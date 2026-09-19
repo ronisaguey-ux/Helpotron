@@ -826,6 +826,11 @@ export const api = {
     return res.json();
   },
   getDumpList: (userId, status) => request(`/api/dump/list?user_id=${userId}${status ? `&status=${status}` : ''}`, { method: 'GET' }),
+  // Dump pasted text (no file) — filed under a subject so an agent can find it.
+  uploadDumpText: (payload) => request('/api/dump/upload-text', { method: 'POST', body: JSON.stringify(payload) }),
+  // Raw material filed under one subject (the dump list endpoint filters by it).
+  listSubjectDumps: (subject, limit = 20) =>
+    request(`/api/dump/list?subject=${encodeURIComponent(subject)}&limit=${limit}`, { method: 'GET' }),
   routeDumpItem: (dumpId, payload, userId) => request(`/api/dump/${dumpId}/route?user_id=${userId}`, { method: 'POST', body: JSON.stringify(payload) }),
   finalizeDumpItem: (dumpId, action) => request(`/api/dump/${dumpId}/finalize`, { method: 'POST', body: JSON.stringify({ action }) }),
   batchEstimateDumpItems: (ids = '') => request(`/api/dump/batch/estimate${ids ? `?ids=${encodeURIComponent(ids)}` : ''}`, { method: 'GET' }),

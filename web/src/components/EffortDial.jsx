@@ -1,27 +1,33 @@
 /**
- * EffortDial.jsx — Session Effort, free slider 1–10 (Stitch v6 / §3.6.4).
+ * EffortDial.jsx — session effort, 1–10.
  *
- * Was three locked buttons (Low / Balanced / High) at scores 300/600/900, so
- * only three settings were reachable. The model router already accepts a level
- * of 1–10 directly (`server/llm.py`: `if es <= 10: level = clamp(1, 10, es)`),
- * so the dial now exposes all ten steps instead of quantising the user's choice
- * to the nearest third.
+ * History, so this does not get "improved" back:
+ *   - It used to be three locked buttons (Low / Balanced / High at 300/600/900),
+ *     so only three settings were reachable.
+ *   - It then showed a per-level "~200 tokens/turn"-style readout. Those numbers
+ *     were never measured — they were invented for the UI — and a fabricated
+ *     cost figure next to a real slider is worse than no figure at all. Removed.
+ *
+ * What is left is the control and the fact the router actually needs: a level of
+ * 1–10. `server/llm.py` accepts the level directly (`if es <= 10: level =
+ * clamp(1, 10, es)`), and `parse_effort_score` scales a level by 100 for the
+ * stored score, so the number shown here is the number the router uses.
  */
 import React from 'react';
 import { Gauge, Cpu } from 'lucide-react';
 
-/** The ten effort levels, with the cost/latency shape each one buys. */
+/** Plain names for the ten levels — no cost claims attached. */
 export const EFFORT_LEVELS = [
-  { level: 1, label: 'Minimal', tokensPerTurn: '~200 tokens/turn', pct: 10 },
-  { level: 2, label: 'Minimal', tokensPerTurn: '~300 tokens/turn', pct: 20 },
-  { level: 3, label: 'Low', tokensPerTurn: '~400 tokens/turn', pct: 30 },
-  { level: 4, label: 'Low', tokensPerTurn: '~550 tokens/turn', pct: 40 },
-  { level: 5, label: 'Balanced', tokensPerTurn: '~750 tokens/turn', pct: 50 },
-  { level: 6, label: 'Balanced', tokensPerTurn: '~950 tokens/turn', pct: 60 },
-  { level: 7, label: 'High', tokensPerTurn: '~1,200 tokens/turn', pct: 70 },
-  { level: 8, label: 'High', tokensPerTurn: '~1,500 tokens/turn', pct: 80 },
-  { level: 9, label: 'Max', tokensPerTurn: '~1,800 tokens/turn', pct: 90 },
-  { level: 10, label: 'Max', tokensPerTurn: '~2,200 tokens/turn', pct: 100 },
+  { level: 1, label: 'Minimal' },
+  { level: 2, label: 'Minimal' },
+  { level: 3, label: 'Low' },
+  { level: 4, label: 'Low' },
+  { level: 5, label: 'Balanced' },
+  { level: 6, label: 'Balanced' },
+  { level: 7, label: 'High' },
+  { level: 8, label: 'High' },
+  { level: 9, label: 'Max' },
+  { level: 10, label: 'Max' },
 ];
 
 /**
@@ -62,19 +68,18 @@ export default function EffortDial({
   score = 6,
   onChange = () => {},
   disabled = false,
-  modelBadge = 'DeepSeek V4.1 Flash · effort-routed',
+  modelBadge = '',
 }) {
   const level = normaliseEffortLevel(score);
   const entry = effortEntryFor(level);
 
   return (
     <div className="flex flex-col gap-unit-3 pt-unit-3 bg-surface-container-low/60 border border-outline-variant/20 rounded-xl p-unit-3 shadow-sm">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-micro-2">
           <Gauge className="w-4 h-4 text-primary" />
           <span className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">
-            Session Effort
+            Effort
           </span>
         </div>
         <span className="font-chip-status text-chip-status text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded uppercase">
@@ -82,7 +87,6 @@ export default function EffortDial({
         </span>
       </div>
 
-      {/* Continuous slider — every step 1–10 is selectable */}
       <input
         type="range"
         id="session-effort-slider"
@@ -100,32 +104,18 @@ export default function EffortDial({
         <span>1</span><span>5</span><span>10</span>
       </div>
 
-      {/* Effort Telemetry Readout */}
-      <div className="flex flex-col gap-1 px-1">
-        <div className="flex justify-between items-baseline">
-          <span className="font-tabular-stat-md text-tabular-stat-md text-on-surface font-semibold">
-            {entry.label} ({level}/10)
-          </span>
-          <span className="font-code-sm text-code-sm text-primary">
-            {entry.tokensPerTurn}
-          </span>
-        </div>
-        {/* Subtle Progress Track Indicator */}
-        <div className="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden mt-1">
-          <div
-            className="bg-primary h-full rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(89,216,201,0.5)]"
-            style={{ width: `${entry.pct}%` }}
-          />
-        </div>
-      </div>
+      <span className="font-body-sm text-xs text-on-surface-variant">
+        {entry.label}
+      </span>
 
-      {/* Model Badge */}
-      <div className="flex items-center gap-micro-2 p-2 rounded-lg bg-surface-container-lowest/80 border border-outline-variant/15 mt-1">
-        <Cpu className="w-3.5 h-3.5 text-primary shrink-0" />
-        <span className="font-code-sm text-code-sm text-on-surface-variant truncate">
-          {modelBadge}
-        </span>
-      </div>
+      {modelBadge ? (
+        <div className="flex items-center gap-micro-2 p-2 rounded-lg bg-surface-container-lowest/80 border border-outline-variant/15">
+          <Cpu className="w-3.5 h-3.5 text-primary shrink-0" />
+          <span className="font-code-sm text-code-sm text-on-surface-variant truncate">
+            {modelBadge}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

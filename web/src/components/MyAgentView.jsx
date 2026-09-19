@@ -16,7 +16,7 @@ import { loadSettings, saveSettings } from '../demoData.js';
 // announces assignment lifecycle events (they rendered fabricated fallback
 // copy; see the note where the bubbles used to be rendered).
 import { deriveAssignmentEvent, HONEST_EVENT_CHIPS, formatTokenMetric } from '../lib/agentEvents.js';
-import { PRESET_PERSONAS, DEFAULT_IDENTITIES, DEFAULT_SKILLS } from '../lib/agentPresets.js';
+import { PRESET_PERSONAS, DEFAULT_SKILLS, DEFAULT_IDENTITY_ID } from '../lib/agentPresets.js';
 import ModeControl from './ModeControl.jsx';
 import ThreadsRail from './ThreadsRail.jsx';
 import AgentConfigsSidebar from './AgentConfigsSidebar.jsx';
@@ -35,17 +35,21 @@ export default function MyAgentView({
   const [settings, setSettings] = useState(() => loadSettings());
   const [mode, setMode] = useState(() => settings.operation_mode || settings.ai?.mode || 'auto');
   const [effortScore, setEffortScore] = useState(() => Number(settings.effort_score || 600));
-  const [activeIdentityId, setActiveIdentityId] = useState(() => settings.ai?.persona_id || 'scholar');
+  // Blank slate (owner 2026-09-19): a new account starts on no identity and no
+  // skills, not on a house style it never chose.
+  const [activeIdentityId, setActiveIdentityId] = useState(
+    () => settings.ai?.persona_id || DEFAULT_IDENTITY_ID
+  );
   const [identities, setIdentities] = useState(() => settings.ai?.identities || []);
-  const [skills, setSkills] = useState(() => settings.ai?.skills?.length ? settings.ai.skills : DEFAULT_SKILLS);
+  const [skills, setSkills] = useState(() => settings.ai?.skills || DEFAULT_SKILLS);
   // The sidebar computes isEnabled as `active || enabled`; when stored skills
-  // exist, seed the active set FROM them so a user-disabled built-in (e.g.
-  // humanizer off) doesn't get pinned back on by the default include-list.
-  // 09-06.
+  // exist, seed the active set FROM them so a user-disabled skill does not get
+  // pinned back on. With no stored skills there is nothing enabled — the old
+  // fallback list named three built-ins that no longer ship (owner 09-19).
   const [activeSkillIds, setActiveSkillIds] = useState(() => {
     const saved = settings.ai?.skills;
     if (saved?.length) return saved.filter((s) => s.enabled).map((s) => s.id);
-    return ['z3_prover', 'latex_derivations', 'humanizer_cadence'];
+    return [];
   });
   const [memory, setMemory] = useState([]);
   const [memoryText, setMemoryText] = useState('');
@@ -363,6 +367,27 @@ export default function MyAgentView({
       await api.request?.(`/api/agent/threads/${threadId}`, { method: 'DELETE' });
     } catch (e) {
       console.warn('Failed to delete thread:', e);
+    }
+  };
+
+  // Pin/unpin a chat. The server already stores `pinned` and returns pinned
+  // threads first (routes_overlord.list_chat_threads sorts on it), so this only
+  // has to send the flag and keep the rail's own order honest.
+  const handlePinThread = async (threadId, pinned) => {
+    setThreads((prev) => {
+      const next = prev.map((t) => (t.id === threadId ? { ...t, pinned } : t));
+      // Pinned first, everything else in the order the server gave us.
+      return [...next.filter((t) => t.pinned), ...next.filter((t) => !t.pinned)];
+    });
+    try {
+      await api.request?.(`/api/agent/threads/${threadId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ pinned }),
+      });
+    } catch (e) {
+      console.warn('Failed to pin thread:', e);
+      // Put it back rather than showing a state the server does not have.
+      setThreads((prev) => prev.map((t) => (t.id === threadId ? { ...t, pinned: !pinned } : t)));
     }
   };
 
@@ -719,9 +744,9 @@ export default function MyAgentView({
           onCreateThread={handleCreateThread}
           onRenameThread={handleRenameThread}
           onDeleteThread={handleDeleteThread}
+          onPinThread={handlePinThread}
           effortScore={effortScore}
           onEffortChange={handleEffortChange}
-          modelBadge="Gemini Flash · effort-routed"
         />
 
         {/* Center/Main Column: Chat Canvas & Controls */}
@@ -756,33 +781,9 @@ export default function MyAgentView({
                 }}
               />
 
-              {/* Educational Mode Toggle (09-07): school-only help scope —
-                  mirrors the extension popup's Educational Mode switch */}
-              <button
-                id="educationalToggle"
-                type="button"
-                onClick={handleToggleEducationalMode}
-                title={
-                  educationalMode
-                    ? 'Educational mode ON — help is scoped to schoolwork. Click to open the chat.'
-                    : 'Educational mode OFF — chat about anything. Click to scope help to schoolwork.'
-                }
-                className="h-11 px-unit-3 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface flex items-center gap-micro-2 transition-all shadow-sm cursor-pointer"
-              >
-                <BookOpen className="w-4 h-4 text-primary" />
-                <span className="font-label-caps text-label-caps uppercase hidden sm:inline">
-                  Educational
-                </span>
-                <span
-                  className={`font-code-sm text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full border ${
-                    educationalMode
-                      ? 'bg-primary/15 text-primary border-primary/25'
-                      : 'bg-surface-container-high text-on-surface-variant border-outline-variant/30'
-                  }`}
-                >
-                  {educationalMode ? 'ON' : 'OFF'}
-                </span>
-              </button>
+              {/* Educational Mode moved into Configs (owner 2026-09-19): it is a
+                  setting you choose once, not a per-message control, and having it
+                  in the chat header made it look like a send-time toggle. */}
 
               {/* Config Matrix Toggle Button */}
               <button
@@ -1167,6 +1168,8 @@ export default function MyAgentView({
               } catch (e) {}
             }}
             onCollapse={() => setShowConfigsSidebar(false)}
+            educationalMode={educationalMode}
+            onToggleEducationalMode={handleToggleEducationalMode}
           />
         </div>
       )}

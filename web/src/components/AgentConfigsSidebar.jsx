@@ -30,14 +30,15 @@ function getPersonaIcon(type, className = 'w-5 h-5') {
 export default function AgentConfigsSidebar({
   ai = {},
   identities = [],
-  activeIdentityId = 'scholar',
+  activeIdentityId = 'none',
   onSelectIdentity = () => {},
   onAddIdentity = () => {},
   onUpdateIdentity = () => {},
   onDeleteIdentity = () => {},
   onSaveAgentName = () => {},
   skills = DEFAULT_SKILLS,
-  activeSkillIds = ['z3_prover', 'latex_derivations', 'humanizer_cadence'],
+  // No stock skills, none enabled — a blank slate (owner 2026-09-19).
+  activeSkillIds = [],
   onToggleSkill = () => {},
   onAddSkill = () => {},
   onDeleteSkill = () => {},
@@ -54,8 +55,12 @@ export default function AgentConfigsSidebar({
   deleteFile = () => {},
   useFileInPrompt = () => {},
   onCollapse = () => {},
+  // Educational mode moved here from the chat header (owner 2026-09-19): it is a
+  // preference you set once, not a per-message control.
+  educationalMode = true,
+  onToggleEducationalMode = () => {},
 }) {
-  const [activeTab, setActiveTab] = useState('identities'); // 'identities' | 'skills' | 'memories' | 'files'
+  const [activeTab, setActiveTab] = useState('identities'); // 'identities' | 'skills' | 'memories' | 'files' | 'behaviour'
 
   // Modal states
   const [showNewIdentityModal, setShowNewIdentityModal] = useState(false);
@@ -86,7 +91,8 @@ export default function AgentConfigsSidebar({
     onSaveAgentName(next);
   };
 
-  // Merged persona list: Canonical PRESET_PERSONAS + custom user identities.
+  // Merged persona list. PRESET_PERSONAS is empty now (blank slate), so this is
+  // the user's own identities unless presets are ever added back.
   //
   // `hidden_identities` is why a deleted preset STAYS deleted. Presets live in
   // the bundle, not in the user's settings, so filtering the merged list once
@@ -210,7 +216,8 @@ export default function AgentConfigsSidebar({
           { key: 'identities', label: 'Identities' },
           { key: 'skills', label: 'Skills' },
           { key: 'memories', label: 'Memories' },
-          { key: 'files', label: 'Rules & Files' },
+          { key: 'files', label: 'Files' },
+          { key: 'behaviour', label: 'Behaviour' },
         ].map((tab) => {
           const isActive = activeTab === tab.key;
           return (
@@ -256,6 +263,15 @@ export default function AgentConfigsSidebar({
 
             {/* Persona Preset Cards */}
             <div className="flex flex-col gap-unit-3">
+              {allIdentities.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-outline-variant/30 bg-surface-container-low/40 p-unit-4 text-center">
+                  <p className="font-body-sm text-body-sm text-on-surface-variant">
+                    No identities yet. An identity is a personality and instruction set you
+                    give your agent — its tone, its rigour, how it writes. Add one when you
+                    want the agent to behave differently from a plain assistant.
+                  </p>
+                </div>
+              )}
               {allIdentities.map((persona) => {
                 const isActive = persona.id === activeIdentityId;
                 return (
@@ -393,6 +409,15 @@ export default function AgentConfigsSidebar({
             </div>
 
             <div className="flex flex-col gap-unit-2">
+                {skills.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-outline-variant/30 bg-surface-container-low/40 p-unit-4 text-center">
+                    <p className="font-body-sm text-body-sm text-on-surface-variant">
+                      No skills yet. A skill is a standing instruction your agent keeps —
+                      always verify arithmetic, always cite sources, always check for
+                      plagiarism. None are on by default.
+                    </p>
+                  </div>
+                )}
               {skills.map((skill) => {
                 const isEnabled = activeSkillIds.includes(skill.id) || skill.enabled;
                 return (
@@ -592,6 +617,55 @@ export default function AgentConfigsSidebar({
                 ))
               )}
             </div>
+          </div>
+        )}
+        {activeTab === 'behaviour' && (
+          <div className="flex flex-col gap-unit-4">
+            <div className="flex flex-col gap-1">
+              <span className="font-label-caps text-label-caps text-on-surface uppercase tracking-wider">
+                Educational mode
+              </span>
+              <p className="font-body-sm text-body-sm text-on-surface-variant">
+                {educationalMode
+                  ? 'On — help is scoped to schoolwork. The agent keeps everything academic.'
+                  : 'Off — the agent will chat about anything.'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              id="educationalToggle"
+              onClick={onToggleEducationalMode}
+              aria-pressed={educationalMode}
+              className={`h-11 px-unit-3 rounded-xl border flex items-center justify-between gap-micro-2 transition-all cursor-pointer ${
+                educationalMode
+                  ? 'bg-primary/15 border-primary/40 text-primary'
+                  : 'bg-surface-container-low border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-high'
+              }`}
+            >
+              <span className="font-label-caps text-label-caps uppercase">
+                {educationalMode ? 'Educational mode ON' : 'Educational mode OFF'}
+              </span>
+              {/* A real switch, so the state reads at a glance. */}
+              <span
+                className={`w-10 h-6 rounded-full border flex items-center px-0.5 transition-all ${
+                  educationalMode
+                    ? 'bg-primary/30 border-primary/50 justify-end'
+                    : 'bg-surface-container-high border-outline-variant/30 justify-start'
+                }`}
+              >
+                <span
+                  className={`w-4 h-4 rounded-full ${
+                    educationalMode ? 'bg-primary' : 'bg-on-surface-variant/50'
+                  }`}
+                />
+              </span>
+            </button>
+
+            <p className="font-code-sm text-[11px] text-outline">
+              This is sent with every agent request, so it applies to the site chat and the
+              browser extension alike.
+            </p>
           </div>
         )}
       </div>

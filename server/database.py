@@ -664,6 +664,11 @@ class UniversalDumpItem(Base):
     file_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     status: Mapped[str] = mapped_column(String(64), default="pending_analysis")  # pending_analysis, processing, matched, unmatched, manual_routed, finalized
     extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Subject ("bubble") this dump was filed under. An assignment's subject is
+    # derived from its title/description, but a raw dump has no title to derive
+    # from — the user picks one when dumping, so it is stored explicitly. This is
+    # what lets an agent ask for "everything dumped in Biology" (owner 09-19).
+    subject: Mapped[str | None] = mapped_column(String(256), nullable=True, index=True)
     matched_assignment_id: Mapped[int | None] = mapped_column(ForeignKey("assignments.id"), nullable=True, index=True)
     auto_match_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     requested_action: Mapped[str | None] = mapped_column(String(32), nullable=True)  # flashcards, practice_quiz, study_guide, summary, do_it
@@ -788,6 +793,11 @@ def init_db() -> None:
                 # universal_dump_items (dump provenance); DBs created before the
                 # field existed would 500 without this guard.
                 columns_dump = [row[1] for row in conn.execute(text("PRAGMA table_info(universal_dump_items)")).fetchall()]
+                if columns_dump and "subject" not in columns_dump:
+                    # create_all does NOT add a column to a table that already
+                    # exists, so an existing DB needs this explicit ALTER or
+                    # the column silently does not exist at runtime.
+                    conn.execute(text("ALTER TABLE universal_dump_items ADD COLUMN subject VARCHAR(256)"))
                 if columns_dump and "requested_action" not in columns_dump:
                     conn.execute(text("ALTER TABLE universal_dump_items ADD COLUMN requested_action VARCHAR(32)"))
 

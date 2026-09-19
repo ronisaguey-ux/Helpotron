@@ -5,6 +5,7 @@ import NewAssignmentModal from './NewAssignmentModal';
 import SubjectTile from './SubjectTile';
 import SubjectSettingsPanel from './SubjectSettingsPanel';
 import CreateSubjectDialog from './CreateSubjectDialog';
+import SubjectDumpModal from './SubjectDumpModal';
 import AssignmentCard from './AssignmentCard';
 import api from '../api';
 import { normalizeCards } from '../lib/assignmentEvents';
@@ -23,6 +24,8 @@ import {
   History,
   BookOpen,
   Orbit,
+  Upload,
+  ChevronLeft,
 } from 'lucide-react';
 
 const DEFAULT_SUBJECT_BUBBLES = [
@@ -119,7 +122,6 @@ export function AssignmentCardDashboard({
   userId = 'student_demo',
   isGuest = false,
   onSelectAssignment = null,
-  onOpenHistory = null,
 }) {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -139,6 +141,11 @@ export function AssignmentCardDashboard({
 
   // Custom Bubbles
   const [customBubbles, setCustomBubbles] = useState([]);
+
+  // Subject drill-in + dump-into-subject. `selectedSubjectId === null` is the
+  // dashboard level (the bubble grid); anything else is that one subject open.
+  const [selectedSubjectId, setSelectedSubjectId] = useState(null);
+  const [dumpTargetSubject, setDumpTargetSubject] = useState(null);
 
   // Notices
   const [exportNotice, setExportNotice] = useState('');
@@ -457,10 +464,10 @@ export function AssignmentCardDashboard({
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <h2 className="font-headline-lg text-headline-lg text-on-surface tracking-tight mb-1">
-            Active Subjects
+            Your subjects
           </h2>
           <p className="font-body-md text-body-md text-on-surface-variant">
-            Manage and review your coursework modules grouped by academic domain.
+            Open a subject to work on it, or dump material into one for your agent.
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
@@ -485,9 +492,110 @@ export function AssignmentCardDashboard({
         </div>
       </div>
 
-      {/* Active Subjects Sections */}
+      {/* Dashboard level: one medium card per subject. The owner's shape for
+          this page is bubbles, not a wall of assignment rows — you pick a
+          subject, then work inside it. */}
+      {selectedSubjectId === null ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+          {finalSubjects.map((bubble) => {
+            const subjectCards = (
+              bubble.id === 'subj_other' ? unassigned : cardMap.get(bubble.id) || []
+            ).filter((c) => c != null && c.id != null);
+            const activeCount = subjectCards.filter(
+              (c) => getAssignmentBucket(c.status) === 'in_progress'
+            ).length;
+            const pendingCount = subjectCards.filter(
+              (c) => getAssignmentBucket(c.status) === 'pending'
+            ).length;
+
+            return (
+              <div
+                key={bubble.id}
+                className="group relative bg-surface-container-lowest/80 backdrop-blur-xl rounded-3xl border border-outline-variant/20 p-5 md:p-6 shadow-sm hover:border-primary/40 hover:shadow-[0_0_28px_rgba(89,216,201,0.10)] transition-all flex flex-col"
+              >
+                {/* Whole card opens the subject; the dump button sits above it so
+                    a click there does not also navigate. */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedSubjectId(bubble.id)}
+                  className="flex items-start gap-4 text-left cursor-pointer w-full"
+                  aria-label={`Open ${bubble.title}`}
+                >
+                  <SubjectTile icon={bubble.icon} color={bubble.color} size={44} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-title-md text-base font-semibold text-on-surface truncate">
+                        {bubble.title}
+                      </h3>
+                      {bubble.is_custom && (
+                        <span className="font-chip-status text-[10px] text-primary bg-primary/10 border border-primary/30 rounded-full px-2 py-0.5 uppercase">
+                          Custom
+                        </span>
+                      )}
+                    </div>
+                    <p className="font-code-sm text-xs text-on-surface-variant mt-1">
+                      {subjectCards.length} {subjectCards.length === 1 ? 'assignment' : 'assignments'} present
+                    </p>
+                  </div>
+                </button>
+
+                <div className="mt-4 flex items-center gap-2 flex-wrap">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-chip-status uppercase tracking-wider border ${
+                      activeCount > 0
+                        ? 'bg-primary/10 border-primary/30 text-primary'
+                        : 'bg-surface-container border-outline-variant/25 text-on-surface-variant'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        activeCount > 0 ? 'bg-primary' : 'bg-on-surface-variant/40'
+                      }`}
+                    />
+                    {activeCount} active
+                  </span>
+                  {pendingCount > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-chip-status uppercase tracking-wider border bg-error-container/20 border-error/25 text-on-error-container">
+                      {pendingCount} pending
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-5 pt-4 border-t border-outline-variant/15 flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDumpTargetSubject(bubble.title)}
+                    className="h-9 px-3 rounded-xl border border-outline-variant/30 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors flex items-center gap-2 cursor-pointer font-label-caps text-[11px] uppercase tracking-wider"
+                    title={`Dump text or a file into ${bubble.title}`}
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Dump</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSubjectId(bubble.id)}
+                    className="h-9 px-3 rounded-xl text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors flex items-center gap-1.5 cursor-pointer font-label-caps text-[11px] uppercase tracking-wider"
+                  >
+                    <span>Open</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
       <div className="space-y-8">
-        {finalSubjects.map((bubble) => {
+        {/* One subject, opened. */}
+        <button
+          type="button"
+          onClick={() => setSelectedSubjectId(null)}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-outline-variant/30 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors cursor-pointer font-label-caps text-xs uppercase tracking-wider"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          <span>All subjects</span>
+        </button>
+        {finalSubjects.filter((b) => b.id === selectedSubjectId).map((bubble) => {
           const subjectCards = (
             bubble.id === 'subj_other'
               ? unassigned
@@ -667,35 +775,15 @@ export function AssignmentCardDashboard({
           );
         })}
       </div>
+      )}
 
-      {/* Pointer row to Assignment History / Submission Ledger (§3.4.1) */}
-      <section className="bg-surface-container-lowest/80 backdrop-blur-xl rounded-3xl p-6 md:p-8 border border-outline-variant/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface-variant shrink-0">
-            <Archive className="w-6 h-6 stroke-[1.75]" />
-          </div>
-          <div>
-            <h3 className="font-title-md text-title-md text-on-surface font-semibold">
-              Submission Ledger & Archive
-            </h3>
-            <p className="font-body-sm text-body-sm text-on-surface-variant">
-              Review turned-in papers, completed problem sets, and verified submission telemetry.
-            </p>
-          </div>
-        </div>
-
-        {onOpenHistory && (
-          <button
-            type="button"
-            onClick={onOpenHistory}
-            className="inline-flex items-center gap-2 h-11 px-5 rounded-xl bg-surface-container-low hover:bg-surface-container-high text-secondary font-label-caps text-xs uppercase tracking-wider border border-outline-variant/30 transition-colors cursor-pointer shrink-0"
-          >
-            <Archive className="w-4 h-4" />
-            <span>View Submission Ledger</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        )}
-      </section>
+      {/* Dump-into-subject */}
+      <SubjectDumpModal
+        isOpen={!!dumpTargetSubject}
+        subject={dumpTargetSubject}
+        onClose={() => setDumpTargetSubject(null)}
+        onDumped={() => fetchDashboardData()}
+      />
 
       {/* Create Subject Dialog */}
       <CreateSubjectDialog
