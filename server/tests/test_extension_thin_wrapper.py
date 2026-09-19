@@ -29,39 +29,55 @@ def test_ui_config_serves_mode_hints():
 
 
 def test_ui_config_model_ladder_matches_the_real_router():
-    """The ladder the popup renders must name the model that actually runs.
+    """The ladder the popup renders must name the model the extension runs.
 
-    Regression guard for a real mismatch (owner 2026-09-18): the badge said
-    "Gemini 3.1 Flash Lite" while the agent was answering on deepseek-v4.1-flash.
-    The ladder was computed from `resolve_vision_model` — the SCREEN-FRAME ladder
-    — while text chat routes through `resolve_model_routing`, and the two
-    disagree: vision's top band is gemini-3.8-flash, but the text ladder sends
-    levels 8-10 to DeepSeek, so gemini-3.8-flash is unreachable on the text path.
+    The extension is a VISION surface (owner 2026-09-18): it drives the page and
+    can send screen frames, so it runs only the three models that can see —
+    gemini-3.1-flash-lite, deepseek-v4.1-flash, gemini-3.8-flash — and the chat
+    route pins itself to the same ladder (`model_override` + `vision_only`).
+    The badge is therefore computed from `resolve_vision_model`, NOT from the
+    text ladder My Agent routes through (which uses nemotron at level 1 and qwen
+    at level 2 — models that cannot read a screenshot).
 
-    One entry per LEVEL, not per band: levels 1, 2 and 3 select three different
-    models, so a band-level label can only be right for one of them.
+    One entry per LEVEL, not per band: the popup looks up the exact slider
+    position, so bands would not be enough to pick the right row.
     """
-    from server.llm import effective_chat_model
+    from server.screen_vision import resolve_vision_model
 
     body = client.get("/api/extension/ui-config").json()
     ladder = body["model_ladder"]
     assert [t["level"] for t in ladder] == list(range(1, 11))
 
-    # Every entry must equal what a chat turn at that level will ACTUALLY run —
-    # which is the router plus the request-dependent rewrites (the agent's intent
-    # call is JSON mode, which turns a level-1 nemotron pick into gemini-lite).
-    # Asserting against the raw router instead is what let the badge name a model
-    # that never executed.
     for entry in ladder:
-        expected = effective_chat_model(entry["level"])
+        expected, tier, _ = resolve_vision_model(entry["level"])
         assert entry["model"] == expected, (
             f"level {entry['level']}: ui-config advertises {entry['model']} "
-            f"but a chat turn runs {expected}"
+            f"but the extension runs {expected}"
         )
+        assert entry["tier"] == tier
 
-    # The specific case the owner reported: slider at level 1 must advertise
-    # Gemini 3.1 Flash Lite, because that is what runs there.
-    assert ladder[0]["model"] == "google/gemini-3.1-flash-lite"
+    # The whole ladder must be vision-capable — a text-only model here would mean
+    # the extension could answer about a page it cannot see.
+    vision = {
+        "google/gemini-3.1-flash-lite",
+        "deepseek/deepseek-v4.1-flash",
+        "google/gemini-3.8-flash",
+    }
+    assert {e["model"] for e in ladder} == vision
+
+    # The owner's spec, stated directly: low = lite, mid = deepseek, high = 3.8.
+    for e in ladder:
+        lvl = e["level"]
+        if lvl <= 3:
+            assert e["model"] == "google/gemini-3.1-flash-lite"
+        elif lvl <= 6:
+            assert e["model"] == "deepseek/deepseek-v4.1-flash"
+        else:
+            assert e["model"] == "google/gemini-3.8-flash"
+
+    # My Agent is a DIFFERENT surface and must NOT be pinned to this ladder.
+    from server.llm import resolve_model_routing
+    assert resolve_model_routing(effort_score=100)["model"] != ladder[0]["model"]
 
     # Tier matches the popup's own banding, which drives the badge styling.
     for entry in ladder:
@@ -69,9 +85,8 @@ def test_ui_config_model_ladder_matches_the_real_router():
         expect_tier = "low" if lvl <= 3 else "med" if lvl <= 6 else "high"
         assert entry["tier"] == expect_tier
 
-    # The vision ladder is still published, and separately labelled, because
-    # screen-frame analysis genuinely is tiered differently.
-    assert len(body["vision_ladder"]) == 3
+    # `vision_ladder` is kept as an alias for older clients — same content.
+    assert body["vision_ladder"] == ladder
 
 
 def test_ui_config_carries_action_caps():
