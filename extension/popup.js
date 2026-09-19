@@ -289,9 +289,12 @@ function clampEffortScore(value) {
         return { tier: hit.tier || 'med', label: hit.label || hit.model, model: hit.model };
       }
     }
-    if (s === 2) return { tier: 'low', label: 'Qwen 2.5 72B', model: 'qwen/qwen-2.5-72b-instruct' };
+    // Offline fallback for the VISION ladder the extension runs on — kept in
+    // step with server/screen_vision.resolve_vision_model, not with the text
+    // ladder My Agent uses.
     if (s <= 3) return { tier: 'low', label: 'Gemini 3.1 Flash Lite', model: 'google/gemini-3.1-flash-lite' };
-    return { tier: 'med', label: 'DeepSeek V4.1 Flash', model: 'deepseek/deepseek-v4.1-flash' };
+    if (s <= 6) return { tier: 'med', label: 'DeepSeek V4.1 Flash', model: 'deepseek/deepseek-v4.1-flash' };
+    return { tier: 'high', label: 'Gemini 3.8 Flash', model: 'google/gemini-3.8-flash' };
   }
 
 // ONE place that writes the model name to every model surface.

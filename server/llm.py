@@ -372,6 +372,7 @@ async def call_llm(
     temperature: Optional[float] = None,
     max_tokens: Optional[int] = None,
     images: Optional[List[str]] = None,
+    vision_only: bool = False,
 ) -> str:
     if response_format in ("json", "json_object") or json_mode:
         json_mode = True
@@ -418,13 +419,26 @@ async def call_llm(
         payload["response_format"] = {"type": "json_object"}
 
     openrouter_err = None
+    # The three models that can actually consume a screenshot. The extension is
+    # a vision surface by design (it drives the page and can send screen frames),
+    # so it is restricted to these and never falls back to a text-only model —
+    # a fallback to a blind model on an image turn would answer about a page it
+    # cannot see (owner directive 2026-09-18: the extension uses ONLY
+    # gemini-3.1-flash-lite, deepseek-v4.1-flash and gemini-3.8-flash).
+    vision_capable = [
+        ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"],
+        ModelPolicy.PRIMARY_MODELS["deepseek_v4_1_flash"],
+        ModelPolicy.PRIMARY_MODELS["gemini_38_flash"],
+    ]
+
     attempt_models = _effort_cascade(model_id, effort=effort_score or 500)
-    if images:
-        vision_capable = {
-            ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"],
-            ModelPolicy.PRIMARY_MODELS["deepseek_v4_1_flash"],
-            ModelPolicy.PRIMARY_MODELS["gemini_38_flash"],
-        }
+    if vision_only:
+        # Keep the resolved primary if it is vision-capable, then the rest of the
+        # vision set as fallbacks — in tier order, so a failed high tier degrades
+        # rather than jumping to an unrelated model.
+        ordered = [m for m in vision_capable if m != model_id]
+        attempt_models = ([model_id] if model_id in vision_capable else []) + ordered
+    elif images:
         attempt_models = [m for m in attempt_models if m in vision_capable] or [
             ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"],
             ModelPolicy.PRIMARY_MODELS["deepseek_v4_1_flash"],

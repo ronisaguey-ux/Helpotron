@@ -1793,6 +1793,8 @@ async def _resolve_agent_intent(
     viewport: Optional[Dict[str, int]] = None,
     screen_analysis: Optional[str] = None,
     images: Optional[List[str]] = None,
+    model_override: Optional[str] = None,
+    vision_only: bool = False,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """LLM decides which action the agent should take — strict JSON contract.
@@ -1959,16 +1961,21 @@ async def _resolve_agent_intent(
 
     raw = ""
     try:
-        raw = await call_llm(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            temperature=0.2,
-            max_tokens=2400,
-            response_format="json_object",
-            effort_score=effort,
-            db=db, user_id=user.public_id,
-            images=images,
-        )
+          raw = await call_llm(
+              system_prompt=system_prompt,
+              user_prompt=user_prompt,
+              temperature=0.2,
+              max_tokens=2400,
+              response_format="json_object",
+              effort_score=effort,
+              db=db, user_id=user.public_id,
+              images=images,
+              # The extension surface pins its model to the VISION ladder and
+              # refuses text-only fallbacks; every other surface leaves this None
+              # and routes through the normal text ladder.
+              model=model_override,
+              vision_only=vision_only,
+          )
     except Exception as err:
         logger.error("agent intent LLM failed: %s", err)
         raw = ""
