@@ -27,10 +27,26 @@ MODEL_RATES = {
 DEFAULT_RATES = {'input': 0.001, 'output': 0.002}
 
 
+def _rates_for(model: str) -> dict:
+    """Resolve the rate row for a model id.
+
+    OpenRouter ids carry a provider prefix (`google/gemini-3.8-flash`,
+    `deepseek/deepseek-v4.1-flash`) while this table is keyed by the bare model
+    name. Without the fallback EVERY lookup missed and silently fell through to
+    DEFAULT_RATES — measured 2026-09-18, that priced deepseek-v4.1-flash at
+    0.001/0.002 per 1K instead of its real 0.00015/0.0006, i.e. 6.7x too dear on
+    input, on every call the extension made.
+    """
+    rates = MODEL_RATES.get(model)
+    if rates:
+        return rates
+    return MODEL_RATES.get(str(model).split("/")[-1], DEFAULT_RATES)
+
+
 class CostEngine:
     def log_cost(self, user_id, endpoint, model, prompt_tokens, completion_tokens):
         """Pure math: USD cost for one API call (legacy interface, no DB write)."""
-        rates = MODEL_RATES.get(model, DEFAULT_RATES)
+        rates = _rates_for(model)
         cost = (prompt_tokens / 1000.0) * rates['input'] + (completion_tokens / 1000.0) * rates['output']
         return max(cost, 0.00001)
 
@@ -44,13 +60,27 @@ class CostEngine:
         input_tokens: int = 0,
         output_tokens: int = 0,
         metadata: Optional[Dict[str, Any]] = None,
+        exact_cost_usd: Optional[float] = None,
     ) -> ApiUsageLog:
         """Record one API call in the ledger (transcription/detector/llm surface).
 
         Cost = base rate × user token multiplier (default 1.0).
+
+        exact_cost_usd: the provider's own reported charge, when it gives one.
+        OpenRouter returns `usage.cost` on every response, streaming included
+        (measured 2026-09-18), and that is the authoritative USD amount actually
+        billed including its markup. Prefer it over the rate table, which is an
+        estimate and only knows a handful of models. When absent, fall back to
+        the table via _rates_for() (which now handles prefixed ids).
         """
-        rates = MODEL_RATES.get(tool_or_model, DEFAULT_RATES)
-        base_cost = (input_tokens / 1000.0) * rates['input'] + (output_tokens / 1000.0) * rates['output']
+        meta = dict(metadata or {})
+        if exact_cost_usd is not None:
+            base_cost = float(exact_cost_usd)
+            meta["cost_source"] = "provider"
+        else:
+            rates = _rates_for(tool_or_model)
+            base_cost = (input_tokens / 1000.0) * rates['input'] + (output_tokens / 1000.0) * rates['output']
+            meta["cost_source"] = "rate_table"
 
         user = db.query(User).filter(User.public_id == public_id).first()
         multiplier = float(getattr(user, 'token_cost_multiplier', 1.0) or 1.0) if user else 1.0
@@ -65,7 +95,7 @@ class CostEngine:
             base_cost_usd=round(base_cost, 8),
             user_multiplier=multiplier,
             charged_cost_usd=round(base_cost * multiplier, 8),
-            metadata_=metadata or {},
+            metadata_=meta,
         )
         db.add(entry)
         db.commit()
