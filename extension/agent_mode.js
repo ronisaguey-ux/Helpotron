@@ -1309,17 +1309,22 @@ async function hostPermitted(tabUrl) {
   try { return await chrome.permissions.contains({ origins: [pat] }); } catch (e) { return false; }
 }
 
+// Set by a failed burst so the returned verdict can carry why. Declared here
+// rather than at the throw site so the `return` after `finally` can read it.
+let lastDriveError = null;
+
 async function runActions(actions) {
+  lastDriveError = null;
   if (!state.controlOn || state.paused) {
     pushLog('warn', state.controlOn ? 'pause active — actions dropped (press Resume first)' : 'control is OFF — actions dropped (agent sees the screen but cannot drive)');
-    return;
+    return { ran: 0, asked: 0, dropped: 'control off or paused' };
   }
   if (!state.driveTabId) {
     pushLog('warn', 'no captured TAB — actions dropped (pick a tab, not a screen)');
-    return;
+    return { ran: 0, asked: 0, dropped: 'no driveable tab' };
   }
-  let list = (actions || []).slice(0, MAX_ACTIONS); // 09-02 cap re-enforced locally
-  if (!list.length) return;
+  let list = (actions || []).slice(0, MAX_ACTIONS); // local cap, mirrors the server's
+  if (!list.length) return { ran: 0, asked: 0, dropped: 'empty action list' };
 
   // A ref-based op carries no coordinates: resolve it against the live DOM
   // before anything is dispatched, so it joins the coordinate path below. An
@@ -1333,12 +1338,12 @@ async function runActions(actions) {
   const driveTab = await chrome.tabs.get(state.driveTabId).catch(() => null);
   if (!driveTab || !driveTab.url) {
     pushLog('warn', 'drive tab is gone — actions dropped');
-    return;
+    return { ran: 0, asked: 0, dropped: 'drive tab is gone' };
   }
   if (!(await hostPermitted(driveTab.url))) {
     pushLog('warn', `HOST-PERMISSION GATE: no host permission for ${driveTab.url} — actions dropped (the extension only acts on sites it is installed for)`);
     setStatus('⛔ The agent is not permitted to act on that site — no host permission.');
-    return;
+    return { ran: 0, asked: 0, dropped: 'no host permission for that site' };
   }
 
   if (await ensureDebugger() === false) {
@@ -1350,7 +1355,7 @@ async function runActions(actions) {
     state.paused = true;
     updateBanner();
     setStatus('⏸ Debugger attach failed — press "Resume driving" to retry the agent actions.');
-    return;
+    return { ran: 0, asked: 0, dropped: 'debugger attach failed' };
   }
   state.pendingActions = null;
   state.driving = true;
@@ -1400,6 +1405,7 @@ async function runActions(actions) {
     }
   } catch (e) {
     pushLog('err', `drive burst failed: ${e && e.message ? e.message : e}`);
+    lastDriveError = (e && e.message) ? e.message : String(e);
   } finally {
     state.driving = false;
     state.awaitingApproval = false;
@@ -1409,6 +1415,12 @@ async function runActions(actions) {
     await driveMessage('disarm', false);
     await detachDebugger();
   }
+
+  // A verdict, so the multi-action loop can tell "the batch ran" from "the
+  // batch was dropped" (control off, no tab, page navigated away, or the user
+  // denied every action). Without it the loop counted the ARRAY LENGTH as work
+  // done — the same "it said it scrolled and never did" lie, one layer up.
+  return { ran: completed, asked, error: lastDriveError };
 }
 
 // ── Interrupt / pause: NO auto-resume (spec safe default) ────────────────────
@@ -1445,19 +1457,20 @@ function stopAll(trigger) {
 
 // ── Chat send (agent mode: frame + viewport attached) ────────────────────────
 let chatBusy = false;
-async function sendChatMessage() {
-  const text = els.chatInput.value.trim();
-  if (!text || chatBusy) return;
+// One ROUND: capture a fresh frame + DOM list, ask the server what to do, and
+// execute what comes back. Split out of sendChatMessage on 09-18 so the
+// multi-action loop can drive it repeatedly (owner: "allow it to do multi
+// actions inside agent mode ... give it a 100 tool call loop limit").
+// Returns a verdict the loop reads: {ok, ran, done, noops}.
+async function runAgentTurnTab(text, opts = {}) {
+  const { silentUser = false } = opts;
   if (!(await isLoggedIn())) {
     refreshLoginNote();
     setStatus('⚠️ Login required — open the popup and sign in first.');
-    return;
+    return { ok: false, fatal: true };
   }
   const srv = await serverUrl();
-  chatBusy = true;
-  els.chatSend.disabled = true;
-  els.chatInput.value = '';
-  addChatMsgEl('user', text);
+  if (!silentUser) addChatMsgEl('user', text);
 
   // Attach a FRESH frame when a live capture is running AND the "See screen"
   // toggle is ON (09-02: the toggle decides what the agent sees). See screen
@@ -1573,6 +1586,7 @@ async function sendChatMessage() {
         // 09-02: the Execute toggle is OFF — the agent talks, it never acts.
         pushLog('warn', `agent proposed ${n} action(s) but “Study Mode” is OFF — turn it on in the popup (then Control ON + Resume) to let it drive`);
         setStatus(`Agent proposed ${n} action(s) — “Study Mode” is OFF, nothing ran.`);
+        return { ok: true, ran: 0, done: true, skipped: true };
       } else if (data.control_requires_approval && !agentControlSessionAllowed) {
         // Server permission gate (09-14, S1-3). The server refuses a burst the
         // current mode does not authorise — e.g. a COMMITTING one (submit /
@@ -1602,20 +1616,109 @@ async function sendChatMessage() {
         while (pendAgentApprovals.length > 5) pendAgentApprovals.shift();
         renderAgentApproval();
         setStatus(`⚠️ ${n} action(s) need your approval (mode: ${state.agentMode}).`);
+        // Approval pending: the loop must NOT continue past an undecided card.
+        return { ok: true, ran: 0, done: true, needsApproval: true };
       } else if (!state.controlOn || state.paused) {
         pushLog('warn', `agent proposed ${n} action(s) but control is ${state.controlOn ? 'paused' : 'OFF'} — enable Control (or press Resume) to let it drive`);
+        return { ok: true, ran: 0, done: true, paused: true };
       } else {
         setStatus(`👁 Agent sees the screen — ${state.agentMode !== 'yolo' ? `requesting permission for ${n} action(s) (mode: ${state.agentMode})…` : `executing ${n} action(s) (YOLO mode — no prompts)`}`);
-        await runActions(actions);
+        const v = await runActions(actions);
         setStatus('✓ Actions finished.');
+        const ran = (v && v.ran) || n;
+        const noops = (v && v.noops) || [];
+        const cur = (await chrome.storage.local.get(CHAT_KEY))[CHAT_KEY] || [];
+        await cacheChat([...cur, { sender: 'user', text }, { sender: 'agent', text: reply }]);
+        return { ok: true, ran, noops, done: false };
       }
     }
     const cur = (await chrome.storage.local.get(CHAT_KEY))[CHAT_KEY] || [];
-    await cacheChat([...cur, { sender: 'user', text }, { sender: 'agent', text: reply }]);
+    if (!silentUser) await cacheChat([...cur, { sender: 'user', text }, { sender: 'agent', text: reply }]);
+    else await cacheChat([...cur, { sender: 'agent', text: reply }]);
+    // No actions = the agent considers the task finished.
+    return { ok: true, ran: 0, noops: [], done: true };
   } catch (e) {
     typingEl.replaceWith(addChatMsgEl('agent', `⚠️ ${e.message}`));
     setStatus('❌ Study Buddy chat failed.');
     pushLog('err', `chat failed: ${e.message}`);
+    return { ok: false, fatal: true, error: e.message };
+  }
+}
+
+// The continuation prompt for the full-tab surface. Same contract as the
+// popup's: state the budget, forbid repeating finished work, and make
+// "finished" mean "emit no control block".
+function tabContinuationPrompt(used, budget, priorNoops) {
+  const stalled = priorNoops && priorNoops.length
+    ? `\nYour last batch had NO EFFECT on the page (${priorNoops.map((o) => o.why).slice(0, 2).join('; ')}). Do not repeat it — try a different approach or say you are blocked.`
+    : '';
+  return (
+    `[AUTO-CONTINUATION] Keep going with the task. Tool calls used so far: ${used} of ${budget}. ` +
+    `The screen above is FRESH and shows the result of your last batch. ` +
+    `Do not repeat or re-describe completed work. Work out where the task stands now and emit the next ` +
+    `batch needed to finish it. If the task is COMPLETE, emit no control block and state the result. ` +
+    `If you need the user, emit no control block and say exactly what you need.` + stalled
+  );
+}
+
+const TAB_LOOP_HARD_ROUND_CAP = 40;
+
+async function runAgentTaskTab(userText) {
+  let budget = 100;
+  try {
+    const copy = await globalThis.HelpotronSL?.fetchBootstrap?.();
+    const n = Number(copy && copy.ui && copy.ui.tool_call_budget);
+    if (Number.isFinite(n) && n > 0) budget = n;
+  } catch { /* offline: keep the default */ }
+
+  let used = 0;
+  let round = 0;
+  let lastNoops = [];
+  let stalledRounds = 0;
+  let outcome = await runAgentTurnTab(userText);
+  if (!outcome.ok) return outcome;
+
+  while (!outcome.done) {
+    used += outcome.ran || 0;
+    lastNoops = outcome.noops || [];
+    round += 1;
+
+    const batchRan = outcome.ran || 0;
+    if (batchRan > 0 && lastNoops.length >= batchRan) stalledRounds += 1;
+    else stalledRounds = 0;
+
+    if (state.paused) { setStatus(`⏸ Paused after ${used} tool call(s).`); return { ...outcome, used, stopped: 'paused' }; }
+    if (used >= budget) {
+      setStatus(`✓ Stopped at the ${budget} tool-call limit — ${used} used.`);
+      addChatMsgEl('agent', `⚠️ Reached the ${budget} tool-call limit for this task. Send another message to continue.`);
+      return { ...outcome, used, stopped: 'budget' };
+    }
+    if (round >= TAB_LOOP_HARD_ROUND_CAP) {
+      setStatus(`✓ Stopped after ${round} rounds (${used} tool calls).`);
+      return { ...outcome, used, stopped: 'rounds' };
+    }
+    if (stalledRounds >= 2) {
+      setStatus(`⚠️ Two batches in a row changed nothing — stopping after ${used} tool call(s).`);
+      addChatMsgEl('agent', `⚠️ I stopped: two batches in a row had no effect on the page. Repeating them would not help — this step needs your input.`);
+      return { ...outcome, used, stopped: 'stalled' };
+    }
+
+    outcome = await runAgentTurnTab(tabContinuationPrompt(used, budget, lastNoops), { silentUser: true });
+    if (!outcome.ok) return { ...outcome, used };
+  }
+
+  if (used > 0) setStatus(`✓ Agent finished — ${used} tool call(s) used.`);
+  return { ...outcome, used };
+}
+
+async function sendChatMessage() {
+  const text = els.chatInput.value.trim();
+  if (!text || chatBusy) return;
+  chatBusy = true;
+  els.chatSend.disabled = true;
+  els.chatInput.value = '';
+  try {
+    await runAgentTaskTab(text);
   } finally {
     chatBusy = false;
     els.chatSend.disabled = false;

@@ -75,8 +75,19 @@ _VISION_FALLBACK: Dict[str, str] = {
 MAX_DECODED_BYTES: int = 8 * 1024 * 1024  # ~8MB decoded cap (parent spec)
 _MAX_IMAGES_PER_CALL: int = 4
 
-# 09-02 parent spec: cap consecutive control actions per task at 15 (was 25).
-_MAX_CONTROL_ACTIONS: int = 15
+# Actions allowed in ONE control block. The block still drops WHOLE if it
+# exceeds this (a partial burst could leave a type running mid-field), so the
+# number has to be generous enough that a competent plan fits inside it.
+#
+# 09-18 (operator): raised 15 -> 25 alongside the multi-batch loop. The loop
+# budget is 100 tool calls ACROSS batches (see _MAX_AGENT_TOOL_CALLS), so a long
+# task finishes over several rounds; this cap only bounds a single round.
+_MAX_CONTROL_ACTIONS: int = 25
+
+# Total tool calls one agent-mode task may spend across ALL batches. The
+# extension re-drives, re-captures the screen and calls the agent again after
+# every batch, counting each executed op, and stops at this budget.
+_MAX_AGENT_TOOL_CALLS: int = 100
 _MAX_TYPE_TEXT: int = 2000
 _DEFAULT_VIEWPORT_MAX: int = 20000
 
