@@ -44,6 +44,12 @@ READONLY_ACTION_TYPES = {
     # 09-01 (Bob, full-capability suite): config/plan reads and data exports
     # are pure reads — manual mode must never gate them either.
     "see_settings", "select_settings", "see_config", "export_assignment_data",
+    # 09-18 (owner): a web lookup only READS the web — it changes nothing on the
+    # page, the account, or any data. Gating it would stall every "what's the
+    # latest…?" question behind a confirmation card for no safety gain. Its cost
+    # is metered like any other call, so the budget — not a prompt — is what
+    # bounds it.
+    "web_search",
 }
 
 # Critical actions that trigger permission prompt in AUTO mode (09-01, Bob:
@@ -1130,6 +1136,46 @@ print(f"Active files: {os.listdir('.')}")
             ans = result.strip()
             return {"action": action_type, "status": "completed",
                     "message": ans, "result_text": ans}
+
+        elif action_type == "web_search":
+            # Owner 2026-09-18: any helpotron agent can look things up on the
+            # live web when it needs current facts. The model picks this action;
+            # the surface's own ladder already chose `model`, so resolve it the
+            # same way that surface would for a normal turn (the extension must
+            # stay on a vision model, My Agent on the text ladder).
+            from .web_search import web_search as _web_search, format_for_agent as _fmt_search
+
+            query = (payload.get("query") or "").strip()
+            if not query:
+                return {"action": action_type, "status": "failed",
+                        "message": "I need something specific to look up — tell me the question and I'll search for it."}
+
+            # Resolve the model the SAME way this surface would for a normal
+            # turn, so the search never lands on a model the surface would not
+            # otherwise use. `node == "extensions"` is a VISION surface: it must
+            # stay on the vision ladder (nemotron/qwen cannot see a page).
+            try:
+                if node == "extensions":
+                    from .routes_extension import _user_effort_score
+                    from .screen_vision import resolve_vision_model
+                    _search_model = resolve_vision_model(_user_effort_score(user))[0]
+                else:
+                    from .routes_overlord import resolve_agent_effort
+                    from .llm import resolve_model_routing
+                    _search_model = resolve_model_routing(
+                        effort_score=resolve_agent_effort(dict(user.settings or {}))
+                    )["model"]
+            except Exception as _e:
+                logger.warning("web_search model resolution failed, using default: %s", _e)
+                _search_model = None  # web_search() falls back to its own default
+            search_res = await _web_search(query, model=_search_model, user_id=user.public_id, db=db)
+            text = _fmt_search(search_res, query)
+            if not search_res.get("ok"):
+                return {"action": action_type, "status": "failed", "message": text,
+                        "query": query, "sources": []}
+            return {"action": action_type, "status": "completed", "message": text,
+                    "result_text": text, "query": query,
+                    "sources": search_res.get("sources") or []}
 
         elif action_type == "message_assignment_team":
             aid = payload.get("assignment_id") or assignment_id

@@ -312,6 +312,7 @@ PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
         "AGENT MODE",
         "\U0001f501 Multi-step tasks actually finish. The agent used to do one batch of actions and stop with a promise about the rest \u2014 so \u201cwork through this quiz\u201d ended at question 1. It now keeps going on its own: after each batch it re-reads the screen and continues, up to 100 actions in one task, and it is told to work out the full scope of what you asked and see it through rather than stopping at the first step.",
         "\U0001f6d1 Stops when it should. If two batches in a row change nothing, it stops and says why instead of repeating the same miss \u2014 and it still stops for your approval, or if you pause it.",
+        "\U0001f310 It can look things up on the live web. When an answer depends on something current \u2014 news, dates, prices, who currently holds a role, a page you name \u2014 the agent now searches the web and answers from real sources instead of relying on what it was trained on. It is told to say plainly when it could not find something rather than guessing.",
         "",
         "CONNECTING",
         "🔑 No more sign-in. The extension used to need a Helpotron login it could barely complete. It now connects with a personal API key you create once at Settings \u2192 API Keys \u2014 paste it in and you're connected. Revoke a key any time and that extension stops working immediately.",
