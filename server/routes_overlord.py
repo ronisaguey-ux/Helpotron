@@ -2126,8 +2126,6 @@ def _build_agent_chat_prompt(user, payload: ChatMessageRequest, db: Session) -> 
 async def stream_chat_message(payload: ChatMessageRequest, request: Request, db: Session = Depends(get_db)):
     """Streaming chat endpoint: live reasoning and tokens with seamless fallback to non-streaming."""
     user = _get_current_user(request, db)
-    from .security import is_admin_user
-    is_admin = bool(getattr(user, "is_admin", False)) or is_admin_user(user)
 
     ctx = _build_agent_chat_prompt(user, payload, db)
     settings = ctx["settings"]
@@ -2136,14 +2134,16 @@ async def stream_chat_message(payload: ChatMessageRequest, request: Request, db:
     humanizer_ctx = ctx["humanizer_ctx"]
     system_prompt = ctx["system_prompt"]
 
-    # Token check
-    if not is_admin and user.plan != "elite":
-        token_bal = float((user.settings or {}).get("token_balance", 0) or 0)
-        if token_bal <= 0:
-            async def _insufficient_stream():
-                msg = "⚠️ Insufficient tokens — your token balance is 0. Activate the Free Trial or top up in Billing to use My Agent."
-                yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
-            return StreamingResponse(_insufficient_stream(), media_type="text/event-stream")
+    # Token check — the same canonical gate the other agent paths use. It reads
+    # `is_unmetered` internally, so the OPERATOR passes and a paid tier does not;
+    # the old `plan != "elite"` exemption let a subscriber start work on an empty
+    # balance. No deduction happens here (owner 2026-09-17: charge after, measured).
+    from .credits import has_usage_balance as _has_usage_balance
+    if not _has_usage_balance(user):
+        async def _insufficient_stream():
+            msg = "⚠️ Insufficient tokens — your token balance is 0. Activate the Free Trial or top up in Billing to use My Agent."
+            yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
+        return StreamingResponse(_insufficient_stream(), media_type="text/event-stream")
 
     # If the message appears to be a tool/action or shell compute:
     shell_cmd = _extract_shell_query(payload.text)
@@ -2186,6 +2186,16 @@ async def stream_chat_message(payload: ChatMessageRequest, request: Request, db:
     else:
         user_prompt = payload.text
 
+    # Metering watermark (owner 2026-09-17): everything this turn consumes — the
+    # streamed LLM call, the detection standard, the humanizer pass — is summed
+    # after the answer completes and charged as one MEASURED cost. Take it before
+    # any work starts; a watermark is a position in the ledger, not a lock.
+    try:
+        from .credits import ledger_watermark
+        _usage_mark = ledger_watermark(db, user.id)
+    except Exception:
+        _usage_mark = None
+
     async def event_generator():
         from .llm import stream_llm
         full_reply = ""
@@ -2221,8 +2231,29 @@ async def stream_chat_message(payload: ChatMessageRequest, request: Request, db:
             return
 
         # Deduct tokens and persist final reply
-        if not is_admin and user.plan != "elite":
-            _charge_tokens(user, db, 1.0)
+        #
+        # 09-18: this was a flat 1 token, and it exempted `elite` — which is a
+        # metered tier. Only the OPERATOR account is unmetered, so that guard let
+        # every subscriber consume unbounded upstream spend for 1 token per answer.
+        # The turn now costs what it measured: the LLM's own reported charge, at
+        # 100 tokens per cent. charge_actual_usage() applies the operator exemption
+        # itself via is_unmetered(), so no plan check belongs here.
+        if _usage_mark is not None:
+            try:
+                from .credits import charge_actual_usage
+                charge_actual_usage(
+                    user, "agent_chat_stream", db, since_id=_usage_mark,
+                    pre_charged=0,  # nothing was guessed up front
+                    reason=f"usage:chat_stream:{user.id}:{_usage_mark}",
+                    # The watermark names the window, so a re-entered settlement of
+                    # the SAME window bills once. Two genuinely concurrent turns can
+                    # share a watermark and would settle once — an undercharge, which
+                    # is the safe direction to be wrong in.
+                    idempotency_key=f"usage:chat_stream:{user.id}:{_usage_mark}",
+                )
+            except Exception as usage_error:
+                db.rollback()
+                logger.error("chat stream usage charge failed: %s", usage_error)
 
         # AI Detection Standard
         if full_reply and not full_reply.startswith(("⚠️", "✅", "❌")):

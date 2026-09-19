@@ -270,6 +270,15 @@ async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[st
         if user is None:
             user = db_session.query(User).filter(User.public_id == str(user_id)).first()
 
+        # OpenRouter reports the exact charge in `usage.cost` (verified live
+        # 2026-09-18, streaming included). Prefer that over the rate table — it is
+        # the real amount billed, and the table only covers a handful of models.
+        raw_cost = (token_usage or {}).get("cost")
+        try:
+            exact_cost = float(raw_cost) if raw_cost is not None else None
+        except (TypeError, ValueError):
+            exact_cost = None
+
         # 09-01 fix: log_api_call's real signature takes db, public_id,
         # tool_or_model, category, ... (the kwargs user_id=/model=/input_tokens=
         # don't exist) — every attempt raised TypeError and NO routing row
@@ -283,6 +292,7 @@ async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[st
             input_tokens=int(token_usage.get("prompt_tokens", 0) or 0),
             output_tokens=int(token_usage.get("completion_tokens", 0) or 0),
             metadata={k: v for k, v in route_info.items() if k != "model"},
+            exact_cost_usd=exact_cost,
         )
     except Exception as e:
         logger.warning(f"Failed to persist routing telemetry: {e}")
@@ -647,6 +657,7 @@ async def stream_llm(
                 cand_payload["messages"] = cand_messages
 
                 try:
+                    usage: Dict[str, Any] = {}
                     async with client.stream(
                         "POST",
                         "https://openrouter.ai/api/v1/chat/completions",
@@ -667,6 +678,15 @@ async def stream_llm(
                                 chunk = json.loads(data_str)
                             except Exception:
                                 continue
+                            # OpenRouter attaches the usage block — including the
+                            # exact charge — to the FINAL chunk of a stream
+                            # (measured 2026-09-18). Read it BEFORE the choices
+                            # filter below: the usage chunk can carry an empty
+                            # choices list, and nothing else in this loop looks at
+                            # it. That omission is why the streamed My Agent path
+                            # spent OpenRouter money and recorded nothing at all.
+                            if chunk.get("usage"):
+                                usage = chunk["usage"]
                             choices = chunk.get("choices") or []
                             if not choices:
                                 continue
@@ -679,6 +699,21 @@ async def stream_llm(
                             if content:
                                 streamed_any = True
                                 yield {"type": "content", "text": content}
+                    # Ledger the turn. Without this the streaming path billed the
+                    # provider and left no trace, so nothing downstream (analytics
+                    # or the usage settlement) could ever see the cost.
+                    if usage and db and user_id:
+                        await record_routing_telemetry(
+                            db, user_id, {**route, "model": cand_id}, usage
+                        )
+                    elif streamed_any:
+                        # Aborted mid-stream, or a provider that reports no usage.
+                        # Record nothing rather than invent a 0-cost row — an
+                        # unmetered call is recoverable, a phantom one is a lie.
+                        logger.warning(
+                            "stream_llm: %s streamed content but reported no usage — "
+                            "this call is unmetered", cand_id,
+                        )
                     if streamed_any:
                         return
                 except Exception as e:
