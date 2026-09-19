@@ -51,6 +51,25 @@ const MAX_JURISDICTION_FRAMES = 4;
 // "all tabs" is the same lie this labelling exists to stop.
 const MAX_JURISDICTION_TABS = 16;
 
+// Total tool calls one agent-mode task may spend across all its batches
+// (owner, 2026-09-18: "give it a 100 tool call loop limit"). The server
+// publishes the authoritative number as `tool_call_budget` in ui-config; this
+// is the offline fallback and the value used until that config lands. The two
+// are kept in step by the extension test, which asserts they agree.
+const AGENT_TOOL_BUDGET_FALLBACK = 100;
+let _agentToolBudget = null;
+
+async function agentToolBudget() {
+  if (_agentToolBudget) return _agentToolBudget;
+  try {
+    const copy = await _ensureUiCopy();
+    const n = Number(copy && copy.tool_call_budget);
+    if (Number.isFinite(n) && n > 0) { _agentToolBudget = n; return n; }
+  } catch { /* offline — fall through to the local default */ }
+  _agentToolBudget = AGENT_TOOL_BUDGET_FALLBACK;
+  return _agentToolBudget;
+}
+
 const modelToggles = {
   toggleSeeScreen: document.getElementById('toggleSeeScreen'),
   toggleExecute: document.getElementById('toggleExecute'),
@@ -2188,6 +2207,82 @@ function clampToViewport(x, y, vp) {
   return { x: cx, y: cy };
 }
 
+// ── Scroll verification ──────────────────────────────────────────────────────
+// A raw CDP mouseWheel event is dispatched and forgotten: nothing confirms the
+// page moved. That is how the agent came to announce a scroll that never
+// happened (owner report 2026-09-18). These read the real scroll position
+// before and after so a scroll can be VERIFIED rather than assumed.
+//
+// `inner` reports the deepest scrollable element under the wheel point, which
+// is what actually moves on a quiz page whose questions live in a scroll
+// container rather than the document.
+async function readScrollPos(tabId) {
+  try {
+    const res = await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: `(() => {
+        const doc = Math.round(window.scrollY || document.documentElement.scrollTop || 0);
+        let best = null;
+        for (const el of document.querySelectorAll('*')) {
+          if (el.scrollHeight - el.clientHeight < 24) continue;
+          const st = getComputedStyle(el);
+          if (!/(auto|scroll|overlay)/.test(st.overflowY)) continue;
+          const area = el.clientHeight * el.clientWidth;
+          if (!best || area > best.area) best = { top: Math.round(el.scrollTop), area };
+        }
+        return { doc, inner: best ? best.top : -1 };
+      })()`,
+      returnByValue: true,
+    });
+    const v = res && res.result && res.result.value;
+    if (v && typeof v.doc === 'number') return v;
+  } catch { /* page may be mid-navigation — treat as unmoved */ }
+  return { doc: -1, inner: -1 };
+}
+
+// The wheel did nothing. Scroll the real container ourselves: prefer the
+// scrollable element under the cursor, else the tallest scrollable container on
+// the page. Returns true when a direct scrollTop write actually changed
+// something, so the caller can say "the wheel was ignored" instead of claiming
+// a normal scroll.
+async function scrollContainerFallback(tabId, x, y, deltaX, deltaY) {
+  try {
+    const res = await chrome.debugger.sendCommand({ tabId }, 'Runtime.evaluate', {
+      expression: `(() => {
+        const scrollable = (el) => {
+          if (!el || el.scrollHeight - el.clientHeight < 24) return false;
+          const st = getComputedStyle(el);
+          return /(auto|scroll|overlay)/.test(st.overflowY);
+        };
+        // The element actually under the wheel point wins, then its ancestors.
+        let target = document.elementFromPoint(${Math.round(x)}, ${Math.round(y)});
+        let hit = null;
+        for (let el = target; el && el !== document.documentElement; el = el.parentElement) {
+          if (scrollable(el)) { hit = el; break; }
+        }
+        if (!hit) {
+          let best = null;
+          for (const el of document.querySelectorAll('*')) {
+            if (!scrollable(el)) continue;
+            const area = el.clientHeight * el.clientWidth;
+            if (!best || area > best.area) best = { el, area };
+          }
+          hit = best ? best.el : null;
+        }
+        const before = { d: window.scrollY, i: hit ? hit.scrollTop : -1 };
+        if (hit) { hit.scrollTop += ${Math.round(deltaY)}; hit.scrollLeft += ${Math.round(deltaX)}; }
+        else { window.scrollBy(${Math.round(deltaX)}, ${Math.round(deltaY)}); }
+        const after = { d: window.scrollY, i: hit ? hit.scrollTop : -1 };
+        return { moved: before.d !== after.d || before.i !== after.i };
+      })()`,
+      returnByValue: true,
+    });
+    const v = res && res.result && res.result.value;
+    return Boolean(v && v.moved);
+  } catch {
+    return false;
+  }
+}
+
 // The click coordinates come from a vision model reading a screenshot, so they
 // routinely land a few pixels off — inside the right control, or on the padding
 // just outside it. The click then dispatches at the model's guess and the page
@@ -2942,6 +3037,17 @@ async function driveActionsInTab(driveTab, actions, ctx) {
     // says WHERE — keep the tab in front of the user for every step.
     const say = (n, what) => updateAgentActiveDesc(`${step}Action ${n}/${actions.length}: ${what}`);
 
+    // Ops that were dispatched but demonstrably did nothing. Collected so the
+    // batch verdict can state what actually happened instead of reporting the
+    // ARRAY LENGTH as evidence of work (owner report 2026-09-18: "it said it
+    // scrolled and never did"). An action that produced no page change is not a
+    // success, and saying so is the whole point of this list.
+    const noops = [];
+    // Ran, and worked, but in a way worth telling the user about (a page that
+    // eats wheel events, for instance). Informational: never counted as a
+    // failure, so a moved page is never reported as "nothing happened".
+    const notes = [];
+
     for (let idx = 0; idx < actions.length; idx++) {
       if (isAgentActionPaused) break;
       const pagePaused = await checkPagePauseFlag(driveTab.id);
@@ -3082,18 +3188,72 @@ async function driveActionsInTab(driveTab, actions, ctx) {
             } catch {}
           }
         }
-      } else if (op.op === 'scroll' && (op.deltaX || op.deltaY)) {
-        say(stepNum, 'Scrolling…');
-        await setVirtualCursorAction(driveTab.id, 'Scrolling…');
-        const sxy = clampToViewport(
-          op.x !== undefined ? op.x : lastCursorPos.x,
-          op.y !== undefined ? op.y : lastCursorPos.y,
-          vp
-        );
-        await cdp(driveTab.id, 'Input.dispatchMouseEvent', {
-          type: 'mouseWheel', x: Math.round(sxy.x), y: Math.round(sxy.y),
-          deltaX: Math.trunc(op.deltaX || 0), deltaY: Math.trunc(op.deltaY || 0),
-        });
+      } else if (op.op === 'scroll') {
+        // Owner report (2026-09-18): the agent said it scrolled and the page
+        // never moved. Two independent causes, and the old code hid both behind
+        // an unconditional "✓ executed":
+
+        //  1. A scroll op with both deltas at zero is a NO-OP. The directive's
+        //     own prompt printed {"op":"scroll",...,"deltaX":0,"deltaY":0} as
+        //     the template, so a model copying the shape emitted zero movement
+        //     on every round. The guard `(op.deltaX || op.deltaY)` skipped it
+        //     silently, and the batch still reported the full action count.
+        //  2. deltaY on a page whose content lives in an INNER scrollable
+        //     container does nothing — the wheel event lands on the container,
+        //     not the document, and a quiz/assessment UI is usually exactly
+        //     that. A raw wheel dispatch cannot reach it when the container
+        //     was not the element under the point.
+        //
+        // So: never claim movement without checking, and fall back to setting
+        // scrollTop on the real scroll container when the wheel did nothing.
+        const dx = Math.trunc(op.deltaX || 0);
+        const dy = Math.trunc(op.deltaY || 0);
+        if (!dx && !dy) {
+          noops.push({ op: 'scroll', why: 'zero deltaX+deltaY — a scroll with no distance does nothing' });
+          say(stepNum, 'Scroll skipped (no distance given)');
+        } else {
+          say(stepNum, `Scrolling Δ(${dx},${dy})…`);
+          await setVirtualCursorAction(driveTab.id, 'Scrolling…');
+          const sxy = clampToViewport(
+            op.x !== undefined ? op.x : lastCursorPos.x,
+            op.y !== undefined ? op.y : lastCursorPos.y,
+            vp
+          );
+          const before = await readScrollPos(driveTab.id);
+          await cdp(driveTab.id, 'Input.dispatchMouseEvent', {
+            type: 'mouseWheel', x: Math.round(sxy.x), y: Math.round(sxy.y),
+            deltaX: dx, deltaY: dy,
+          });
+          await new Promise((r) => setTimeout(r, 220));
+          let after = await readScrollPos(driveTab.id);
+          if (after.doc === before.doc && after.inner === before.inner) {
+            // The wheel was dispatched and the page did not move. Do not report
+            // success: scroll the real container directly, then re-read.
+            const usedFallback = await scrollContainerFallback(driveTab.id, sxy.x, sxy.y, dx, dy);
+            await new Promise((r) => setTimeout(r, 160));
+            after = await readScrollPos(driveTab.id);
+            const reallyMoved = after.doc !== before.doc || after.inner !== before.inner;
+            if (!reallyMoved) {
+              // Nothing scrolled: either the page is already at the end, or
+              // there is genuinely nothing scrollable here. Either way the user
+              // must be told, not handed a green tick.
+              noops.push({
+                op: 'scroll',
+                why: `Δ(${dx},${dy}) moved nothing — page may already be at its end or have no scrollable area`,
+              });
+              say(stepNum, 'Scroll had no effect');
+            } else if (usedFallback) {
+              // It moved — the wheel was ignored and we scrolled the container
+              // ourselves. That is a SUCCESS with a caveat, not a no-op, so it
+              // goes in `notes`. Filing it as a no-op made the batch verdict
+              // read "nothing was scrolled" over a page that had just moved.
+              notes.push({
+                op: 'scroll',
+                what: `Δ(${dx},${dy}) — page ignores wheel events; scrolled the container directly`,
+              });
+            }
+          }
+        }
       }
       await new Promise((r) => setTimeout(r, 180));
     }
@@ -3101,7 +3261,7 @@ async function driveActionsInTab(driveTab, actions, ctx) {
     await removeVirtualCursor(driveTab.id);
     await chrome.debugger.detach({ tabId: driveTab.id }).catch(() => {});
     if (isAgentActionPaused) return { status: 'paused', ran: 0, label };
-    return { status: 'ok', ran: actions.length, label, unseen: drivingUnseen };
+    return { status: 'ok', ran: actions.length, noops, notes, label, unseen: drivingUnseen };
   } catch (err) {
     await removeVirtualCursor(driveTab.id).catch(() => {});
     await chrome.debugger.detach({ tabId: driveTab.id }).catch(() => {});
@@ -3166,14 +3326,34 @@ async function executeReturnedActions(actions) {
   // Say it when the cap cut the scope down — "all tabs" that quietly means 16
   // is worse than 16 tabs and a sentence about it.
   const capped = overCap ? ` ${overCap} more tab(s) were in scope but past the ${MAX_JURISDICTION_TABS}-tab limit.` : '';
+
+  // An op that ran but changed nothing is NOT a success, and the count of ops
+  // SENT is not evidence of work done. Report the no-ops explicitly: the report
+  // that started this was "it said it scrolled and never did", and a green tick
+  // over a batch that moved nothing is exactly that lie.
+  const noopList = done.flatMap((d) => d.noops || []);
+  const noteList = done.flatMap((d) => d.notes || []);
+  const noopNote = noopList.length
+    ? ` ⚠️ ${noopList.length} action(s) had no effect: ${noopList.map((o) => `${o.op} — ${o.why}`).slice(0, 2).join('; ')}.`
+    : '';
+  const noteNote = noteList.length
+    ? ` Note: ${noteList.map((o) => o.what).slice(0, 2).join('; ')}.`
+    : '';
+  const didNothing = n > 0 && noopList.length >= n;
+
   if (done.length === 1) {
-    setStatus(done[0].unseen
-      ? `✓ Drove ${done[0].label} in the background — ${n} action(s). Press ⧉ Keep open to watch it happen.${missed}${capped}`
-      : `✓ Drove ${done[0].label} — ${n} action(s) executed with visible cursor.${missed}${capped}`);
+    if (didNothing) {
+      setStatus(`⚠️ ${done[0].label} — ${n} action(s) sent, but NONE of them changed the page. Nothing was scrolled.${noopNote}${missed}${capped}`);
+    } else {
+      setStatus(done[0].unseen
+        ? `✓ Drove ${done[0].label} in the background — ${n} action(s). Press ⧉ Keep open to watch it happen.${noteNote}${noopNote}${missed}${capped}`
+        : `✓ Drove ${done[0].label} — ${n} action(s) executed with visible cursor.${noteNote}${noopNote}${missed}${capped}`);
+    }
   } else {
-    setStatus(`✓ Drove ${done.length} tabs — ${n} action(s) each: ${done.map((d) => d.label).join(', ')}.${missed}${capped}`);
+    setStatus(`✓ Drove ${done.length} tabs — ${n} action(s) each: ${done.map((d) => d.label).join(', ')}.${noteNote}${noopNote}${missed}${capped}`);
   }
   hideAgentActiveBar();
+  return { ran: n, targets: done.length, noops: noopList, notes: noteList };
 }
 
 async function loadPopupChatHistory() {
@@ -3209,6 +3389,294 @@ if (btnRefreshChat) {
   });
 }
 
+// ── Agent turn: one capture → one server call → execute → report ──────────────
+//
+// Lifted out of the submit handler on 09-18 so the MULTI-ACTION LOOP can drive
+// the same code path repeatedly. The owner asked for agent mode to be able to
+// take more than one batch: "allow it to do multi actions inside agent mode,
+// give it a 100 tool call loop limit".
+//
+// One call = one round. It captures the live screen/elements, asks the server
+// what to do, executes what comes back, and returns a verdict the loop can act
+// on. `opts.silentUser` suppresses the user bubble so a continuation round does
+// not fake a message the user never typed.
+async function runAgentTurn(text, opts = {}) {
+  const { silentUser = false } = opts;
+  let srv = '';
+  let t = null;
+  try {
+    const { server } = await chrome.storage.local.get('server');
+    srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
+    t = await authToken();
+  } catch (e) {
+    // Speak in the CHAT, not just the status line: the pre-refactor handler
+    // wrote this into the bubble it had already created, and an early return
+    // that reports only to the status bar leaves the user staring at a chat
+    // that swallowed their message with no reply at all.
+    addPopupChatMsg('agent', '⚠️ Could not read your connection settings — reopen the panel and try again.');
+    setStatus('⚠️ Could not read connection settings.');
+    return { ok: false, fatal: true, error: 'Could not read your connection settings — reopen the panel and try again.' };
+  }
+  if (!t) {
+    addPopupChatMsg('agent', '⚠️ Connect Helpotron with an API key first to chat with the agent.');
+    setStatus('⚠️ Not connected — add an API key in Settings → API Keys.');
+    return { ok: false, fatal: true, error: 'Not connected' };
+  }
+
+  const typingNode = addPopupChatMsg('agent', 'Thinking…');
+  if (!silentUser) addPopupChatMsg('user', text);
+
+  try {
+    const agentState = await readAgentState();
+    const seeScreen = agentState[SEE_SCREEN_KEY] !== undefined ? agentState[SEE_SCREEN_KEY] : SEE_SCREEN_DEFAULT;
+    let images = [];
+    let tabRefs = [];
+    let elements = [];
+    let viewport = await activeTabViewport();
+
+    let screenError = null;
+    if (seeScreen) {
+      const active = await activeTabForDrive();
+      const { tabs: targets, reason } = await resolveJurisdictionTabs(active);
+      const executeOn = agentState[EXECUTE_KEY] !== undefined ? agentState[EXECUTE_KEY] : EXECUTE_DEFAULT;
+      if (!targets.length) {
+        screenError = reason || (active ? `the tab you are on (${driveTabLabel(active)}) cannot be driven or captured — browser internal pages are restricted. Switch to a normal web page.` : 'no active tab found');
+      } else {
+        const shot = await captureJurisdictionFrames(targets, active, Boolean(executeOn));
+        images = shot.images;
+        tabRefs = shot.tabs;
+        if (shot.elements && shot.elements.length) elements = shot.elements;
+        if (shot.viewport) viewport = shot.viewport;
+        if (!images.length) {
+          screenError = 'screen capture returned no frames (tab may be restricted, DevTools open, or occluded)';
+        }
+      }
+    }
+
+    const eduMode = agentState[EDUCATIONAL_MODE_KEY] !== undefined ? agentState[EDUCATIONAL_MODE_KEY] : EDUCATIONAL_MODE_DEFAULT;
+    const permMode = agentState[MODE_KEY] || MODE_DEFAULT;
+    const executeOn = agentState[EXECUTE_KEY] !== undefined ? agentState[EXECUTE_KEY] : EXECUTE_DEFAULT;
+
+    if (executeOn && (!elements || !elements.length)) {
+      try {
+        const driveTab = await activeTabForDrive();
+        if (driveTab && driveTab.id !== undefined && driveTab.id !== null) {
+          elements = await collectInteractiveElements(driveTab.id, undefined, { allowAttach: true });
+        }
+      } catch (e) { elements = []; }
+    }
+
+    const bodyPayload = {
+      text,
+      thread_id: currentThreadId,
+      agent_mode: true,
+      educational_mode: eduMode,
+      permission_mode: permMode,
+      seescreen: !!seeScreen,
+      execute: !!executeOn,
+    };
+    if (images.length) bodyPayload.images = images;
+    if (screenError) bodyPayload.screen_error = screenError;
+    if (tabRefs.length) bodyPayload.tabs = tabRefs;
+    if (viewport) bodyPayload.viewport = viewport;
+    if (elements.length) bodyPayload.elements = elements.slice(0, 5000);
+
+    const ctrl = new AbortController();
+    const fetchTimer = setTimeout(() => ctrl.abort(), 75000);
+    let res;
+    try {
+      res = await fetch(`${srv}/api/extension/agent_chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+        body: JSON.stringify(bodyPayload),
+        signal: ctrl.signal,
+      });
+    } finally {
+      clearTimeout(fetchTimer);
+    }
+
+    const data = await res.json().catch(() => ({}));
+    if (typingNode && typingNode.parentNode) typingNode.parentNode.removeChild(typingNode);
+
+    if (data && data.status === 'insufficient_tokens') {
+      if (chatTokenBanner && chatTokenMsg) {
+        chatTokenMsg.textContent = data.message || 'Insufficient tokens for agent actions.';
+        chatTokenBanner.style.display = 'flex';
+      }
+      addPopupChatMsg('agent', '⚠️ Insufficient tokens — visit your Helpotron account to replenish tokens.');
+      return { ok: false, fatal: true, outOfTokens: true };
+    }
+
+    if (data && data.status === 'permission_required') {
+      const ap = (data.approval_request && data.approval_request.req_id)
+        ? data.approval_request
+        : (data.permission_request
+            ? { req_id: data.permission_request.id, title: data.permission_request.title, summary: data.permission_request.description }
+            : null);
+      if (ap) {
+        pendingApprovals.push({ reqId: String(ap.req_id), title: ap.title || 'Permission required', summary: ap.summary || 'The agent is waiting for your decision.', viaServer: true });
+        while (pendingApprovals.length > 5) pendingApprovals.shift();
+        renderNextApproval();
+        setStatus('⚠️ The agent needs your approval before it can act.');
+      }
+      // A loop must not run on past a pending approval — the user has not
+      // decided yet, so the next round would be acting without consent.
+      return { ok: false, fatal: true, needsApproval: true };
+    }
+
+    if (!res.ok) {
+      const errDetail = data.detail;
+      let errText = `HTTP ${res.status}`;
+      if (typeof errDetail === 'string') errText = errDetail;
+      else if (Array.isArray(errDetail)) errText = errDetail.map((d) => (d && d.msg) || JSON.stringify(d)).join('; ');
+      else if (errDetail && typeof errDetail === 'object') errText = errDetail.message || errDetail.msg || JSON.stringify(errDetail);
+      addPopupChatMsg('agent', `⚠️ Error: ${errText}`);
+      return { ok: false, fatal: true, error: errText };
+    }
+
+    const reply = (typeof data.reply === 'string' ? data.reply : data.reply?.text) || data.message || 'Done.';
+    addPopupChatMsg('agent', reply, data.reply_html || '');
+
+    const cacheKey = currentThreadId === 0 ? CHAT_KEY : `${CHAT_KEY}_t${currentThreadId}`;
+    const st = await chrome.storage.local.get(cacheKey);
+    const list = (st[cacheKey] || []).slice(-70);
+    if (!silentUser) list.push({ sender: 'user', text, timestamp: new Date().toISOString() });
+    list.push({ sender: 'agent', text: reply, timestamp: new Date().toISOString() });
+    chrome.storage.local.set({ [cacheKey]: list }).catch(() => {});
+
+    const actions = Array.isArray(data.control_actions) ? data.control_actions : null;
+    const execInfo = data.execution && typeof data.execution === 'object' ? data.execution : null;
+
+    if (!actions || !actions.length) {
+      if (execInfo && execInfo.status === 'failed' && execInfo.detail) {
+        addPopupChatMsg('agent', `⚠️ ${execInfo.detail}`);
+        setStatus('No action ran — see the note above.');
+      }
+      // No actions = the agent considers the task finished. That is the loop's
+      // natural stop condition, so report it as such rather than as an error.
+      return { ok: true, reply, actions: [], ran: 0, noops: [], done: true };
+    }
+
+    if (!executeOn) {
+      setStatus(`Agent proposed ${actions.length} action(s) — Study Mode is OFF, so actions were skipped.`);
+      return { ok: true, reply, actions, ran: 0, skipped: true, done: true };
+    }
+
+    if (data.control_requires_approval && !screenControlSessionAllowed) {
+      const reqId = `screenctl-${Date.now()}`;
+      pendingApprovals.push({
+        reqId,
+        title: 'Approve screen control?',
+        summary: data.control_summary
+          ? `${data.control_summary}\n\nOn: ${await jurisdictionTargetSummary()}`
+          : `The agent wants to run ${actions.length} action(s) on your screen.`,
+        onDecision: async (decision, note, o) => {
+          if (decision !== 'allow') {
+            setStatus('Screen control rejected — nothing ran.');
+            return;
+          }
+          if (o && o.autoAdd) screenControlSessionAllowed = true;
+          setStatus(`Executing ${actions.length} action(s) after approval…`);
+          await executeReturnedActions(actions);
+        },
+      });
+      while (pendingApprovals.length > 5) pendingApprovals.shift();
+      renderNextApproval();
+      addPopupChatMsg('agent', `⚠️ Action ready: "${data.control_summary || 'Screen control'}". Click **Approve** on the card below to execute, or switch Permissions to **Automatic** or **YOLO** in study settings above to act automatically.`);
+      setStatus('⚠️ Waiting on your approval below before touching the screen.');
+      return { ok: true, reply, actions, ran: 0, needsApproval: true, done: true };
+    }
+
+    setStatus(`Executing ${actions.length} action(s) proposed by agent…`);
+    const verdict = await executeReturnedActions(actions);
+    const ran = (verdict && verdict.ran) || actions.length;
+    const noops = (verdict && verdict.noops) || [];
+    return { ok: true, reply, actions, ran, noops, done: false };
+  } catch (err) {
+    if (typingNode && typingNode.parentNode) typingNode.parentNode.removeChild(typingNode);
+    addPopupChatMsg('agent', `⚠️ Connection error: ${String(err).slice(0, 100)}`);
+    return { ok: false, fatal: true, error: String(err) };
+  }
+}
+
+// The continuation prompt. Deliberately explicit about the budget and about
+// "do not repeat yourself", because a model re-invoked with a fresh screen will
+// otherwise re-announce the step it already completed.
+function agentContinuationPrompt(used, budget, priorNoops) {
+  const stalled = priorNoops && priorNoops.length
+    ? `\nYour last batch was reported as having NO EFFECT on the page (${priorNoops.map((o) => o.why).slice(0, 2).join('; ')}). Do not repeat those actions — choose a different approach, or stop and tell the user you are blocked.`
+    : '';
+  return (
+    `[AUTO-CONTINUATION] Keep going with the task. Tool calls used so far: ${used} of ${budget}. ` +
+    `The screen state above is FRESH — it shows the result of your last batch. ` +
+    `Do not repeat or re-describe what you already did. Assess where the task actually stands now, ` +
+    `then emit the next batch of actions needed to finish it. ` +
+    `If the task is now COMPLETE, emit no control block at all and simply state that it is done and what the result is. ` +
+    `If you cannot make further progress without the user, emit no control block and say exactly what you need.` +
+    stalled
+  );
+}
+
+// Agent-mode is "act on the user's browser", so anything that is scanned for
+// element refs on EVERY round costs real time. The loop only continues when the
+// run is genuinely mid-task: executing, not paused, and the last batch actually
+// did something.
+const AGENT_LOOP_HARD_ROUND_CAP = 40;
+
+async function runAgentTask(userText) {
+  const budget = await agentToolBudget();
+  let used = 0;
+  let round = 0;
+  let lastNoops = [];
+  let stalledRounds = 0;
+  let outcome = await runAgentTurn(userText);
+
+  if (!outcome.ok) return outcome;
+
+  while (!outcome.done) {
+    used += outcome.ran || 0;
+    lastNoops = outcome.noops || [];
+    round += 1;
+
+    // A batch where every action was reported as having no effect is a wasted
+    // round. One is forgiven — the model may simply have guessed wrong and
+    // deserves a chance to change approach now that it can see the result. TWO
+    // in a row is a loop, and the remaining budget is better saved than burned
+    // re-clicking the same miss.
+    const batchRan = outcome.ran || 0;
+    if (batchRan > 0 && lastNoops.length >= batchRan) stalledRounds += 1;
+    else stalledRounds = 0;
+
+    if (isAgentActionPaused) {
+      setStatus(`⏸ Paused after ${used} tool call(s). Send any message, or press Resume, to carry on.`);
+      return { ...outcome, stopped: 'paused', used };
+    }
+    if (used >= budget) {
+      setStatus(`✓ Stopped at the ${budget} tool-call limit — ${used} used. Send a message to continue.`);
+      addPopupChatMsg('agent', `⚠️ Reached the ${budget} tool-call limit for one task. The work so far is done; send another message to continue where it left off.`);
+      return { ...outcome, stopped: 'budget', used };
+    }
+    if (round >= AGENT_LOOP_HARD_ROUND_CAP) {
+      setStatus(`✓ Stopped after ${round} rounds (${used} tool calls) to avoid looping.`);
+      return { ...outcome, stopped: 'rounds', used };
+    }
+    if (stalledRounds >= 2) {
+      setStatus(`⚠️ Two batches in a row changed nothing — stopping after ${used} tool call(s).`);
+      addPopupChatMsg('agent', `⚠️ I stopped: two batches in a row had no effect on the page. Repeating them would not help — the screen is not changing, so something about this step needs your input.`);
+      return { ...outcome, stopped: 'stalled', used };
+    }
+
+    outcome = await runAgentTurn(agentContinuationPrompt(used, budget, lastNoops), { silentUser: true });
+    if (!outcome.ok) {
+      if (outcome.fatal) return { ...outcome, used };
+      break;
+    }
+  }
+
+  if (used > 0) setStatus(`✓ Agent finished — ${used} tool call(s) used.`);
+  return { ...outcome, used };
+}
+
 if (chatFormEl && chatInputEl) {
   chatFormEl.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -3216,236 +3684,15 @@ if (chatFormEl && chatInputEl) {
     if (!text || chatBusy) return;
 
     chatInputEl.value = '';
-    addPopupChatMsg('user', text);
     chatBusy = true;
     if (chatTokenBanner) chatTokenBanner.style.display = 'none';
-
-    const typingNode = addPopupChatMsg('agent', 'Thinking…');
-
-    // Read the connection settings under a guard. These two awaits used to sit
-    // bare, so any failure here threw straight past `chatBusy = false` and
-    // wedged the composer — the same shape as the selector bug below.
-    let srv = '';
-    let t = null;
     try {
-      const { server } = await chrome.storage.local.get('server');
-      srv = (server || 'https://helpotron.dpdns.org').replace(/\/+$/, '');
-      t = await authToken();
-    } catch (e) {
-      setPopupChatBody(typingNode, '⚠️ Could not read your connection settings — reopen the panel and try again.');
-      chatBusy = false;
-      return;
-    }
-
-    if (!t) {
-      // setPopupChatBody, never a raw querySelector: see its comment for the
-      // crash + stuck-composer bug this replaced.
-      setPopupChatBody(typingNode, '⚠️ Connect Helpotron with an API key first to chat with the agent.');
-      chatBusy = false;
-      return;
-    }
-
-    try {
-      const agentState = await readAgentState();
-      const seeScreen = agentState[SEE_SCREEN_KEY] !== undefined ? agentState[SEE_SCREEN_KEY] : SEE_SCREEN_DEFAULT;
-      let images = [];
-      let tabRefs = [];
-      let elements = [];
-      // The server clamps returned control coordinates against THIS box, so it
-      // has to be the drive tab's CSS viewport. It used to send the whole
-      // screen (e.g. 2560x1440 for a 1200x800 tab), which let coordinates far
-      // outside the page survive clamping and land on nothing.
-      let viewport = await activeTabViewport();
-
-      let screenError = null;
-      if (seeScreen) {
-        // One path for every scope, single tab included. The old single-tab
-        // branch called captureVisibleTab with no window id, which means "the
-        // current window" — inside a popped-out popup that is the popup itself,
-        // so the model was handed a picture of the chat window instead of the
-        // page it was being asked about. Going through the jurisdiction always
-        // means the frames come from the tabs the run will actually drive.
-        const active = await activeTabForDrive();
-        const { tabs: targets, reason } = await resolveJurisdictionTabs(active);
-        const executeOn = agentState[EXECUTE_KEY] !== undefined ? agentState[EXECUTE_KEY] : EXECUTE_DEFAULT;
-        if (!targets.length) {
-          screenError = reason || (active ? `the tab you are on (${driveTabLabel(active)}) cannot be driven or captured — browser internal pages are restricted. Switch to a normal web page.` : 'no active tab found');
-          setStatus(`⚠️ Screen capture: ${screenError}`);
-        } else {
-          const shot = await captureJurisdictionFrames(targets, active, Boolean(executeOn));
-          images = shot.images;
-          tabRefs = shot.tabs;
-          if (shot.elements && shot.elements.length) {
-            elements = shot.elements;
-          }
-          // The frames were just normalized into the drive tab's CSS viewport,
-          // so that is the box the server must clamp against. Prefer it over the
-          // pre-capture read — the tab can be resized between the two.
-          if (shot.viewport) viewport = shot.viewport;
-          if (!images.length) {
-            screenError = 'screen capture returned no frames (tab may be restricted, DevTools open, or occluded)';
-            setStatus(`⚠️ Screen capture: ${screenError}`);
-          }
-        }
-      }
-
-      const eduMode = agentState[EDUCATIONAL_MODE_KEY] !== undefined ? agentState[EDUCATIONAL_MODE_KEY] : EDUCATIONAL_MODE_DEFAULT;
-      const permMode = agentState[MODE_KEY] || MODE_DEFAULT;
-      // The server gates the model's screen/execute directives on THESE two
-      // flags (routes_extension.py: sees_can_see = bool(seescreen) and images;
-      // can_execute = bool(execute)). Omitting them made the model announce
-      // "the See screen toggle is off" while the toggle was visibly ON, and
-      // refuse to act on the page.
-      const executeOn = agentState[EXECUTE_KEY] !== undefined ? agentState[EXECUTE_KEY] : EXECUTE_DEFAULT;
-
-      // The page's own element list — exact measured coordinates, not a vision
-      // guess. Gathered only when the run may actually act, so a look-only turn
-      // pays no extra tokens; an empty list leaves the vision path untouched.
-      if (executeOn && (!elements || !elements.length)) {
-        try {
-          const driveTab = await activeTabForDrive();
-          if (driveTab && driveTab.id !== undefined && driveTab.id !== null) {
-            // allowAttach: on a site outside the manifest's host_permissions
-            // chrome.scripting is refused and the list would be empty, so the
-            // model gets no element refs at all. A brief debugger session reads
-            // the same DOM through CDP on any page. Read-only callers do not
-            // pass this, so they never arm the debugger.
-            elements = await collectInteractiveElements(driveTab.id, undefined, { allowAttach: true });
-          }
-        } catch (e) { elements = []; }
-      }
-
-      const bodyPayload = {
-        text,
-        thread_id: currentThreadId,
-        agent_mode: true,
-        educational_mode: eduMode,
-        permission_mode: permMode,
-        seescreen: !!seeScreen,
-        execute: !!executeOn,
-      };
-      if (images.length) bodyPayload.images = images;
-      if (screenError) bodyPayload.screen_error = screenError;
-      if (tabRefs.length) bodyPayload.tabs = tabRefs;
-      if (viewport) bodyPayload.viewport = viewport;
-      if (elements.length) bodyPayload.elements = elements.slice(0, 5000);
-
-      const ctrl = new AbortController();
-      const fetchTimer = setTimeout(() => ctrl.abort(), 75000);
-      let res;
-      try {
-        res = await fetch(`${srv}/api/extension/agent_chat`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${t}`,
-          },
-          body: JSON.stringify(bodyPayload),
-          signal: ctrl.signal,
-        });
-      } finally {
-        clearTimeout(fetchTimer);
-      }
-
-      const data = await res.json().catch(() => ({}));
-      if (typingNode && typingNode.parentNode) typingNode.parentNode.removeChild(typingNode);
-
-      if (data && data.status === 'insufficient_tokens') {
-        if (chatTokenBanner && chatTokenMsg) {
-          chatTokenMsg.textContent = data.message || 'Insufficient tokens for agent actions.';
-          chatTokenBanner.style.display = 'flex';
-        }
-        addPopupChatMsg('agent', '⚠️ Insufficient tokens — visit your Helpotron account to replenish tokens.');
-      } else if (data && data.status === 'permission_required') {
-        // Server permission gate (09-07): the action needs the user's decision
-        // before the agent can execute. Renders the shared card; the answer
-        // posts straight to /api/extension/approval/respond (viaServer entry).
-        const ap = (data.approval_request && data.approval_request.req_id)
-          ? data.approval_request
-          : (data.permission_request
-              ? { req_id: data.permission_request.id, title: data.permission_request.title, summary: data.permission_request.description }
-              : null);
-        if (ap) {
-          pendingApprovals.push({ reqId: String(ap.req_id), title: ap.title || 'Permission required', summary: ap.summary || 'The agent is waiting for your decision.', viaServer: true });
-          while (pendingApprovals.length > 5) pendingApprovals.shift();
-          renderNextApproval();
-          setStatus('⚠️ The agent needs your approval before it can act.');
-        }
-      } else if (res.ok) {
-        const reply = (typeof data.reply === 'string' ? data.reply : data.reply?.text) || data.message || 'Done.';
-        addPopupChatMsg('agent', reply, data.reply_html || '');
-        // Persist message to local chat mirror
-        const cacheKey = currentThreadId === 0 ? CHAT_KEY : `${CHAT_KEY}_t${currentThreadId}`;
-        const st = await chrome.storage.local.get(cacheKey);
-        const list = (st[cacheKey] || []).slice(-70);
-        list.push({ sender: 'user', text, timestamp: new Date().toISOString() });
-        list.push({ sender: 'agent', text: reply, timestamp: new Date().toISOString() });
-        chrome.storage.local.set({ [cacheKey]: list }).catch(() => {});
-
-        // Check for control actions execution
-        const actions = Array.isArray(data.control_actions) ? data.control_actions : null;
-        const execInfo = data.execution && typeof data.execution === 'object' ? data.execution : null;
-        if (actions && actions.length) {
-          if (!executeOn) {
-            setStatus(`Agent proposed ${actions.length} action(s) — Study Mode is OFF, so actions were skipped.`);
-          } else if (data.control_requires_approval && !screenControlSessionAllowed) {
-            // Manual mode (09-08): the agent does NOT touch the screen until
-            // the user says so. The card carries the real ops, so "Approve"
-            // is an informed click, not a blank cheque.
-            const reqId = `screenctl-${Date.now()}`;
-            pendingApprovals.push({
-              reqId,
-              title: 'Approve screen control?',
-              // Name the tabs the run will REALLY touch — the same jurisdiction
-              // the drive resolves. This used to name a tab picked by the old
-              // most-recently-used fallback, so the card could promise one page
-              // and the burst land on another.
-              summary: data.control_summary
-                ? `${data.control_summary}\n\nOn: ${await jurisdictionTargetSummary()}`
-                : `The agent wants to run ${actions.length} action(s) on your screen.`,
-              onDecision: async (decision, note, opts) => {
-                if (decision !== 'allow') {
-                  setStatus('Screen control rejected — nothing ran.');
-                  return;
-                }
-                if (opts && opts.autoAdd) screenControlSessionAllowed = true;
-                setStatus(`Executing ${actions.length} action(s) after approval…`);
-                await executeReturnedActions(actions);
-              },
-            });
-            while (pendingApprovals.length > 5) pendingApprovals.shift();
-            renderNextApproval();
-            addPopupChatMsg('agent', `⚠️ Action ready: "${data.control_summary || 'Screen control'}". Click **Approve** on the card below to execute, or switch Permissions to **Automatic** or **YOLO** in study settings above to act automatically.`);
-            setStatus('⚠️ Waiting on your approval below before touching the screen.');
-          } else {
-            setStatus(`Executing ${actions.length} action(s) proposed by agent…`);
-            await executeReturnedActions(actions);
-          }
-        } else if (execInfo && execInfo.status === 'failed' && execInfo.detail) {
-          // Never leave the agent's prose ("I'm typing that for you now") as
-          // the only account of a turn where nothing actually ran (09-08).
-          addPopupChatMsg('agent', `⚠️ ${execInfo.detail}`);
-          setStatus('No action ran — see the note above.');
-        }
-      } else {
-        const errDetail = data.detail;
-        let errText = `HTTP ${res.status}`;
-        if (typeof errDetail === 'string') {
-          errText = errDetail;
-        } else if (Array.isArray(errDetail)) {
-          errText = errDetail.map((d) => (d && d.msg) || JSON.stringify(d)).join('; ');
-        } else if (errDetail && typeof errDetail === 'object') {
-          errText = errDetail.message || errDetail.msg || JSON.stringify(errDetail);
-        }
-        addPopupChatMsg('agent', `⚠️ Error: ${errText}`);
-      }
-    } catch (err) {
-      if (typingNode && typingNode.parentNode) typingNode.parentNode.removeChild(typingNode);
-      addPopupChatMsg('agent', `⚠️ Connection error: ${String(err).slice(0, 100)}`);
+      await runAgentTask(text);
     } finally {
       chatBusy = false;
     }
   });
+
 
   // Enter to send (Shift+Enter for newline)
   chatInputEl.addEventListener('keydown', (e) => {

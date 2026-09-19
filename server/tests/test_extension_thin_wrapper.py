@@ -90,6 +90,12 @@ def test_ui_config_model_ladder_matches_the_real_router():
 
 
 def test_ui_config_carries_action_caps():
+    from server.screen_vision import _MAX_AGENT_TOOL_CALLS, _MAX_CONTROL_ACTIONS
+
     body = client.get("/api/extension/ui-config").json()
-    assert body["action_cap"] == 15
+    assert body["action_cap"] == _MAX_CONTROL_ACTIONS
+    # The extension's loop reads this rather than hardcoding it, so the server
+    # stays the single source of truth for the tool-call budget.
+    assert body["tool_call_budget"] == _MAX_AGENT_TOOL_CALLS
+    assert body["tool_call_budget"] == 100
     assert body["type_text_cap"] == 2000

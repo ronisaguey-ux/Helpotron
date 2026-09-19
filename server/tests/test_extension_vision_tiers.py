@@ -142,19 +142,32 @@ def _act(i):
     return {"op": "move", "x": i * 10 % 1199, "y": i * 10 % 799}
 
 
-def test_control_action_cap_is_15():
-    assert _MAX_CONTROL_ACTIONS == 15
+def test_control_action_cap_matches_the_multi_batch_loop():
+    """One batch is bounded; the TASK is bounded by the loop budget.
+
+    The cap rose 15 -> 25 on 2026-09-18 when the extension gained its
+    multi-action loop: a single round now has room for a real plan, and the
+    100-tool-call budget (enforced across batches) is what bounds the task.
+    """
+    from server.screen_vision import _MAX_AGENT_TOOL_CALLS
+
+    assert _MAX_CONTROL_ACTIONS == 25
+    assert _MAX_AGENT_TOOL_CALLS == 100
+    # A batch must always fit inside the task budget, or a single round could
+    # blow the whole allowance and the budget would stop meaning anything.
+    assert _MAX_CONTROL_ACTIONS <= _MAX_AGENT_TOOL_CALLS
 
 
 def test_control_block_at_cap_accepted():
-    reply = "doing it now\n```control\n" + "{\"actions\": " + repr([_act(i) for i in range(15)]).replace("'", '"') + "}\n```"
+    n = _MAX_CONTROL_ACTIONS
+    reply = "doing it now\n```control\n" + "{\"actions\": " + repr([_act(i) for i in range(n)]).replace("'", '"') + "}\n```"
     clean, actions = extract_control_actions(reply, _viewport())
-    assert actions is not None and len(actions) == 15
+    assert actions is not None and len(actions) == n
     assert "doing it now" in clean
 
 
 def test_control_block_over_cap_dropped_whole():
-    big = [dict(_act(i)) for i in range(16)]
+    big = [dict(_act(i)) for i in range(_MAX_CONTROL_ACTIONS + 1)]
     import json as _json
     reply = "x\n```control\n" + _json.dumps({"actions": big}) + "\n```"
     clean, actions = extract_control_actions(reply, _viewport())

@@ -28,6 +28,7 @@ from .screen_vision import (
     DEFAULT_EFFORT_SCORE,
     VISION_MODEL,
     VISION_MODEL_TIERS,
+    _MAX_AGENT_TOOL_CALLS,
     _MAX_CONTROL_ACTIONS,
     _MAX_IMAGES_PER_CALL,
     _MAX_TYPE_TEXT,
@@ -164,6 +165,7 @@ _UI_CONFIG = {
         "scroll": "scroll Δ({deltaX}, {deltaY}) @ ({x}, {y})",
     },
     "action_cap": _MAX_CONTROL_ACTIONS,
+    "tool_call_budget": _MAX_AGENT_TOOL_CALLS,
     "type_text_cap": _MAX_TYPE_TEXT,
 }
 
@@ -305,6 +307,11 @@ PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
         # separate version number was bookkeeping nobody could act on.
         "FIXED",
         "\U0001f4ac Chat no longer freezes on \u201cThinking\u2026\u201d. If you sent a message before connecting an API key, the chat could get stuck on \u201cThinking\u2026\u201d and then quietly ignore everything else you typed until you closed and reopened the extension. It now tells you to connect a key and immediately keeps working.",
+        "\U0001f4dc Scrolling actually scrolls, and we no longer claim otherwise. The agent could say it had scrolled a page when nothing had moved \u2014 it reported the actions it SENT rather than what the page did. It now checks the page really moved, scrolls question lists that live in their own panel (the usual quiz layout), and tells you plainly when a step had no effect instead of showing a green tick.",
+        "",
+        "AGENT MODE",
+        "\U0001f501 Multi-step tasks actually finish. The agent used to do one batch of actions and stop with a promise about the rest \u2014 so \u201cwork through this quiz\u201d ended at question 1. It now keeps going on its own: after each batch it re-reads the screen and continues, up to 100 actions in one task, and it is told to work out the full scope of what you asked and see it through rather than stopping at the first step.",
+        "\U0001f6d1 Stops when it should. If two batches in a row change nothing, it stops and says why instead of repeating the same miss \u2014 and it still stops for your approval, or if you pause it.",
         "",
         "CONNECTING",
         "🔑 No more sign-in. The extension used to need a Helpotron login it could barely complete. It now connects with a personal API key you create once at Settings \u2192 API Keys \u2014 paste it in and you're connected. Revoke a key any time and that extension stops working immediately.",
@@ -817,14 +824,55 @@ AGENT_MODE_DIRECTIVE = (
     "{\"op\":\"drag\",\"fromX\":0,\"fromY\":0,\"toX\":0,\"toY\":0}; "
     "{\"op\":\"type\",\"text\":\"...\"}; "
     "{\"op\":\"key\",\"key\":\"Enter\"|\"Escape\"|\"Tab\"|\"Backspace\"|\"ArrowLeft\"|\"ArrowRight\"|\"ArrowUp\"|\"ArrowDown\"|\"Home\"|\"End\"|\"Delete\"|\"PageUp\"|\"PageDown\",\"modifiers\":[\"ctrl\"|\"shift\"|\"alt\"]}; "
-    "{\"op\":\"scroll\",\"x\":0,\"y\":0,\"deltaX\":0,\"deltaY\":0}. "
+    "{\"op\":\"scroll\",\"x\":0,\"y\":0,\"deltaX\":0,\"deltaY\":600}. "
+    # 09-18 (operator): the template used to print deltaY:0, and the model copied
+    # the shape literally — a scroll with no distance moves nothing, and the page
+    # never scrolled while the agent said it had. Never emit a zero-distance
+    # scroll and never claim movement you have not seen.
+    "SCROLL RULES: a scroll needs a NON-ZERO delta — use deltaY 600 to go down "
+    "(negative to go up) or deltaX for sideways. NEVER emit deltaX:0 with "
+    "deltaY:0: that is a scroll of zero distance and it moves nothing. To reach "
+    "content further down, emit several scrolls in sequence rather than one "
+    "enormous jump. After a scroll the next [Screen state at] must show different "
+    "content — if it looks identical you are already at the end of the page, so "
+    "stop scrolling and say so instead of repeating it. Some assessment pages "
+    "put the questions in an inner pane rather than the page itself; the harness "
+    "handles that, so just describe the destination and let it scroll there. "
     "Coordinates are CSS pixel offsets inside the tab viewport (each [Screen "
     "state] line gives its W×H; if exact coordinates are estimated from the screen description, pick reasonable coordinates for the visible UI element, e.g. center of the search bar). "
     "ACTING RULES: one screen task per message, "
-    "minimal steps, never more than 15 actions in one task (09-02 cap; the "
+    "minimal steps, never more than 25 actions in one batch (the "
     "extension's stop button and per-action permission prompts are live, so "
     "the user can halt after any action — keep each batch small and wait for the "
     "user's confirmation between tasks); "
+    # 09-18 (operator): the loop. The extension now re-sends a fresh screen and
+    # keeps calling you after every batch, up to a 100-tool-call budget, so a
+    # task that needs 30 steps can actually finish instead of stopping after the
+    # first batch with a promise. This is the difference between "I scrolled to
+    # question 4" and actually reaching it.
+    "LOOP RULES (multi-step tasks): you are re-invoked automatically after every "
+    "batch with a fresh [Screen state at] and the running count of tool calls "
+    "used. Keep emitting the next batch until the task is GENUINELY finished. "
+    "Never stop mid-task to announce what you are about to do next — do it, then "
+    "say what you did. Stop only when one of these is true: (a) the task is "
+    "complete and you can see the finished result on screen; (b) you are blocked "
+    "in a way only the user can resolve (a login, a payment, a CAPTCHA, or a "
+    "choice between options) — then say exactly what you need; (c) you have spent "
+    "the budget, in which case state plainly what is done and what remains. "
+    "SCOPE RULES: before you act, work out the FULL scope of what was asked — "
+    "what the finished result looks like, and every step between here and there "
+    "(open the thing, read it, answer or fill each part, advance, submit if that "
+    "was asked). Do not solve the first visible step and declare success. Do not "
+    "silently narrow the request to the part that is easy: if the user asks to "
+    "complete a 20-question quiz, that means reaching and answering all 20, not "
+    "answering question 1. If part of the request turns out to be impossible, "
+    "finish everything that IS possible and then say precisely which part you "
+    "could not do and why. "
+    "PROGRESS RULES: after each batch, compare the new screen with what you "
+    "expected. If the screen did not change, the action did not land — do NOT "
+    "repeat it. Take fresh coordinates, try a different route (keyboard, a named "
+    "target, scrolling the element into view), and if two different attempts at "
+    "the same step both fail, stop and report what you see rather than looping. "
     # 09-08 (operator): nothing is hard-blocked. The user's permission mode is
     # the only gate — manual asks before every batch, auto asks for risky work,
     # yolo asks for nothing. Refusing a field class the user explicitly asked
