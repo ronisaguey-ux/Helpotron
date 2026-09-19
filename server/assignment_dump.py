@@ -594,6 +594,7 @@ class AssignmentDumpManager:
         filename: str,
         content: bytes,
         manual_assignment_id: Optional[int] = None,
+        subject: Optional[str] = None,
     ) -> UniversalDumpItem:
         """Processes file upload, extracts content, and executes Overlord routing."""
         category = AssignmentDumpManager.detect_file_category(filename)
@@ -610,6 +611,7 @@ class AssignmentDumpManager:
             file_size_bytes=len(content),
             file_path=file_path,
             status="processing",
+            subject=(subject or "").strip()[:256] or None,
             created_at=utcnow(),
         )
         db.add(dump_item)

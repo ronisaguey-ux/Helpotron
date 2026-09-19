@@ -1,9 +1,13 @@
 /**
- * ThreadsRail.jsx — Workspace Threads Rail & Topic Management (Stitch v6 / §3.6.4).
- * Houses thread list with search filter, inline rename/delete, New Topic (⌘N), and EffortDial.
+ * ThreadsRail.jsx — the chat history rail.
+ *
+ * Owner (2026-09-19): "history rail with date/time + 3-dot menu per chat
+ * (delete/rename/pin)". The two inline icons this used to carry (a pencil and a
+ * bin, always visible on hover) grew with every feature; a single 3-dot menu is
+ * the surface that stays fixed while the number of actions grows.
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Pencil, Trash2, Check, X, MessageSquare } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Check, X, MessageSquare, Pin, MoreVertical } from 'lucide-react';
 import EffortDial from './EffortDial.jsx';
 
 /**
@@ -46,14 +50,28 @@ export default function ThreadsRail({
   onCreateThread = () => {},
   onRenameThread = () => {},
   onDeleteThread = () => {},
+  onPinThread = () => {},
   effortScore = 600,
   onEffortChange = () => {},
-  modelBadge = 'Gemini Flash · effort-routed',
+  modelBadge = '',
 }) {
   const [filterText, setFilterText] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [menuOpenId, setMenuOpenId] = useState(null);
   const searchInputRef = useRef(null);
+  const menuRef = useRef(null);
+
+  // A click anywhere else closes the 3-dot menu. Without this the menu stays
+  // open behind whatever the user does next.
+  useEffect(() => {
+    if (menuOpenId == null) return undefined;
+    const close = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpenId(null);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [menuOpenId]);
 
   // Keyboard shortcut: / focuses search, ⌘N creates new thread
   useEffect(() => {
@@ -79,7 +97,7 @@ export default function ThreadsRail({
   }, [onCreateThread]);
 
   const filteredThreads = threads.filter((t) =>
-    (t.title || `Thread #${t.id || ''}`).toLowerCase().includes(filterText.toLowerCase())
+    (t.title || "New chat").toLowerCase().includes(filterText.toLowerCase())
   );
 
   const startRename = (thread, e) => {
@@ -111,21 +129,21 @@ export default function ThreadsRail({
           <div className="flex items-center justify-between gap-micro-2">
             <div className="flex flex-col">
               <span className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">
-                Workspace Threads
+                Chats
               </span>
               <span className="font-title-md text-title-md text-on-surface font-semibold">
-                Active Synthesis
+                History
               </span>
             </div>
             <button
               type="button"
               id="btn-new-topic"
               onClick={onCreateThread}
-              title="New Topic (⌘N)"
+              title="New chat (⌘N)"
               className="h-11 px-unit-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/30 text-primary flex items-center gap-micro-2 transition-all shadow-sm active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4 text-primary shrink-0" />
-              <span className="font-label-caps text-label-caps uppercase">New Topic</span>
+                <span className="font-label-caps text-label-caps uppercase">New chat</span>
             </button>
           </div>
 
@@ -137,7 +155,7 @@ export default function ThreadsRail({
               type="text"
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
-              placeholder="Filter thread telemetry..."
+              placeholder="Search chats..."
               className="bg-transparent text-on-surface font-body-sm text-body-sm focus:outline-none w-full placeholder:text-outline"
             />
             <kbd className="hidden sm:inline-block font-code-sm text-code-sm text-outline px-1.5 py-0.5 rounded bg-surface-container-highest/40">
@@ -149,7 +167,7 @@ export default function ThreadsRail({
           <div className="flex flex-col gap-micro-2 mt-micro-1 overflow-y-auto max-h-[340px]" role="list">
             {filteredThreads.length === 0 ? (
               <div className="p-unit-4 text-center rounded-xl bg-surface-container-low/40 border border-outline-variant/15 text-outline font-body-sm">
-                No threads found
+                No chats yet
               </div>
             ) : (
               filteredThreads.map((thread) => {
@@ -170,7 +188,9 @@ export default function ThreadsRail({
                   >
                     <div className="flex items-start justify-between gap-micro-2">
                       <div className="flex items-center gap-micro-2 min-w-0 flex-1">
-                        {isActive ? (
+                        {thread.pinned ? (
+                          <Pin className="w-3.5 h-3.5 text-primary shrink-0" aria-label="Pinned" />
+                        ) : isActive ? (
                           <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
                         ) : (
                           <MessageSquare className="w-3.5 h-3.5 text-outline shrink-0" />
@@ -206,33 +226,77 @@ export default function ThreadsRail({
                           </div>
                         ) : (
                           <span className={`font-body-sm text-body-sm truncate ${isActive ? 'font-semibold text-on-surface' : ''}`}>
-                            {thread.title || `Thread #${thread.id}`}
+                            {thread.title || "New chat"}
                           </span>
                         )}
                       </div>
 
-                      {/* Outside action affordances for rename & delete */}
+                      {/* One 3-dot menu per chat: rename, pin, delete. */}
                       {!isEditing && (
-                        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">
+                        <div
+                          className="relative shrink-0"
+                          ref={menuOpenId === thread.id ? menuRef : null}
+                        >
                           <button
                             type="button"
-                            onClick={(e) => startRename(thread, e)}
-                            title="Rename Thread"
-                            className="w-7 h-7 rounded-md text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors flex items-center justify-center cursor-pointer"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
+                            data-thread-menu={thread.id}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onDeleteThread(thread.id);
+                              setMenuOpenId(menuOpenId === thread.id ? null : thread.id);
                             }}
-                            title="Purge Thread"
-                            className="w-7 h-7 rounded-md text-on-surface-variant hover:text-error hover:bg-error-container/20 transition-colors flex items-center justify-center cursor-pointer"
+                            title="Chat options"
+                            aria-haspopup="menu"
+                            aria-expanded={menuOpenId === thread.id}
+                            className="w-7 h-7 rounded-md text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors flex items-center justify-center cursor-pointer"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <MoreVertical className="w-3.5 h-3.5" />
                           </button>
+
+                          {menuOpenId === thread.id && (
+                            <div
+                              role="menu"
+                              className="absolute right-0 top-8 z-30 w-40 rounded-xl bg-surface-container-lowest border border-outline-variant/30 shadow-2xl py-1"
+                            >
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={(e) => {
+                                  setMenuOpenId(null);
+                                  startRename(thread, e);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-left font-body-sm text-xs text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors cursor-pointer"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                <span>Rename</span>
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuOpenId(null);
+                                  onPinThread(thread.id, !thread.pinned);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-left font-body-sm text-xs text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors cursor-pointer"
+                              >
+                                <Pin className="w-3.5 h-3.5" />
+                                <span>{thread.pinned ? 'Unpin' : 'Pin'}</span>
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuOpenId(null);
+                                  onDeleteThread(thread.id);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-left font-body-sm text-xs text-on-surface-variant hover:text-error hover:bg-error-container/20 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

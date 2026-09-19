@@ -1,160 +1,44 @@
 /**
- * agentPresets.js — Canonical personas, starter presets, and default skills (Stitch v6 / 3.6).
- * LUMINOUS GLASS design system compatible.
+ * agentPresets.js — the agent's identity and skill library.
+ *
+ * ── WHY THIS FILE IS EMPTY (owner, 2026-09-19) ──────────────────────────────
+ * It used to ship five canned identities (Scholar, Editor, Coach, Co-Pilot,
+ * No Identity) and six canned skills (Sandbox Math Verification, LaTeX
+ * Derivations, Humanizer Cadence, Socratic Inquiry, Citation Verifier, Code
+ * Synthesis), and a new account started with three of the skills switched on.
+ *
+ * Owner: "remove all default skills/identities — blank slate."
+ *
+ * The reasoning, because this will be tempting to undo: every one of those
+ * presets was a decision made for the user about how their own agent should
+ * think and write. They made the Configs panel look populated on a brand-new
+ * account — which reads as "these are yours, they came with the product" — and
+ * they silently shaped every reply via instructions the user never read or
+ * chose. An agent that is genuinely the user's starts with nothing and becomes
+ * theirs as they add to it.
+ *
+ * The exports are kept (empty) rather than deleted so existing imports keep
+ * working and a user's OWN saved identities/skills are unaffected: this file was
+ * only ever the starting point, never the storage. Saved lists live in
+ * `settings.ai.identities` / `settings.ai.skills`.
  */
 
-export const PRESET_PERSONAS = [
-  {
-    // The explicit "no persona" state. Selecting it clears the identity that is
-    // injected into the agent's prompt, so the agent answers as a plain
-    // assistant instead of in a character. It is a real, selectable preset
-    // rather than the absence of a choice: before this, every surface fell back
-    // to Scholar/Coach, so "no identity" was not reachable at all.
-    id: 'none',
-    name: 'No Identity',
-    title: 'No Identity (Plain Assistant)',
-    tagline: 'No persona injected — the agent answers as itself',
-    description: 'Turns persona shaping off. The agent keeps its normal capabilities and memory but adopts no character, tone or writing style beyond a neutral, professional default.',
-    badge: 'Off',
-    badgeVariant: 'gray',
-    reasoningDepth: 'Model default',
-    writingStyle: 'Neutral',
-    detectorStealth: 'Not applied',
-    iconType: 'none',
-    accentColor: 'var(--outline)',
-    defaultEffort: 500,
-    instructions: '',
-  },
-  {
-    id: 'scholar',
-    name: 'The Scholar',
-    title: 'The Scholar (Rigorous Proofs)',
-    tagline: 'Deterministic mathematical reasoning & formal axiomatic synthesis',
-    description: 'Prioritizes step-by-step derivations with sandbox-verified arithmetic, explicit proof steps, and rigorous sourced citations.',
-    badge: 'Recommended for STEM',
-    badgeVariant: 'cyan',
-    reasoningDepth: 'High (deep step-by-step)',
-    writingStyle: 'Formal Academic',
-    detectorStealth: 'Humanizer ready',
-    iconType: 'scholar',
-    accentColor: 'var(--primary)',
-    defaultEffort: 800,
-    instructions: 'Operate with mathematical rigor. Derive step-by-step proofs using LaTeX math blocks, cite formal definitions, and verify edge conditions thoroughly before concluding.',
-  },
-  {
-    id: 'editor',
-    name: 'The Editor',
-    title: 'The Editor (Subtle Polish)',
-    tagline: 'Dynamic perplexity sculpting & linguistic rhythm variation',
-    description: 'Focuses on cadence variation and natural phrasing while preserving factual integrity.',
-    badge: 'Humanizer Specialist',
-    badgeVariant: 'purple',
-    reasoningDepth: 'Balanced',
-    writingStyle: 'Conversational Prose',
-    detectorStealth: 'Humanizer ready',
-    iconType: 'editor',
-    accentColor: 'var(--secondary)',
-    defaultEffort: 500,
-    instructions: 'Sculpt sentence cadence and burstiness. Eliminate repetitive structural cliches, modulate clause lengths organically, and maintain an authentic, high-human voice.',
-  },
-  {
-    id: 'coach',
-    name: 'The Coach',
-    title: 'The Coach (Socratic Guide)',
-    tagline: 'Active recall & guided Socratic discovery',
-    description: 'Guides learners through step-by-step inquiry, provocative conceptual questions, and error diagnostics instead of raw answer emission.',
-    badge: 'Active Recall',
-    badgeVariant: 'amber',
-    reasoningDepth: 'Guided Discovery',
-    writingStyle: 'Interactive Inquiry',
-    detectorStealth: 'Humanizer ready',
-    iconType: 'coach',
-    accentColor: 'var(--sem-amber)',
-    defaultEffort: 400,
-    instructions: 'Use Socratic questioning. Do not give direct solutions immediately; probe the student\'s understanding, point out edge contradictions, and guide them to deduce the correct result.',
-  },
-  {
-    id: 'copilot',
-    name: 'Academic Co-Pilot',
-    title: 'Academic Co-Pilot (Standard Synthesis)',
-    tagline: 'Balanced multi-disciplinary academic assistant',
-    description: 'General coursework assistant balancing literature review, numerical calculations, and essay drafting across diverse subjects.',
-    badge: 'General Purpose',
-    badgeVariant: 'primary',
-    reasoningDepth: 'Balanced',
-    writingStyle: 'Balanced Academic',
-    detectorStealth: 'Humanizer ready',
-    iconType: 'copilot',
-    accentColor: 'var(--primary)',
-    defaultEffort: 600,
-    instructions: 'Provide structured, reliable academic assistance across writing, problem sets, citations, and summaries with balanced depth and clear explanations.',
-  },
-];
+/** No stock identities. The user's own live in `settings.ai.identities`. */
+export const PRESET_PERSONAS = [];
 
-export const DEFAULT_IDENTITIES = PRESET_PERSONAS.map((p) => ({
-  id: p.id,
-  name: p.name,
-  icon: p.iconType === 'scholar' ? '🎓' : p.iconType === 'editor' ? '✍️' : p.iconType === 'coach' ? '💡' : '⚡',
-  persona: p.name,
-  instructions: p.instructions,
-  isBuiltin: true,
-  badge: p.badge,
-  badgeVariant: p.badgeVariant,
-  description: p.description,
-  metrics: {
-    reasoningDepth: p.reasoningDepth,
-    writingStyle: p.writingStyle,
-    detectorStealth: p.detectorStealth,
-  },
-}));
+/** Kept for import compatibility — a blank slate means no starter cards. */
+export const DEFAULT_IDENTITIES = [];
 
-export const DEFAULT_SKILLS = [
-  {
-    id: 'z3_prover',
-    name: 'Sandbox Math Verification',
-    category: 'Mathematics',
-    icon: 'Cpu',
-    description: 'Runs every calculation in the sandbox and logs the run artifact.',
-    enabled: true,
-  },
-  {
-    id: 'latex_derivations',
-    name: 'Exhaustive LaTeX Equations',
-    category: 'STEM',
-    icon: 'FileCode',
-    description: 'Renders complete mathematical derivations in clean display and inline LaTeX notation.',
-    enabled: true,
-  },
-  {
-    id: 'humanizer_cadence',
-    name: 'Humanizer Rhythm Sculpting',
-    category: 'Writing',
-    icon: 'Sparkles',
-    description: 'Varies sentence rhythm and structure for a natural cadence.',
-    enabled: true,
-  },
-  {
-    id: 'socratic_inquiry',
-    name: 'Socratic Challenge Loops',
-    category: 'Pedagogy',
-    icon: 'HelpCircle',
-    description: 'Interrogates flawed premises with guided inquiry questions before finalizing deliverables.',
-    enabled: false,
-  },
-  {
-    id: 'citation_verifier',
-    name: 'Peer-Reviewed Cross-Citations',
-    category: 'Research',
-    icon: 'BookMarked',
-    description: 'Formats citations and keeps the bibliography consistent.',
-    enabled: true,
-  },
-  {
-    id: 'code_synthesis',
-    name: 'Algorithmic Proof Verification',
-    category: 'Computer Science',
-    icon: 'Terminal',
-    description: 'Generates runnable Python verification scripts for algorithmic invariants.',
-    enabled: true,
-  },
-];
+/** No stock skills, and none enabled by default. */
+export const DEFAULT_SKILLS = [];
+
+/**
+ * The one identity the agent starts on: none.
+ *
+ * 'none' is the explicit "no persona injected" state, so a fresh account's agent
+ * answers as a plain assistant instead of in a character it was never asked to
+ * play. It is not a preset here — nothing to render in the list — it is just the
+ * absence of a selection, which the server already understands
+ * (`agent_prompt.py`: `persona_id == "none"` skips persona shaping entirely).
+ */
+export const DEFAULT_IDENTITY_ID = 'none';

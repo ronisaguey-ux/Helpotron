@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
-from .database import AgentFile, Assignment, CreditTransaction, StudyMaterial, Transcript, User
+from .database import AgentFile, Assignment, CreditTransaction, StudyMaterial, Transcript, UniversalDumpItem, User
 from .security import is_admin_user, is_junk_content, educational_guards_on
 from .humanizer import AIHumanizerPipeline
 from .subagents import SubAgentCoordinator
@@ -39,7 +39,7 @@ logger = logging.getLogger("helpotron.overlord")
 # or feedback entries is not a work action — manual mode should not gate it.
 READONLY_ACTION_TYPES = {
     "plain_answer", "run_shell", "read_assignment",
-    "get_wallet", "list_library", "list_referrals",
+    "get_wallet", "list_library", "list_dumps", "list_referrals",
     "list_datalake_entries", "get_progress",
     # 09-01 (Bob, full-capability suite): config/plan reads and data exports
     # are pure reads — manual mode must never gate them either.
@@ -1520,6 +1520,45 @@ print(f"Active files: {os.listdir('.')}")
             return {"action": action_type, "status": "completed",
                     "message": f"Library ({len(rows)} material{'s' if len(rows) != 1 else ''}):\n"
                                + "\n".join(lines)}
+
+        elif action_type == "list_dumps":
+            # The raw material a user dumped (file or pasted text), so an agent can
+            # actually work from it instead of asking the user to repeat themselves.
+            # A dump is unfiled input: it has a subject and extracted text, and may
+            # or may not have been routed to an assignment.
+            try:
+                limit = max(1, min(int(payload.get("limit", 10)), 50))
+            except (TypeError, ValueError):
+                limit = 10
+            q = db.query(UniversalDumpItem).filter(UniversalDumpItem.user_id == user.id)
+            subj = (payload.get("subject") or "").strip()
+            if subj:
+                from sqlalchemy import func as _func
+                q = q.filter(_func.lower(UniversalDumpItem.subject) == subj.lower())
+            aid = payload.get("assignment_id")
+            if aid:
+                try:
+                    q = q.filter(UniversalDumpItem.matched_assignment_id == int(aid))
+                except (TypeError, ValueError):
+                    pass
+            rows = q.order_by(UniversalDumpItem.created_at.desc()).limit(limit).all()
+            if not rows:
+                where = f" under '{subj}'" if subj else ""
+                return {"action": action_type, "status": "completed",
+                        "message": f"Nothing dumped{where} yet. The user can dump a file "
+                                   f"or pasted text from the Dashboard."}
+            out = []
+            for d in rows:
+                body = (d.extracted_text or "").strip()
+                preview = body[:600].replace("\n", " ") if body else "(no text extracted)"
+                out.append(f"#{d.id} [{d.file_type}] {d.file_name} "
+                           f"({d.subject or 'unfiled'}, {d.status}, {d.created_at:%b %d}): "
+                           f"{preview}{'…' if len(body) > 600 else ''}")
+            header = f"Dumped material ({len(rows)})"
+            if subj:
+                header += f" under '{subj}'"
+            return {"action": action_type, "status": "completed",
+                    "message": header + ":\n" + "\n".join(out)}
 
         elif action_type == "list_referrals":
             from .database import Referral

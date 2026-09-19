@@ -1239,6 +1239,7 @@ _AGENT_ACTIONS = {
     # referrals, Data Lake entries, and progress. All cost 0 (reads).
     "get_wallet": {"": "no payload — returns token balance, credits, micro-credits and plan"},
     "list_library": {"assignment_id": "int optional — only materials for this assignment; omit for all", "limit": "int optional (1-50, default 10)"},
+    "list_dumps": {"subject": "str optional — only dumps filed under this subject, e.g. \"Biology\"; omit for all", "assignment_id": "int optional — only dumps routed to this assignment", "limit": "int optional (1-50, default 10)"},
     "list_referrals": {"": "no payload — returns the user's referral codes and their redemption status"},
     "list_datalake_entries": {"limit": "int optional (1-20, default 5)"},
     "get_progress": {"": "no payload — returns assignment status counts and next due dates"},
@@ -1290,7 +1291,7 @@ _AGENT_ACTION_COSTS = {
     "browser_action": 1,          # extension direct screen control
     "read_assignment": 0, "change_settings": 0,
     "remember": 0, "forget_memory": 0, "plain_answer": 0,
-    "get_wallet": 0, "list_library": 0, "list_referrals": 0,
+    "get_wallet": 0, "list_library": 0, "list_referrals": 0, "list_dumps": 0,
     "list_datalake_entries": 0, "get_progress": 0,
     # 09-01 (Bob, full-capability): reads are free; the direction dispatch is
     # real team work (assignment_solve); lifecycle flips are cheap; feature
@@ -1946,7 +1947,7 @@ async def _resolve_agent_intent(
         f"- YOLO: never ask — run every tool call directly, no suffix ever.\n"
         f"Pure reads and reversible computes NEVER take the suffix in any mode: "
         f"see_settings, select_settings, see_config, export_assignment_data, get_wallet, "
-        f"list_library, list_referrals, list_datalake_entries, get_progress, read_assignment, "
+        f"list_library, list_dumps, list_referrals, list_datalake_entries, get_progress, read_assignment, "
         f"run_shell.\n\n"
     )
     # Owner 2026-09-18: the tool exists, but a model will not reach for it

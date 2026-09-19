@@ -7,6 +7,7 @@ import os
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .assignment_dump import assignment_dump_manager, classify_assignment_meta
@@ -118,6 +119,7 @@ class BatchFinalizePayload(BaseModel):
 async def upload_dump_file(
     file: UploadFile = File(...),
     assignment_id: Optional[int] = Form(None),
+    subject: Optional[str] = Form(None),
     current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db),
 ):
@@ -145,7 +147,15 @@ async def upload_dump_file(
         filename=filename,
         content=content,
         manual_assignment_id=assignment_id,
+        subject=subject,
     )
+    # Falling back to the matched assignment's own subject keeps a dump filed under
+    # the same bubble as the assignment it landed on, rather than showing up unfiled.
+    if not dump_item.subject and dump_item.matched_assignment_id:
+        _matched = db.query(Assignment).filter(Assignment.id == dump_item.matched_assignment_id).first()
+        if _matched:
+            dump_item.subject = (_matched.progress or {}).get("subject") or None
+            db.commit()
 
     matched_title = None
     match_subject = None
@@ -164,15 +174,104 @@ async def upload_dump_file(
         "auto_match_confidence": dump_item.auto_match_confidence,
         "matched_assignment_id": dump_item.matched_assignment_id,
         "matched_assignment_title": matched_title,
-        "subject": match_subject,
+        "subject": dump_item.subject or match_subject,
         "overlord_notes": dump_item.overlord_notes,
         "snippet": (dump_item.extracted_text or "")[:250],
+    }
+
+
+class TextDumpPayload(BaseModel):
+    """Raw pasted text filed under a subject — no file, no upload."""
+
+    text: str = Field(..., min_length=1, max_length=200_000)
+    title: Optional[str] = Field(None, max_length=512)
+    subject: Optional[str] = Field(None, max_length=256)
+    assignment_id: Optional[int] = None
+
+
+@router.post("/upload-text")
+async def upload_dump_text(
+    payload: TextDumpPayload,
+    current_user: User = Depends(get_current_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    """Dump pasted text into a subject.
+
+    The file path needs an upload; a pasted syllabus, a teacher's email, a set of
+    notes does not, and requiring a file for those meant the only way to give the
+    agent raw material was to save it to disk first. Same dump record, same
+    routing, `file_type="text"` and no file on disk.
+    """
+    text = (payload.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Nothing to dump — the text was empty.")
+
+    title = (payload.title or "").strip()[:512]
+    if not title:
+        # A dump always has a name so it is identifiable in the list and the agent
+        # has something to refer to; derive one from the first line of the text.
+        first_line = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")
+        title = (first_line[:120] or "Pasted note")
+
+    # Route to an explicit assignment when given, but verify ownership — an
+    # assignment_id from the request body is a claim, not a permission.
+    assignment = None
+    if payload.assignment_id is not None:
+        assignment = (
+            db.query(Assignment)
+            .filter(Assignment.id == payload.assignment_id, Assignment.user_id == current_user.id)
+            .first()
+        )
+        if assignment is None:
+            raise HTTPException(status_code=404, detail="Assignment not found for this user.")
+
+    subject = (payload.subject or "").strip()[:256] or None
+    if not subject and assignment is not None:
+        subject = (assignment.progress or {}).get("subject") or None
+
+    status = "manual_routed" if assignment is not None else "pending_analysis"
+    notes = "Pasted text filed manually by user."
+    if assignment is not None:
+        notes = f"Pasted text routed to '{assignment.title}' by the user."
+    elif subject:
+        notes = f"Pasted text filed under subject '{subject}'; awaiting agent triage."
+
+    dump_item = UniversalDumpItem(
+        user_id=current_user.id,
+        file_name=title,
+        file_type="text",
+        file_size_bytes=len(text.encode("utf-8")),
+        file_path=None,
+        status=status,
+        extracted_text=text,
+        subject=subject,
+        matched_assignment_id=assignment.id if assignment is not None else None,
+        auto_match_confidence=1.0 if assignment is not None else None,
+        overlord_notes=notes,
+        created_at=utcnow(),
+    )
+    db.add(dump_item)
+    db.commit()
+    db.refresh(dump_item)
+
+    return {
+        "status": "success",
+        "dump_id": dump_item.id,
+        "file_name": dump_item.file_name,
+        "file_type": dump_item.file_type,
+        "item_status": dump_item.status,
+        "subject": dump_item.subject,
+        "matched_assignment_id": dump_item.matched_assignment_id,
+        "matched_assignment_title": assignment.title if assignment is not None else None,
+        "overlord_notes": dump_item.overlord_notes,
+        "snippet": text[:250],
     }
 
 
 @router.get("/list")
 async def list_dump_items(
     status: Optional[str] = Query(None),
+    subject: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db),
@@ -181,6 +280,10 @@ async def list_dump_items(
     query = db.query(UniversalDumpItem).filter(UniversalDumpItem.user_id == current_user.id)
     if status:
         query = query.filter(UniversalDumpItem.status == status)
+    if subject:
+        # Case-insensitive exact match: a subject name originates from the user (a
+        # custom bubble), so two spellings of one subject must not split the list.
+        query = query.filter(func.lower(UniversalDumpItem.subject) == subject.strip().lower())
 
     items = query.order_by(UniversalDumpItem.created_at.desc()).limit(limit).all()
 
@@ -201,6 +304,7 @@ async def list_dump_items(
             "extracted_text": item.extracted_text,
             "matched_assignment_id": item.matched_assignment_id,
             "matched_assignment_title": matched_title,
+            "subject": item.subject,
             "auto_match_confidence": item.auto_match_confidence,
             "overlord_notes": item.overlord_notes,
             "requested_action": item.requested_action,

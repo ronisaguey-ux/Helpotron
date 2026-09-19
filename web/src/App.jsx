@@ -53,7 +53,6 @@ const QueueNoticeBanner = lazyWithRetry(() => import('./components/QueueNoticeBa
 const CommandPalette = lazyWithRetry(() => import('./components/CommandPalette.jsx'));
 
 const AssignmentCardDashboard = lazyWithRetry(() => import('./components/AssignmentCardDashboard.jsx'));
-const AssignmentTurnInView = lazyWithRetry(() => import('./components/AssignmentTurnInView.jsx'));
 const AssignmentDetailView = lazyWithRetry(() => import('./components/AssignmentDetailView.jsx'));
 const AssignmentHistoryView = lazyWithRetry(() => import('./components/AssignmentHistoryView.jsx'));
 const AssignmentDumpView = lazyWithRetry(() => import('./components/AssignmentDumpView.jsx'));
@@ -850,11 +849,7 @@ export default function App() {
                             userId={userId}
                             isGuest={isGuest}
                             onSelectAssignment={(a) => { recordNav(); setOpenAssignment(a); }}
-                            onOpenHistory={() => handleSelectView('history')}
                           />
-                        </div>
-                        <div className="mt-5">
-                          <AssignmentTurnInView userId={userId} />
                         </div>
                       </>
                     )
