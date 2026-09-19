@@ -102,6 +102,7 @@ class User(Base):
     referrals = relationship("Referral", foreign_keys="Referral.referrer_id", back_populates="referrer", cascade="all, delete-orphan")
     referred = relationship("Referral", foreign_keys="Referral.referee_id", back_populates="referee", cascade="all, delete-orphan")
     study_sessions = relationship("StudySession", back_populates="user", cascade="all, delete-orphan")
+    calendar_entries = relationship("CalendarEntry", back_populates="user", cascade="all, delete-orphan")
     organization = relationship("Organization", foreign_keys="User.organization_id", back_populates="members")
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
     api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
@@ -809,3 +810,39 @@ def init_db() -> None:
                 conn.commit()
             except Exception:
                 pass
+
+
+class CalendarEntry(Base):
+    """A user's own calendar note — the working deadline calendar (owner 2026-09-19).
+
+    Owner: *"a callender where u can have agents remind u of certain stuff on
+    telegram, dates to start an assignment, etc, just have a text box with title
+    and description per day, and just have the user describe in plain text what
+    they want, agents will deal with it"*.
+
+    So the row is deliberately dumb: a date, a title, and a free-text
+    description. There is no event taxonomy, no priority enum, no recurrence
+    rule — the description is plain language and the AGENT is what interprets it
+    (when to remind, what to do). Anything structured here would be a second,
+    worse place to express the same intent.
+
+    `remind` is the one flag: it means "the agent should remind me about this",
+    which is the whole point of putting it on a calendar rather than in a note.
+    """
+
+    __tablename__ = "calendar_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # Local calendar date the user picked, stored as YYYY-MM-DD. A DateTime here
+    # would drag timezones into a field the user thinks of as "the 14th".
+    entry_date: Mapped[str] = mapped_column(String(10), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    remind: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Set when the agent has delivered the reminder, so one note cannot be
+    # announced twice — and so "what is still pending" is answerable.
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    user = relationship("User", back_populates="calendar_entries")

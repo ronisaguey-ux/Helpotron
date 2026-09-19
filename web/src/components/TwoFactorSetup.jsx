@@ -27,6 +27,11 @@ import Button from './Button.jsx';
 
 export default function TwoFactorSetup({ s, set }) {
   const [method, setMethod] = useState('totp');
+  // Owner 2026-09-19: the destination was never collected — the server fell
+  // back to the username, so the "code sent" notice was fiction. Email and SMS
+  // signup now require a real destination, entered here.
+  const [contact, setContact] = useState('');
+  const [contactError, setContactError] = useState('');
   const [setupStep, setSetupStep] = useState('idle'); // idle | method_select | configuring | disabling
   const [secret, setSecret] = useState('');
   const [code, setCode] = useState('');
@@ -57,10 +62,31 @@ export default function TwoFactorSetup({ s, set }) {
   };
 
   const startSetup = async () => {
-    setLoading(true);
     setMsg({ text: '', type: '' });
+    setContactError('');
+
+    // A 2FA factor needs a real destination. Refuse locally rather than let the
+    // server invent one, so the user is never told a code went somewhere it did
+    // not.
+    const needsContact = method === 'email' || method === 'sms';
+    const target = contact.trim();
+    if (needsContact) {
+      if (method === 'email') {
+        if (!target || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(target)) {
+          setContactError('Enter a valid email address to receive your codes.');
+          return;
+        }
+      } else if (method === 'sms') {
+        if (!target || target.replace(/[^0-9]/g, '').length < 7) {
+          setContactError('Enter your phone number in international format, e.g. +447700900123.');
+          return;
+        }
+      }
+    }
+
+    setLoading(true);
     try {
-      const res = await api.setup2FA(method, s?.profile?.phone || null);
+      const res = await api.setup2FA(method, needsContact ? target : null, needsContact ? target : null);
       if (res && res.status === 'success') {
         setSecret(res.secret || '');
         setSetupStep('configuring');
@@ -85,7 +111,16 @@ export default function TwoFactorSetup({ s, set }) {
     setLoading(true);
     setMsg({ text: '', type: '' });
     try {
-      const res = await api.verifySetup2FA(method, code.trim(), secret);
+      // Pass the destination through so the server PERSISTS it — login
+      // challenges read settings.profile.email / settings.phone_number, and
+      // before this nothing ever wrote the email.
+      const res = await api.verifySetup2FA(
+        method,
+        code.trim(),
+        secret,
+        method === 'sms' ? contact || null : null,
+        method === 'email' ? contact || null : null,
+      );
       if (res && res.status === 'success') {
         setEnabled(true);
         setSetupStep('idle');
@@ -271,6 +306,33 @@ export default function TwoFactorSetup({ s, set }) {
       )}
 
       {/* Step 2: Code Verification (Segmented OTP) */}
+      {/* Collect the destination BEFORE sending. This is the step that was
+          missing entirely: the app announced "a code has been dispatched to
+          your email" without ever asking for an email address. */}
+      {setupStep === 'method_select' && (method === 'email' || method === 'sms') && (
+        <div className="space-y-2 pt-2">
+          <label className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant block font-semibold">
+            {method === 'email' ? 'Your email address' : 'Your phone number'}
+          </label>
+          <input
+            type={method === 'email' ? 'email' : 'tel'}
+            value={contact}
+            onChange={(e) => { setContact(e.target.value); setContactError(''); }}
+            inputMode={method === 'email' ? 'email' : 'tel'}
+            placeholder={method === 'email' ? 'you@example.com' : '+447700900123'}
+            className="w-full h-11 px-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface text-sm focus:outline-none focus:border-primary transition"
+          />
+          <p className="font-body-sm text-[11px] text-on-surface-variant">
+            {method === 'email'
+              ? 'Your 2FA codes are sent here. It is stored on your account so login challenges use the same address.'
+              : 'Used only for sign-in codes. Enter it with the country code, e.g. +447700900123.'}
+          </p>
+          {contactError && (
+            <p className="font-body-sm text-[11px] text-error font-semibold">{contactError}</p>
+          )}
+        </div>
+      )}
+
       {setupStep === 'configuring' && (
         <div className="space-y-4 pt-4 border-t border-outline-variant/20">
           {method === 'totp' ? (
@@ -284,7 +346,9 @@ export default function TwoFactorSetup({ s, set }) {
             </div>
           ) : (
             <p className="font-body-sm text-xs text-on-surface">
-              A 6-digit verification code has been dispatched via <span className="font-semibold uppercase">{method}</span>.
+              A 6-digit verification code was sent to{' '}
+              <span className="font-semibold">{contact || (method === 'sms' ? 'your phone' : 'your email')}</span>.
+              It expires in 15 minutes.
             </p>
           )}
 

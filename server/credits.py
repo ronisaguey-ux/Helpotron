@@ -41,8 +41,12 @@ import math
 # here because payments.py already imports this module, so this is the one
 # direction that creates no import cycle; the reverse does not resolve.
 TIER_MONTHLY_TASK_TOKENS: Dict[str, int] = {
-    'trial': 15000,  # owner 09-06 (half a basic allowance); scaled 100x
-    'testing': 15000,  # owner 2026-09-18: free tier, granted by hand on approval
+    # Owner 2026-09-19: trial = one-time, 15,000 tokens, 14 days (was 7).
+    'trial': 15000,
+    # Owner 2026-09-19: Testing = a flat 10,000-token allocation that NEVER
+    # EXPIRES. It is a grant, not a subscription — nothing renews it and nothing
+    # claws it back, so the number is deliberately not on the monthly ladder.
+    'testing': 10000,
     'basic': 30000,
     'pro': 100000,
     'elite': 270000,

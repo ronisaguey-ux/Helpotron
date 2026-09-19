@@ -6,6 +6,39 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Search, Pencil, Trash2, Check, X, MessageSquare } from 'lucide-react';
 import EffortDial from './EffortDial.jsx';
 
+/**
+ * When a thread last saw a message — the fact that used to be replaced by the
+ * meaningless label "Active Trace" (owner 2026-09-19).
+ *
+ * `last_message_at` is the real timestamp of the newest message row for the
+ * thread (server/routes_overlord.py list_chat_threads); `updated_at` is the
+ * fallback for a thread that has none. Rendered relative for recent activity so
+ * the list stays scannable, absolute date+time once it is older than a day.
+ */
+function threadLastActivity(thread) {
+  const iso = thread?.last_message_at || thread?.updated_at || thread?.created_at;
+  if (!iso) return 'No messages yet';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'No messages yet';
+
+  const now = Date.now();
+  const diff = now - d.getTime();
+
+  // Clock skew or a future timestamp: show the absolute value, never a
+  // negative "3 minutes ago".
+  if (diff < 0) return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  if (diff < 60 * 1000) return 'Last message just now';
+  if (diff < 60 * 60 * 1000) {
+    const m = Math.floor(diff / 60000);
+    return `Last message ${m} min ago`;
+  }
+  if (diff < 24 * 60 * 60 * 1000) {
+    const h = Math.floor(diff / 3600000);
+    return `Last message ${h} hr${h === 1 ? '' : 's'} ago`;
+  }
+  return `Last message ${d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}, ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
+}
+
 export default function ThreadsRail({
   threads = [],
   activeThreadId = null,
@@ -204,10 +237,16 @@ export default function ThreadsRail({
                       )}
                     </div>
 
-                    {/* Thread Telemetry Footer */}
+                    {/* Thread Telemetry Footer.
+                        Owner 2026-09-19: this read "Active Trace" for any thread
+                        with no message count — a label that means nothing and
+                        hid the one fact worth showing. It now shows the real
+                        date + time of the thread's last message, which the
+                        threads endpoint already returns as `last_message_at`
+                        (falling back to the thread's own updated_at). */}
                     <div className="flex items-center justify-between mt-micro-2 text-outline">
                       <span className="font-code-sm text-[11px]">
-                        {thread.messages_count ? `${thread.messages_count} msgs` : 'Active Trace'}
+                        {threadLastActivity(thread)}
                       </span>
                       {thread.tokens ? (
                         <span className="font-code-sm text-[11px] text-outline-variant">

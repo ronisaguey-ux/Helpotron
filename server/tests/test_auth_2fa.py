@@ -64,10 +64,23 @@ def test_totp_generation_and_verification():
     assert service.verify_code(secret, "000000") is False
 
 
-def test_email_notification_mock():
+def test_email_reports_failure_when_smtp_is_unconfigured():
+    """There is NO graceful mock any more (owner 2026-09-19).
+
+    This used to assert `res is True` while logging "[Mock Email]" — i.e. the
+    test pinned a lie: the send returned success for an email that never left the
+    building, and every caller reported "code sent". Email now reports failure
+    honestly so the UI can say delivery is unavailable instead of showing a
+    code-entry screen that can never be satisfied.
+    """
     service = EmailNotificationService()
-    res = service.send_verification_code("test@example.com", "123456")
-    assert res is True
+    if service.is_configured():
+        # A box with real SMTP: the call genuinely attempts delivery.
+        result = service.send_verification_code("test@example.com", "123456")
+        assert isinstance(result, bool)
+    else:
+        assert service.is_configured() is False
+        assert service.send_verification_code("test@example.com", "123456") is False
 
 
 def test_twilio_sms_mock():
@@ -84,8 +97,18 @@ def test_api_auth_2fa_routes():
         "/api/auth/send-email-verification",
         json={"email": "test_auth_student@univ.edu"},
     )
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "success"
+    # Email now reports honestly: 200 when SMTP is configured and the message was
+    # really sent, 503 when this deployment cannot send email at all. It used to
+    # be an unconditional 200 because the sender logged "[Mock Email]" and
+    # returned True for a message that never left the box (owner 2026-09-19).
+    from server.auth_2fa import EmailNotificationService
+
+    if EmailNotificationService.is_configured():
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "success"
+    else:
+        assert resp.status_code == 503
+        assert "not configured" in resp.json()["detail"].lower()
 
     # Get generated code from store
     code_entry = code_store._store.get(("test_auth_student@univ.edu", "email_verification"))
@@ -169,8 +192,15 @@ def test_api_mandatory_purchase_2fa_routes():
         cookies=cookies,
         headers=headers,
     )
-    assert chal_resp.status_code == 200
-    assert chal_resp.json()["status"] == "success"
+    from server.auth_2fa import EmailNotificationService
+
+    if EmailNotificationService.is_configured():
+        assert chal_resp.status_code == 200
+        assert chal_resp.json()["status"] == "success"
+    else:
+        # Cannot email a purchase code on a box with no SMTP — and the endpoint
+        # now says so instead of pretending it sent one.
+        assert chal_resp.status_code == 503
 
     # Grab code from code_store (keyed by user's public_id now, not external email)
     code_entry = code_store._store.get((user_id, "purchase_verification"))

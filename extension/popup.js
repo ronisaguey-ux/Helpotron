@@ -3869,6 +3869,21 @@ async function loadAssignmentsForLaunch() {
   }
 
   try {
+    // Owner 2026-09-19: "click launch to doc, then in the extension u see the
+    // launched assignment". The website records the launch and stops; this is
+    // the other half — the extension reads that record and presents it, with
+    // the website's own resolved text, preselected and ready.
+    let launched = null;
+    try {
+      const lr = await fetch(`${srv}/api/launch-to-doc/launched`, {
+        headers: { Authorization: `Bearer ${t}` },
+      });
+      if (lr.ok) {
+        const lj = await lr.json();
+        launched = (lj && lj.launched) || null;
+      }
+    } catch (e) { /* no launch record — fall back to the picker below */ }
+
     const res = await fetch(`${srv}/api/assignments`, {
       headers: { Authorization: `Bearer ${t}` },
     });
@@ -3877,15 +3892,45 @@ async function loadAssignmentsForLaunch() {
     const list = data.assignments || [];
 
     ltdAssignmentSelect.innerHTML = '';
+
+    if (launched && launched.assignment_id) {
+      // Show the launched assignment FIRST and select it, so the panel opens on
+      // the work the user just handed over rather than asking them to find it.
+      const opt = document.createElement('option');
+      opt.value = String(launched.assignment_id);
+      opt.textContent = `★ ${launched.title || 'Launched assignment'} — ready to type`;
+      ltdAssignmentSelect.appendChild(opt);
+      ltdAssignmentSelect.value = String(launched.assignment_id);
+
+      // The text the website resolved is authoritative — fill the field so
+      // Start types exactly what was launched.
+      if (launched.text && ltdTextInput && !ltdTextInput.value.trim()) {
+        ltdTextInput.value = launched.text;
+        if (ltdWordCount) {
+          ltdWordCount.textContent = `${launched.text.trim().split(/\s+/).filter(Boolean).length} words`;
+        }
+      }
+      setStatus(`★ “${launched.title || 'Assignment'}” was launched from the website — press Start to type it.`);
+    }
+
     if (list.length === 0) {
-      ltdAssignmentSelect.innerHTML = '<option value="">No assignments found</option>';
+      if (!launched) ltdAssignmentSelect.innerHTML = '<option value="">No assignments found</option>';
       return;
     }
 
-    const defaultOpt = document.createElement('option');
-    defaultOpt.value = '';
-    defaultOpt.textContent = '— Choose an assignment to type —';
-    ltdAssignmentSelect.appendChild(defaultOpt);
+    if (!launched) {
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = '';
+      defaultOpt.textContent = '— Choose an assignment to type —';
+      ltdAssignmentSelect.appendChild(defaultOpt);
+    } else {
+      // A divider so the launched entry is clearly the hand-off, not just the
+      // first item in a list.
+      const sep = document.createElement('option');
+      sep.disabled = true;
+      sep.textContent = '— other assignments —';
+      ltdAssignmentSelect.appendChild(sep);
+    }
 
     list.forEach((a) => {
       const opt = document.createElement('option');

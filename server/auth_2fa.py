@@ -87,13 +87,34 @@ verification_store = code_store
 
 
 class EmailNotificationService:
-    """Sends verification and 2FA emails via SMTP (or graceful mock when unconfigured)."""
+    """Sends verification and 2FA emails via SMTP.
+
+    ⚠️ NO GRACEFUL MOCK (owner 2026-09-19). This used to log "[Mock Email]" and
+    return **True** when SMTP was unconfigured — so every caller reported "code
+    sent" for an email that was never sent, and the owner hit exactly that:
+    *"it just 'sends' the code to your email ... its bogus"*. It was.
+
+    A send that did not happen must report failure. On this box `email_user` and
+    `email_password` are empty, so email 2FA genuinely cannot be delivered yet —
+    callers now get False and say so, instead of showing a code-entry screen that
+    can never be satisfied.
+    """
+
+    @staticmethod
+    def is_configured() -> bool:
+        """True when an email can actually leave the building."""
+        return bool(getattr(config, "email_user", "") and getattr(config, "email_password", ""))
 
     @staticmethod
     def send_email(to_email: str, subject: str, html_content: str, text_content: str) -> bool:
-        if not config.email_user or not config.email_password:
-            logger.info("[Mock Email] To: %s | Subject: %s | Content: %s", to_email, subject, text_content)
-            return True
+        if not EmailNotificationService.is_configured():
+            logger.error(
+                "Email NOT sent to %s — SMTP is not configured "
+                "(EMAIL_USER / EMAIL_PASSWORD empty). Callers must report this, "
+                "not claim delivery.",
+                to_email,
+            )
+            return False
 
         try:
             msg = MIMEMultipart("alternative")

@@ -12,7 +12,9 @@ import {
 } from 'lucide-react';
 import api from '../api.js';
 import { loadSettings, saveSettings } from '../demoData.js';
-import { normalizeCards, computeAssignmentEvents } from '../lib/assignmentEvents.js';
+// assignmentEvents helpers are no longer used here — the chat no longer
+// announces assignment lifecycle events (they rendered fabricated fallback
+// copy; see the note where the bubbles used to be rendered).
 import { deriveAssignmentEvent, HONEST_EVENT_CHIPS, formatTokenMetric } from '../lib/agentEvents.js';
 import { PRESET_PERSONAS, DEFAULT_IDENTITIES, DEFAULT_SKILLS } from '../lib/agentPresets.js';
 import ModeControl from './ModeControl.jsx';
@@ -92,8 +94,6 @@ export default function MyAgentView({
   const approvalStatusTimer = useRef(null);
 
   // ── Lifecycle & Assignment Events (45s Polling) ──
-  const [assignmentEvents, setAssignmentEvents] = useState([]);
-  const prevCardsRef = useRef(null);
   const chatScrollRef = useRef(null);
 
   // Auto-scroll chat to bottom
@@ -105,7 +105,7 @@ export default function MyAgentView({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingText, thinkingState, assignmentEvents, pendingPermissions, scrollToBottom]);
+  }, [messages, streamingText, thinkingState, pendingPermissions, scrollToBottom]);
 
   // Load initial backend state
   useEffect(() => {
@@ -193,11 +193,12 @@ export default function MyAgentView({
 
     async function pollAssignments() {
       try {
-        const [cardsRes, turnedInRes, pendingRes] = await Promise.all([
-          api.assignmentCards?.().catch(() => null),
-          api.getTurnedInAssignments?.().catch(() => null),
-          api.agentPermissionsPending?.().catch(() => null),
-        ]);
+        // Owner 2026-09-19: this used to also fetch assignment cards and the
+        // turned-in list purely to feed the assignment-event bubbles. Those
+        // bubbles are gone (they rendered fabricated fallback copy), so the
+        // poll now fetches ONLY what it still uses — the permission queue.
+        // Dropping the two dead requests also removes two calls per 45s.
+        const pendingRes = await api.agentPermissionsPending?.().catch(() => null);
 
         // Merge freshly-created permission requests into the approval queue
         // (never re-add one the user already answered — merge only new ids).
@@ -209,26 +210,6 @@ export default function MyAgentView({
           });
         }
 
-        if (!mounted || !cardsRes) return;
-
-        const rawCards = Array.isArray(cardsRes) ? cardsRes : cardsRes.cards || [];
-        const normalized = normalizeCards(rawCards);
-
-        const turnedInList = Array.isArray(turnedInRes) ? turnedInRes : turnedInRes?.assignments || [];
-        const turnedInIds = new Set(turnedInList.map((a) => String(a.id || a.assignment_id)));
-
-        // Compute events
-        const events = computeAssignmentEvents({
-          prev: prevCardsRef.current,
-          cards: normalized,
-          turnedInIds,
-        });
-
-        if (events && events.length > 0) {
-          setAssignmentEvents((prev) => [...prev, ...events]);
-        }
-
-        prevCardsRef.current = new Map(normalized.map((c) => [String(c.id), c]));
       } catch (e) {
         console.warn('Assignment polling error:', e);
       }
@@ -896,62 +877,31 @@ export default function MyAgentView({
             )}
 
             {/* Assignment & Moment Event Bubbles (§3.6.7) */}
-            {assignmentEvents.map((evt, idx) => {
-              const chip = evt.chip || HONEST_EVENT_CHIPS.assignment_created;
-              const assign = evt.assignment || {};
+            {/* Assignment-lifecycle event bubbles were rendered here and are
+                GONE (owner 2026-09-19: "wtf is this active coursework shit, get
+                rid of it").
 
-              return (
-                <div
-                  key={`evt_${idx}`}
-                  className={`w-full pl-4 md:pl-8 border-l-2 ${chip.borderClass} transition-all my-2`}
-                >
-                  <div className="p-unit-5 rounded-2xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/25 shadow-md hover:border-outline-variant/40 transition-all flex flex-col gap-unit-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-outline-variant/15 pb-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`font-chip-status text-[11px] font-semibold px-2 py-0.5 rounded uppercase ${chip.textAccentClass} ${chip.bgGlowClass}`}
-                        >
-                          {chip.chipStatus}
-                        </span>
-                        <h4 className="font-headline-lg text-body-md font-semibold text-on-surface truncate">
-                          {assign.title || assign.name || 'Coursework Assignment'}
-                        </h4>
-                      </div>
-                      <span className="font-code-sm text-xs text-outline">
-                        {assign.subject_code || assign.course || 'CS-441'}
-                      </span>
-                    </div>
+                They were not just noise — they were showing FABRICATED content.
+                `computeAssignmentEvents` (lib/assignmentEvents.js) returns
+                events shaped {type, card}, but this block read `evt.chip` and
+                `evt.assignment`. BOTH were always undefined, so every event
+                rendered the hardcoded `assignment_created` chip and fell
+                through to every fallback string at once:
 
-                    <p className="font-body-sm text-body-sm text-on-surface-variant">
-                      {assign.prompt || assign.description || 'Assignment deliverable registered into synthesis pipeline.'}
-                    </p>
+                    title  -> 'Coursework Assignment'
+                    code   -> 'CS-441'
+                    prompt -> 'Assignment deliverable registered into synthesis pipeline.'
 
-                    {/* Interactive Moment Action Buttons (Strict min 44px) */}
-                    <div className="flex flex-wrap items-center gap-unit-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => onOpenAssignment(assign)}
-                        className="h-11 px-unit-4 rounded-xl bg-primary text-on-primary font-label-caps text-label-caps font-semibold flex items-center gap-2 shadow-[0_0_18px_rgba(89,216,201,0.25)] hover:shadow-[0_0_24px_rgba(89,216,201,0.4)] transition-all cursor-pointer"
-                      >
-                        <span>Open Assignment Detail</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
+                That is the entire "fake hardcoded" look the owner reported: two
+                identical cyan NEW cards with a course code and an invented
+                sentence, for real assignment rows that simply do not carry
+                those fields.
 
-                      {assign.draft_text && (
-                        <button
-                          type="button"
-                          onClick={() => setLaunchToDocTarget({ assignment: assign, text: assign.draft_text })}
-                          className="h-11 px-unit-4 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/25 text-on-surface font-label-caps text-label-caps transition-colors flex items-center gap-2 cursor-pointer"
-                        >
-                          <FileText className="w-4 h-4 text-primary" />
-                          <span>View Working Draft</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                Assignments already have a home — the Dashboard and Assignment
+                Dump — so they are not re-announced in the chat. If lifecycle
+                announcements are ever wanted here, the renderer must read
+                `evt.card` and derive the chip from `evt.type`; do NOT restore
+                this block as it was. */}
 
             {/* Approval Card (09-07): the chat-surface approval gate — same
                 four decisions + one note input as the extension card.
@@ -1028,13 +978,16 @@ export default function MyAgentView({
                   type="text"
                   value={inputQuery}
                   onChange={(e) => setInputQuery(e.target.value)}
-                  placeholder="Ask Co-Pilot to synthesize theorems, verify proof trees, or draft monographs..."
+                  placeholder=""
+                  aria-label="Message the agent"
                   className="w-full h-12 px-unit-4 rounded-xl bg-surface-container-low text-on-surface font-body-md text-body-md placeholder:text-outline focus:outline-none focus:bg-surface-container-lowest transition-all"
                 />
-                <div className="absolute right-3 hidden sm:flex items-center gap-1 font-code-sm text-code-sm text-outline">
-                  <span>Enter</span>
-                  <span className="text-outline-variant">to send</span>
-                </div>
+                {/* The "Enter to send" hint lived INSIDE this input, absolutely
+                    positioned over it, so it collided with the placeholder text
+                    and read as mangled copy (owner 2026-09-19: "the ask copilot
+                    message is mangled up with the enter to send a message
+                    text"). Both are gone: a blank box, no overlay. Enter still
+                    sends — it does not need to be advertised in the field. */}
               </div>
 
               {/* Voice Transcription Mic Button */}

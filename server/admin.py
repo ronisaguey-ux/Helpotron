@@ -312,7 +312,7 @@ async def grant_testing_access(
     approves it.
 
     Idempotent by design: a double-click (or a retried request) must not stack
-    two 15,000-token grants on one account, so an account that already holds a
+    two grants on one account, so an account that already holds a
     testing grant is refused unless the operator explicitly resets it first.
     """
     require_admin(request)
