@@ -1006,11 +1006,21 @@ async def extension_vision(payload: VisionRequest, request: Request, db: Session
 def _harden_actions(raw: Any, viewport: Dict[str, int]) -> Optional[List[Dict[str, Any]]]:
     """Allowlist + viewport-clamp a control-action list from the model.
 
-    Same contract as `extract_control_actions`: the WHOLE list drops when any
-    single op is invalid (never a partial burst — a dropped `click` would leave
-    the following `type` landing on whatever happened to hold focus), and the
-    per-burst cap is enforced here too (the direct `browser_action` payload
-    used to bypass both).
+    The WHOLE list drops when a STATE-AFFECTING op (click / dblclick / drag /
+    type / key) is invalid: never a partial burst, because a dropped `click`
+    would leave the following `type` landing on whatever happened to hold focus.
+
+    A non-state op (move / scroll) that fails validation is skipped on its own
+    instead. Dropping one of those cannot corrupt the page — the cursor is
+    simply not where a later op expected, which is a visible miss the model
+    corrects from the next screen. This matters more than it looks: because one
+    bad op used to fail everything, a model writing a scroll the validator did
+    not accept lost its clicks too and the page never moved at all. That is the
+    "it doesn't scroll" report (2026-09-18).
+
+    NOTE: `screen_vision.extract_control_actions_ex` implements the same policy
+    for the fenced-block path. Two copies exist because the direct
+    `browser_action` payload bypasses block parsing. Keep them in step.
     """
     from .screen_vision import _MAX_CONTROL_ACTIONS, _validate_op
 
@@ -1018,10 +1028,14 @@ def _harden_actions(raw: Any, viewport: Dict[str, int]) -> Optional[List[Dict[st
         return None
     if len(raw) > _MAX_CONTROL_ACTIONS:
         return None
+    harmless = {"move", "scroll"}
     normalized: List[Dict[str, Any]] = []
     for op in raw:
         n = _validate_op(op, viewport)
         if n is None:
+            kind = str((op or {}).get("op", "")).lower() if isinstance(op, dict) else ""
+            if kind in harmless:
+                continue
             return None
         normalized.append(n)
     return normalized or None

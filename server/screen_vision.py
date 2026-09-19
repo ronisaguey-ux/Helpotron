@@ -544,10 +544,32 @@ def _validate_op(op: Any, viewport: Optional[Dict[str, int]]) -> Optional[Dict[s
             return None
         return {"op": "key", "key": key, "modifiers": list(modifiers)}
     if name == "scroll":
-        xy = _clamp_coords(op, viewport)
+        # A scroll does NOT need a point. Where the wheel is aimed changes
+        # nothing when the page itself scrolls, and the extension already falls
+        # back to the last cursor position. Requiring x/y here was a real bug:
+        # the model writes `{"op":"scroll","deltaY":600}` — the natural way to
+        # say "scroll down" — `_clamp_coords` returned None, `_validate_op`
+        # rejected it, and because ONE invalid op fails the WHOLE batch, a batch
+        # whose first op was a click also ran NOTHING. That is "it doesn't
+        # scroll", and it took the clicks with it.
+        #
+        # Coordinates stay supported (a point over an inner pane is how the
+        # extension aims the wheel at the right scroll container); when absent
+        # they default to the middle of the viewport.
         dx, dy = _as_int(op.get("deltaX")), _as_int(op.get("deltaY"))
-        if xy is None or dx is None or dy is None:
-            return None
+        if dx is None:
+            dx = 0
+        if dy is None:
+            dy = 0
+        # A zero-distance scroll is accepted rather than rejected: it is
+        # harmless, and rejecting it would drop the WHOLE batch (one invalid op
+        # fails the burst). The extension reports it as a no-op so the model
+        # still learns it did nothing.
+        xy = _clamp_coords(op, viewport)
+        if xy is None:
+            vp_w = int((viewport or {}).get("width", 1280) or 1280)
+            vp_h = int((viewport or {}).get("height", 800) or 800)
+            xy = [vp_w // 2, vp_h // 2]
         dx = max(-_DELTA_CAP, min(_DELTA_CAP, dx))
         dy = max(-_DELTA_CAP, min(_DELTA_CAP, dy))
         return {"op": "scroll", "x": xy[0], "y": xy[1], "deltaX": dx, "deltaY": dy}
@@ -592,6 +614,7 @@ def extract_control_actions_ex(
     text = reply_text or ""
     actions: Optional[List[Dict[str, Any]]] = None
     reason = "no_block"
+    skipped = 0
 
     matches = list(_CTRL_FENCE_RE.finditer(text))
     if matches:
@@ -611,11 +634,34 @@ def extract_control_actions_ex(
             vp = viewport or {"width": 1280, "height": 800}
             normalized: List[Dict[str, Any]] = []
             ok = True
+            # Why this is not simply all-or-nothing any more (2026-09-18):
+            #
+            # ONE invalid op used to fail the WHOLE burst, and that is the shape
+            # of "it doesn't scroll": the model would write a scroll op
+            # `_validate_op` did not accept, and the batch died — taking the
+            # clicks in it down too, so the page did not move at all and the
+            # user saw the agent claim it had acted.
+            #
+            # The original rule exists for a real reason: a partial burst could
+            # leave a `type` running with no matching `Enter`, or a click
+            # half-done. That danger belongs to ops that CHANGE page state.
+            # Dropping a `move` or a `scroll` cannot corrupt anything — the
+            # cursor simply is not where a later op expected, which is a visible
+            # miss the model corrects from the next screen, not silent damage.
+            #
+            # So: state-affecting op invalid -> drop the whole burst (unchanged).
+            # Only non-state ops invalid -> run the rest, and say how many were
+            # skipped instead of silently pretending the batch was clean.
+            harmless = {"move", "scroll"}
             for op in parsed:
                 n = _validate_op(op, vp)
                 if n is None:
-                    ok = False
-                    break
+                    kind = str((op or {}).get("op", "")).lower() if isinstance(op, dict) else ""
+                    if kind not in harmless:
+                        ok = False
+                        break
+                    skipped += 1
+                    continue
                 normalized.append(n)
             if not ok:
                 reason = "invalid_op"
@@ -623,6 +669,11 @@ def extract_control_actions_ex(
                 reason = "empty"
             else:
                 actions, reason = normalized, ""
+                if skipped:
+                    logger.info(
+                        "control burst: %d non-state op(s) dropped as invalid, %d kept",
+                        skipped, len(normalized),
+                    )
 
     clean = _CTRL_FENCE_RE.sub("", text)
     clean = re.sub(r"\n{3,}", "\n\n", clean).strip()

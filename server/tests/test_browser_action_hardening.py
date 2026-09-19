@@ -51,8 +51,58 @@ def test_scroll_op_normalizes_with_deltas():
     assert out == [{"op": "scroll", "x": 10, "y": 10, "deltaX": 0, "deltaY": 240}]
 
 
-def test_scroll_without_deltas_drops_the_list():
-    assert _harden_actions([{"op": "scroll", "x": 10, "y": 10}], VP) is None
+def test_scroll_without_deltas_is_kept_and_reported_not_dropped():
+    """A scroll with no distance is kept, not used to kill the burst.
+
+    It used to drop the whole list. Two reasons that changed (2026-09-18):
+    dropping it silently told the model nothing, and — because one invalid op
+    failed the entire burst — a model that wrote a scroll the way people
+    naturally write one could lose its clicks too, which is exactly the
+    "it doesn't scroll" report. The extension now executes it, sees the page
+    did not move, and reports it as having had no effect.
+    """
+    out = _harden_actions([{"op": "scroll", "x": 10, "y": 10}], VP)
+    assert out == [{"op": "scroll", "x": 10, "y": 10, "deltaX": 0, "deltaY": 0}]
+
+
+def test_scroll_without_coordinates_gets_a_viewport_centre():
+    """`{"op":"scroll","deltaY":600}` is how a scroll is naturally written.
+
+    It was rejected (a scroll needed x/y), and rejection failed the whole batch,
+    so the page never moved. It now defaults the wheel point to the viewport
+    centre — the page scrolls either way.
+    """
+    out = _harden_actions([{"op": "scroll", "deltaY": 600}], VP)
+    assert out == [{"op": "scroll", "x": VP["width"] // 2, "y": VP["height"] // 2,
+                    "deltaX": 0, "deltaY": 600}]
+
+
+def test_a_bad_move_or_scroll_does_not_take_the_whole_burst_down():
+    """Non-state ops may be dropped individually; state-affecting ones may not.
+
+    Dropping a move/scroll cannot corrupt the page — the cursor is just not
+    where a later op expected, which is a visible miss the model corrects. A
+    partial `type` could leave a field half-filled with no Enter, which is why
+    an invalid click/type/key still fails the entire burst.
+    """
+    burst = [
+        {"op": "click", "x": 40, "y": 40},
+        {"op": "move"},                        # invalid, non-state: skipped
+        {"op": "type", "text": "hi"},
+    ]
+    out = _harden_actions(burst, VP)
+    assert out is not None
+    assert [op["op"] for op in out] == ["click", "type"]
+
+    # A malformed CLICK still fails the whole burst — the safety rule stands.
+    assert _harden_actions(VALID_BURST + [{"op": "click"}], VP) is None
+    assert _harden_actions([{"op": "click"}] + VALID_BURST, VP) is None
+
+    # So does a malformed move INSIDE a burst of state ops? No — a move cannot
+    # leave state behind, so it is skipped and the real work still runs.
+    out2 = _harden_actions([{"op": "move", "x": "left", "y": 1}] + VALID_BURST, VP)
+    assert out2 is not None
+    assert [op["op"] for op in out2] == ["move", "click", "type", "key"]
 
 
 @pytest.mark.parametrize("coords,expected", [
@@ -71,11 +121,15 @@ def test_coordinates_are_clamped_to_the_viewport(coords, expected):
     {"op": "click", "x": 1, "y": 1, "button": "middle"},  # button not allowed
     {"op": "key", "key": "F13", "modifiers": []},         # key not allowed
     {"op": "type", "text": "   "},                        # empty after strip
-    {"op": "move", "x": "left", "y": 1},                  # non-numeric coords
     "not-a-dict",
 ])
-def test_one_invalid_op_drops_the_whole_burst(bad_op):
-    """Never a partial burst: a dropped click must not leave the type running."""
+def test_one_invalid_state_op_drops_the_whole_burst(bad_op):
+    """Never a partial burst: a dropped click must not leave the type running.
+
+    This rule applies to ops that CHANGE page state. A malformed `move` or
+    `scroll` is skipped on its own instead — see
+    test_a_bad_move_or_scroll_does_not_take_the_whole_burst_down.
+    """
     assert _harden_actions(VALID_BURST + [bad_op], VP) is None
     assert _harden_actions([bad_op] + VALID_BURST, VP) is None
 
