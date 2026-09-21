@@ -40,7 +40,7 @@ const SECTIONS = [
     chip: 'Start here',
     what: 'The whole pipeline in order: create an account, get coursework into Helpotron, tell the team what to build, study the results, and Launch to Doc for essays. You can skip steps or do them in a different order — this is just the shortest path.',
     steps: [
-      'Sign up with a public ID and a password (no email, no card) — you start on a 7-day free trial with 150 task tokens after enabling 2FA.',
+      'Sign up with a public ID and a password (no email, no card) — you start on a 14-day free trial with 15,000 task tokens after enabling 2FA.',
       'Install the browser extension from the Chrome Web Store — or skip it and use Drop Assignment manually, that works too.',
       'Open Drop Assignment and dump your coursework: a PDF, slides, lecture audio, an image, a video, or pasted text. The AI matches it to the right assignment or makes a new bubble.',
       'Open the assignment and pick a direction — Do it for me, Study guide, Quiz, Flashcards, Summary, or Something else. The subagent team starts the moment you pick.',
@@ -50,7 +50,7 @@ const SECTIONS = [
     tips: [
       'Dropping coursework manually works fully without the extension; the extension just makes capture one click on class pages.',
       'Each assignment has its own chat thread — the same conversation appears in My Agent\'s bubbles and in the assignment workspace.',
-      'Plans refill tokens monthly: Basic 300, Pro 1,000, Elite 2,700. The 7-day trial starts you at 150.',
+      'Plans refill tokens monthly: Basic 30,000, Pro 100,000, Elite 270,000. The one-time 14-day trial starts you at 15,000.',
     ],
   },
   {
@@ -225,8 +225,8 @@ const SECTIONS = [
     steps: [
       'Open Data Lake from the navigation menu.',
       'Submit coursework rubrics, exam guidelines, or novel problem types with PII stripped.',
-      'Submissions are scored on rarity, clarity, and utility by the valuation engine.',
-      'Accumulate micro-credits (1,000 micro-credits = 1.00 USD credit) and redeem them toward token top-ups or plans.',
+      'The developer reviews submissions by hand — there is no automated scoring.',
+      'Accumulate micro-credits (1,000 micro-credits = 1.00 USD credit) and redeem them as a discount on a plan.',
     ],
     tips: [
       'PII is automatically sanitized client-side before upload.',
@@ -239,12 +239,12 @@ const SECTIONS = [
     icon: CreditCard,
     title: 'Credits & tokens',
     chip: 'Credits',
-    what: 'Understanding the economic model: Tokens meter the deterministic compute your tasks use; Credits are earned through referrals, payments, and data lake contributions, and top up your token allowance.',
+    what: 'Understanding the economic model: Tokens meter the deterministic compute your tasks use and are what your plan grants. Credits are earned discounts — from referrals and data-lake contributions — applied to the price of a plan, never to your token balance.',
     steps: [
-      'Check your balance strip at the top of any screen: live tokens and projected runway.',
-      'Open Billing to view your current tier: Free Trial (7 days, 150 tokens), Basic ($10/mo, 300 tokens), Pro ($20/mo, 1,000 tokens), or Elite ($40/mo, 2,700 tokens).',
+      'Check your token balance at the top of any screen, and your plan under Settings.',
+      'Your plan and its allowance are listed under Settings → Credits & Billing. Allowances are quoted in task tokens and read live from the server.',
       'All tiers enjoy identical full-model access — zero feature gating between plans.',
-      'Top up on-demand with non-expiring token packs if needed.',
+      'If you run out, message Admin for a grant — there is no self-serve top-up.',
     ],
     tips: [
       'Tokens never expire while your account remains active.',
@@ -341,7 +341,7 @@ const SECTIONS = [
     faqs: [
       { q: 'My assignment shows no subagent progress. What is wrong?', a: 'Most dumps arrive without a direction. Open the assignment and pick one — the team starts the moment you choose. Progress appears in the ribbon only once it is really recorded, so give it a moment.' },
       { q: 'My dump went to the wrong assignment. Can I re-route it?', a: 'Check the dump provenance line in the workspace first (file name, type, status: auto-routed / matched / manual-routed / finalized). The most reliable fix is to drop the file directly into the assignment\'s chat bubble — uploads there bind to that assignment.' },
-      { q: 'I ran out of tokens. What now?', a: 'Your plan refills monthly (Basic 300, Pro 1,000, Elite 2,700 tokens). Message Admin to request a grant, or open Billing to top up. Big spends can also be gated to ask you first — set that in My Agent (Mode & Effort pickers, or Dashboard → Subject Settings).' },
+      { q: 'I ran out of tokens. What now?', a: 'Your plan renews on its billing cycle and the allowance is listed under Settings → Credits & Billing. If you run out, message Admin for a grant. Big spends can also be gated to ask you first — that is the effort and mode pickers in My Agent.' },
       { q: 'Launch to Doc is not typing anything.', a: 'The browser extension must be installed and pinned. Check the popup\'s server sync origin matches this site, pick a target tab (or the new docs.new option), and make sure the doc tab is the selected tab.' },
       { q: 'My essay got flagged by AI detection. What can I do?', a: 'The pipeline\'s Step 3 humanizes the draft, and the workspace records the human score it passed at ("Passed: X% Human Score"). If it falls short of your Minimum human score in Dashboard → Subject Settings, tighten the Humanizer Skill, the "Write Like a Sample" standard, and the 9-dimension realism settings on the typing side. Reports vary by detector — treat scores as guidance.' },
       { q: 'Where did my flashcards and quiz go?', a: 'Library (Dashboard → Study OS & Library) holds generated materials under their assignment; each assignment additionally lists its own under "Saved Materials" in the workspace.' },
@@ -758,7 +758,7 @@ export default function GuideView({ onGoTo, publicMode = false }) {
                 Ready to start studying?
               </h3>
               <p className="text-xs sm:text-sm text-on-surface-variant max-w-lg mx-auto leading-relaxed">
-                Join Helpotron with a public ID and password — no credit card needed to start. The 7-day trial includes 150 task tokens after you enable two-factor authentication and a $0.01 payment verification.
+                Join Helpotron with a public ID and password — no credit card needed to start. The 14-day trial includes 15,000 task tokens after you enable two-factor authentication and a $0.01 payment verification.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <button

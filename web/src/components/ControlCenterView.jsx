@@ -87,7 +87,7 @@ export default function ControlCenterView({ userId = "" }) {
         await api.adminAdjustCredits(targetId, amt, "Admin Control Center adjustment");
         // 09-06: assignment dump / agent work is gated on settings.token_balance,
         // not the credits ledger — top up BOTH so a CC grant actually unlocks
-        // features (beta flow: operator grants 100-300 tokens manually).
+        // features (beta flow: the operator grants tokens by hand).
         await api.adminGrantTokens(targetId, amt);
         triggerFeedback(`Added ${amt.toLocaleString()} tokens to ${activeUserMenu.alias || targetId}`);
       } else if (actionType === "password") {
@@ -625,7 +625,7 @@ export default function ControlCenterView({ userId = "" }) {
                     }}
                     className="w-full p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high text-on-surface text-left text-xs font-code-sm flex items-center justify-between transition cursor-pointer"
                   >
-                    <span>Adjust Token Balance (+Top-up)</span>
+                    <span>Adjust Token Balance</span>
                     <span className="text-outline">→</span>
                   </button>
                   <button

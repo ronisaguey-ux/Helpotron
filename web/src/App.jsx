@@ -215,7 +215,10 @@ export default function App() {
     billing: ['credits', 'plans'],
     referral: ['credits', 'earn'],
     leaderboard: ['credits', 'earn'],
-    notifications: ['activity', 'notifications'],
+      // History is a TAB in Library now (owner 2026-09-19) — the two were
+      // views of the same material. A stale deep-link still lands on the list.
+      history: ['library', 'completed'],
+      notifications: ['activity', 'notifications'],
     'ai-workspace': ['agent', null],
   };
   const [viewTab, setViewTab] = useState(null);
@@ -282,7 +285,9 @@ export default function App() {
     '/overview': ['overview', null],
     '/dashboard': ['overview', null],
     '/activity': ['activity', null],
-    '/history': ['history', null],
+      // /history is a Library tab now — without this the path loads the
+      // removed standalone view and renders a blank page.
+      '/history': ['library', 'completed'],
     '/notifications': ['notifications', null],
     '/library': ['library', null],
     '/agent': ['agent', null],
@@ -781,7 +786,7 @@ export default function App() {
                   onClick={() => handleSelectView('billing')}
                   className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-lg text-xs transition cursor-pointer"
                 >
-                  Upgrade / Top Up →
+                  View plans →
                 </button>
               </div>
             );
@@ -874,17 +879,24 @@ export default function App() {
                       }}
                     />
                   )}
-                  {activeView === 'history' && (
-                    <AssignmentHistoryView
-                      userId={userId}
-                      onSelectAssignment={(a) => {
-                        recordNav();
-                        setOpenAssignment(a);
-                        setActiveView('overview');
-                      }}
-                    />
-                  )}
-                  {activeView === 'library' && <LibraryView user={{ public_id: userId }} onOpenAssignmentBubble={() => setActiveView('agent')} onOpenWorkspace={() => setActiveView('agent')} />}
+                  {/* The props here did not match the component: LibraryView reads
+                        `userId` / `onGoTo` / `onSelectAssignment` but was handed
+                        `user` / `onOpenAssignmentBubble`, so every one of them was
+                        undefined — the empty-state "go to dump" did nothing and the
+                        calendar and completed-work tabs got no user. */}
+                    {activeView === 'library' && (
+                      <LibraryView
+                        userId={userId}
+                        initialTab={viewTab}
+                        onGoTo={handleSelectView}
+                        onSelectAssignment={(a) => {
+                          if (!a || a.id == null) return;
+                          recordNav();
+                          setOpenAssignment(a);
+                          setActiveView('overview');
+                        }}
+                      />
+                    )}
                   {activeView === 'inbox' && <MessageAdminView userId={userId} />}
 
                   {/* AUTOMATION */}

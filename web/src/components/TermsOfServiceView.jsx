@@ -142,10 +142,10 @@ export default function TermsOfServiceView({ onBack = null, publicMode = false, 
           <div className="bg-surface-container-low/70 border border-primary/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
             <div className="font-bold text-primary text-xs uppercase tracking-wider font-mono">Pay Plans:</div>
             <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
-              <li><strong className="text-on-surface">Free Trial:</strong> 7-day, one-time trial with 150 task tokens — requires 2FA verification and a $0.01 payment verification.</li>
-              <li><strong className="text-on-surface">Basic:</strong> $10/month — 300 tokens/month.</li>
-              <li><strong className="text-on-surface">Pro:</strong> $20/month — 1,000 tokens/month.</li>
-              <li><strong className="text-on-surface">Elite:</strong> $40/month — 2,700 tokens/month, plus priority execution.</li>
+              <li><strong className="text-on-surface">Free Trial:</strong> one-time 14-day trial with 15,000 task tokens — requires 2FA verification and a $0.01 payment verification.</li>
+              <li><strong className="text-on-surface">Basic:</strong> $10/month — 30,000 task tokens/month.</li>
+              <li><strong className="text-on-surface">Pro:</strong> $20/month — 100,000 task tokens/month.</li>
+              <li><strong className="text-on-surface">Elite:</strong> $40/month — 270,000 task tokens/month.</li>
             </ul>
           </div>
           <div className="bg-surface-container-low/70 border border-outline-variant/30 rounded-2xl p-5 space-y-2.5 shadow-sm">
@@ -572,7 +572,7 @@ export default function TermsOfServiceView({ onBack = null, publicMode = false, 
               <div className="p-6 rounded-3xl bg-primary/10 border border-primary/30 space-y-3">
                 <h4 className="text-sm font-bold text-on-surface">Start your free trial</h4>
                 <p className="text-xs text-on-surface-variant leading-relaxed">
-                  Sign up with a public ID and password. 150 task tokens after two-factor
+                  Sign up with a public ID and password. 15,000 task tokens after two-factor
                   authentication and a 1-cent payment verification.
                 </p>
                 <button

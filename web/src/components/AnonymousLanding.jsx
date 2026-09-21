@@ -41,7 +41,7 @@ const FALLBACK_PLANS = [
   {
     id: 'trial',
     name: 'Free Trial',
-    tagline: '7-day starter trial with 15,000 task tokens — unlocked after 2FA and a $0.01 payment verification. New accounts start at 0 tokens.',
+    tagline: 'One-time 14-day starter trial with 15,000 task tokens — unlocked after 2FA and a $0.01 payment verification. New accounts start at 0 tokens.',
     price_cents: 0,
     price_monthly: 0,
     monthly_task_tokens: 15000,
@@ -349,7 +349,7 @@ function Pricing({ onOpenAuth, onApplyTesting }) {
                 <span className="text-3xl font-extrabold tracking-tight text-on-surface">
                   ${p.price_monthly % 1 === 0 ? p.price_monthly : p.price_monthly.toFixed(2)}
                 </span>
-                <span className="text-xs text-on-surface-variant">/{p.is_trial ? '7 days' : 'mo'}</span>
+                <span className="text-xs text-on-surface-variant">/{p.is_trial ? '14 days' : 'mo'}</span>
               </div>
               <div className="text-xs text-on-surface-variant leading-relaxed">{p.tagline}</div>
 
@@ -379,7 +379,7 @@ function Pricing({ onOpenAuth, onApplyTesting }) {
         <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-secondary" aria-hidden="true" />
         <span>
           Utilities are metered in task tokens — you always see the token cost of a task before
-          you approve it. Credits top up your token allowance when you need more.
+          you approve it. There is no self-serve top-up — message the developer for a grant.
         </span>
       </p>
 

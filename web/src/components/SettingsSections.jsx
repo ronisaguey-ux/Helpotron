@@ -3,7 +3,11 @@
  * Sections: Account | Appearance & Display | Notifications | Privacy & Security | Credits | Integrations.
  * Strict LUMINOUS GLASS M3 tokens, live preview tile, and Telegram real flow.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
+
+// Insights is a large view (~83 KB) that most settings visits never open, so it is
+// loaded on demand rather than folded into the settings bundle.
+const InsightsView = React.lazy(() => import('./InsightsView.jsx'));
 import {
   User, Moon, Sun, Laptop, Bell, Shield, CreditCard, Send,
   Key, Copy, Check, CheckCircle2, AlertCircle, Trash2, ExternalLink, ScanSearch
@@ -47,6 +51,29 @@ export function SettingsSections({
   const [copiedId, setCopiedId] = useState(false);
   const [billingBusy, setBillingBusy] = useState(false);
   const [billingMsg, setBillingMsg] = useState('');
+
+  /* The live tier catalogue.
+   *
+   * These were a hardcoded array — Trial "$0 / 7 days · 150 task tokens", Basic
+   * 300, Pro 1,000, Elite 2,700 — left behind by the 100x token-unit change
+   * (100 tokens = 1 cent) and by the trial moving to 14 days. The settings page
+   * was therefore advertising allowances a payment does not deposit, which is
+   * worse than showing nothing: it is a price list that is simply wrong.
+   *
+   * GET /api/plans is the single source of truth (server/plans.py), so this reads
+   * it instead of keeping a second copy. Any tier number in a component is a bug
+   * on a timer — that is the whole lesson.
+   */
+  const [plans, setPlans] = useState([]);
+  useEffect(() => {
+    if (section !== 'all' && section !== 'credits') return undefined;
+    let alive = true;
+    fetch('/api/plans', { credentials: 'omit' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && Array.isArray(d?.plans)) setPlans(d.plans); })
+      .catch(() => { /* leave the grid out rather than invent tiers */ });
+    return () => { alive = false; };
+  }, [section]);
 
   /* "Manage Billing" means managing the SUBSCRIPTION — payment method, invoices,
    * cancellation. The in-app plans tab can do none of those, so it opens the
@@ -503,47 +530,106 @@ export function SettingsSections({
             </button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-unit-3">
-            {[
-              { label: 'Trial', price: '$0 / 7 days', desc: '150 task tokens' },
-              { label: 'Basic', price: '$10 / mo', desc: '300 task tokens' },
-              { label: 'Pro', price: '$20 / mo', desc: '1,000 task tokens' },
-              { label: 'Elite', price: '$40 / mo', desc: '2,700 task tokens' },
-            ].map((tier) => {
-              const isCurrent = (plan || 'pro').toLowerCase() === tier.label.toLowerCase();
-              return (
-                <div
-                  key={tier.label}
-                  className={`p-unit-3 rounded-2xl border flex flex-col gap-1 ${
-                    isCurrent
-                      ? 'bg-primary/10 border-primary/40 text-on-surface'
-                      : 'bg-surface-container-low/60 border-outline-variant/20 text-on-surface-variant'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-body-sm text-xs font-semibold text-on-surface">
-                      {tier.label}
+          {/* Balance first — what you have is the question this page answers. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-unit-3">
+            <div className="p-unit-4 rounded-2xl bg-primary/10 border border-primary/30 flex flex-col gap-1">
+              <span className="font-label-caps text-label-caps text-primary uppercase tracking-wider">
+                Task tokens
+              </span>
+              <span className="font-tabular-stat-md text-2xl font-semibold text-on-surface">
+                {Number(tokenBalance ?? 0).toLocaleString()}
+              </span>
+              <span className="font-code-sm text-[10px] text-on-surface-variant">
+                Tokens meter the compute your tasks use. 100 tokens = 1¢ of service.
+              </span>
+            </div>
+            <div className="p-unit-4 rounded-2xl bg-surface-container-low/60 border border-outline-variant/20 flex flex-col gap-1">
+              <span className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">
+                Current plan
+              </span>
+              <span className="font-tabular-stat-md text-2xl font-semibold text-on-surface capitalize">
+                {plan || 'none'}
+              </span>
+              <span className="font-code-sm text-[10px] text-on-surface-variant">
+                Credits are earned discounts, not tokens — they come from referrals and
+                data-lake contributions.
+              </span>
+            </div>
+          </div>
+
+          {/* The tier table, read live from /api/plans. */}
+          {plans.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-unit-3">
+              {plans.map((tier) => {
+                const isCurrent = String(plan || '').toLowerCase() === String(tier.id || '').toLowerCase();
+                const allowance = Number(tier.monthly_task_tokens ?? 0).toLocaleString();
+                // A one-time grant is not a monthly allowance: the server does not
+                // claim the trial or Testing renews, and neither does this.
+                const cadence = tier.is_trial
+                  ? 'for the 14-day trial'
+                  : tier.is_testing
+                    ? 'never expires'
+                    : '/ month';
+                return (
+                  <div
+                    key={tier.id}
+                    className={`p-unit-4 rounded-2xl border flex flex-col gap-1.5 ${
+                      isCurrent
+                        ? 'bg-primary/10 border-primary/40'
+                        : 'bg-surface-container-low/60 border-outline-variant/20'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-body-md text-sm font-semibold text-on-surface">
+                        {tier.name}
+                      </span>
+                      {isCurrent ? (
+                        <span className="font-chip-status text-[9px] text-primary font-bold uppercase shrink-0">
+                          Current
+                        </span>
+                      ) : !tier.available ? (
+                        <span className="font-chip-status text-[9px] text-on-surface-variant uppercase shrink-0">
+                          Not available yet
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className="font-tabular-stat-md text-sm font-semibold text-primary">
+                      {tier.price_cents > 0 ? `$${(tier.price_cents / 100).toFixed(0)} / month` : 'Free'}
                     </span>
-                    {isCurrent && (
-                      <span className="font-chip-status text-[9px] text-primary font-bold uppercase">
-                        Current
+                    <span className="font-code-sm text-[11px] text-on-surface">
+                      {allowance} task tokens <span className="text-outline">{cadence}</span>
+                    </span>
+                    {tier.tagline && (
+                      <span className="font-body-sm text-[11px] text-on-surface-variant leading-snug">
+                        {tier.tagline}
                       </span>
                     )}
                   </div>
-                  <span className="font-tabular-stat-md text-sm font-semibold text-primary">
-                    {tier.price}
-                  </span>
-                  <span className="font-code-sm text-[10px] text-outline">
-                    {tier.desc}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
       {/* ================= SECTION 6: INTEGRATIONS ================= */}
+      {/* ================= SECTION: INSIGHTS =================
+          Moved here from the top-level nav (owner 2026-09-19). Same view, same
+          data — it just no longer owns a product area. */}
+      {(section === 'insights') && (
+        <section id="section-insights" className="rounded-3xl bg-surface-container-lowest/80 border border-outline-variant/30 p-unit-6 shadow-sm">
+          <Suspense
+            fallback={
+              <div className="p-8 text-center font-code-sm text-xs text-on-surface-variant">
+                Loading insights…
+              </div>
+            }
+          >
+            <InsightsView userId={userId} onGoTo={onGoTo} />
+          </Suspense>
+        </section>
+      )}
+
       {(section === 'all' || section === 'integrations') && (
         <section id="section-integrations" className="rounded-3xl bg-surface-container-lowest/80 border border-outline-variant/30 p-unit-6 shadow-sm flex flex-col gap-unit-5">
           <TelegramIntegration

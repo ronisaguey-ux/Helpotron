@@ -37,11 +37,11 @@ PLAN_ORDER: List[str] = ["trial", "testing", "basic", "pro", "elite"]
 PLAN_COPY: Dict[str, Dict[str, str]] = {
     "trial": {
         "name": "Free Trial",
-        "tagline": "7-day starter trial with 15,000 task tokens — unlocked after 2FA, a $0.01 payment verification, and approval. New accounts start at 0 tokens.",
+        "tagline": "One-time 14-day starter trial with 15,000 task tokens — unlocked after 2FA, a $0.01 payment verification, and approval. New accounts start at 0 tokens.",
     },
     "testing": {
         "name": "Testing",
-        "tagline": "Free 15,000 task tokens for people evaluating the platform and reporting issues. Tell the developer who you are and why you want access — approval is manual.",
+        "tagline": "Free 10,000 task tokens for people evaluating the platform and reporting issues. They never expire. Tell the developer who you are and why you want access — approval is manual.",
     },
     "basic": {
         "name": "Basic",
@@ -55,6 +55,14 @@ PLAN_COPY: Dict[str, Dict[str, str]] = {
         "name": "Elite",
         "tagline": "270,000 task tokens / month for heavy research and multi-agent work.",
     },
+}
+
+# How each tier's allowance recurs, for the allowance line only. The paid tiers
+# renew monthly; the trial is a one-time grant that ends with the trial, and
+# Testing is a flat grant that never expires.
+ALLOWANCE_RECURRENCE: Dict[str, str] = {
+    "trial": " for the 14-day trial",
+    "testing": " (never expires)",
 }
 
 # Every tier ships the same product. Tiers differ by monthly allowance only —
@@ -163,8 +171,13 @@ def get_plan_catalogue() -> List[Dict[str, Any]]:
                           else ("Most Popular" if plan == "pro" and available else None))
                 ),
                 # No USD-value disclosure (owner 09-06): token allowances only.
+                #
+                # The recurrence word has to match the tier. Saying
+                # "15,000 task tokens / month" on a ONE-TIME trial and on a
+                # never-expiring Testing grant advertises an allowance that
+                # renews when nothing renews it (owner 2026-09-19).
                 "capabilities": [
-                    f"{tokens:,} task tokens / month",
+                    f"{tokens:,} task tokens{ALLOWANCE_RECURRENCE.get(plan, ' / month')}",
                     *SHARED_CAPABILITIES,
                 ],
             }

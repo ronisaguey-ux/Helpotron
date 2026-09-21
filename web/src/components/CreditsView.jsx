@@ -58,7 +58,7 @@ export default function CreditsView({ userId = '', initialTab = 'plans', userCre
           Credits &amp; Billing
         </h1>
         <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl mt-1">
-          Token balance, monthly plans, and credit top-ups.
+          Your token balance, plan and what you have earned.
         </p>
       </div>
 
