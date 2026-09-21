@@ -302,7 +302,7 @@ export default function BillingView({ userId = '' }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
         {TIERS.map((tier) => {
           const price = billingCycle === 'yearly' ? tier.priceYearly : tier.priceMonthly;
-          const cycleLabel = tier.priceMonthly === 0 ? '7 days' : billingCycle === 'yearly' ? '/ year' : '/ month';
+          const cycleLabel = tier.priceMonthly === 0 ? '14 days' : billingCycle === 'yearly' ? '/ year' : '/ month';
           const isCurrent = plan === tier.planId;
 
           return (

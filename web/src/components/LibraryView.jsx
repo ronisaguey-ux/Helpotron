@@ -22,6 +22,7 @@ import api from "../api.js";
 import FlashcardsPlayer from "./study/FlashcardsPlayer.jsx";
 import QuizPlayer from "./study/QuizPlayer.jsx";
 import AcademicCalendar from "./study/AcademicCalendar.jsx";
+import AssignmentHistoryView from "./AssignmentHistoryView.jsx";
 import { StreakBadge, MasteryRing } from "./study/MasteryRing.jsx";
 
 function getTileIcon(kind = "") {
@@ -44,8 +45,16 @@ function getTileIcon(kind = "") {
   return { Icon: FileText, tint: "text-on-surface-variant bg-surface-container border-outline-variant/30" };
 }
 
-export default function LibraryView({ userId = "", onGoTo, onSelectAssignment }) {
-  const [activeTab, setActiveTab] = useState("files"); // "files" | "saved" | "study" | "calendar"
+export default function LibraryView({ userId = "", onGoTo, onSelectAssignment, initialTab = null }) {
+  // Owner 2026-09-19: History and Library were two views of the same material, so
+  // History is now a tab here rather than a destination of its own.
+  // `initialTab` is how a deep-link (/history) lands on the completed-work
+  // list. Unknown values fall back to files rather than rendering nothing.
+  const [activeTab, setActiveTab] = useState(
+    ["files", "saved", "study", "calendar", "completed"].includes(initialTab)
+      ? initialTab
+      : "files",
+  ); // "files" | "saved" | "study" | "calendar" | "completed"
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [streakDays, setStreakDays] = useState(0);
@@ -202,6 +211,7 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment })
           { key: "saved", label: "Saved Collection", count: savedMaterials.length },
           { key: "study", label: "Active Recall Player" },
           { key: "calendar", label: "Academic Deadlines" },
+          { key: "completed", label: "Completed Work" },
         ].map(({ key, label, count }) => {
           const isActive = activeTab === key;
           return (
@@ -500,6 +510,10 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment })
       {/* TAB 4: ACADEMIC CALENDAR */}
       {activeTab === "calendar" && (
         <AcademicCalendar onSelectAssignment={onSelectAssignment} />
+      )}
+      {/* TAB 5: COMPLETED WORK (the merged-in History view) */}
+      {activeTab === "completed" && (
+        <AssignmentHistoryView userId={userId} onSelectAssignment={onSelectAssignment} />
       )}
     </div>
   );

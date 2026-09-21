@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Sliders, User, Moon, Bell, Shield, CreditCard, Send, Trash2,
-  Check, CheckCircle2, Loader2, Search, Sparkles, ExternalLink, ScanSearch, KeyRound
+  Check, CheckCircle2, Loader2, Search, Sparkles, ExternalLink, ScanSearch, KeyRound, TrendingUp
 } from 'lucide-react';
 import api from '../api.js';
 import { loadSettings, saveSettings } from '../demoData.js';
@@ -22,6 +22,10 @@ export const SETTINGS_NAV_ITEMS = [
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'privacy', label: 'Privacy & Security', icon: Shield },
   { id: 'credits', label: 'Credits & Billing', icon: CreditCard },
+  // Owner 2026-09-19: Insights moved off the nav — a niche analytics page
+  // relevant to a small minority, so it sits in Settings rather than owning a
+  // top-level product area.
+  { id: 'insights', label: 'Insights', icon: TrendingUp },
   { id: 'integrations', label: 'Integrations', icon: Send },
   { id: 'trash', label: 'Trash', icon: Trash2 },
 ];

@@ -8,7 +8,7 @@ import api from '../api.js';
  * The Free Trial now requires: (1) 2FA enabled in Account > Settings, and
  * (2) a 1-cent payment verification (Stripe checkout when configured, else a
  * manual record the operator confirms). This card drives that sequence and
- * grants the 150 task tokens on the third step.
+ * grants the 15,000 task tokens on the third step.
  */
 export default function TrialActivationCard({ userId = '', onActivated = null }) {
   const [trial, setTrial] = useState(null);
@@ -116,7 +116,7 @@ export default function TrialActivationCard({ userId = '', onActivated = null })
             Free Trial
           </div>
           <h2 className="font-title-md text-body-lg font-semibold text-on-surface">
-            Activate your 7-day Free Trial — {claim} task tokens
+            Activate your 14-day Free Trial — {claim} task tokens
           </h2>
           <p className="font-body-md text-body-md text-on-surface-variant max-w-xl mt-1">
             One-time per account. Requires 2FA enabled and a 1-cent payment verification (it also keeps

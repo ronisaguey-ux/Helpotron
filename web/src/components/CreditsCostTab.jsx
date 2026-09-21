@@ -55,7 +55,7 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
               type="button"
               onClick={onBack}
               className="flex items-center justify-center w-11 h-11 min-h-[44px] rounded-xl bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all shadow-sm"
-              title="Return to Plans & Top-ups"
+              title="Return to Plans"
               aria-label="Back to Plans"
             >
               <ArrowLeft className="w-5 h-5" />
