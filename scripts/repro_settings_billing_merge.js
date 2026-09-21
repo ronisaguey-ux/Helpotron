@@ -113,10 +113,17 @@ function adminPassword() {
       `${body.length} chars of content`);
   }
 
-  // ── Settings → Credits & Billing ─────────────────────────────────────────
-  const creditsNav = page.locator('button:has-text("Credits & Billing")').first();
-  record('Settings has a Credits & Billing section', (await creditsNav.count()) > 0,
-    `${await creditsNav.count()} entry`);
+  // ── Settings → Account → Credits & Billing ───────────────────────────────
+  // Credits & Billing moved UNDER Account (owner 2026-09-21), so it is a
+  // sub-tab now: open the Account group first, then the section.
+  const accountNav = page.locator('[data-settings-nav="account"]').first();
+  if (await accountNav.count()) {
+    await accountNav.click();
+    await page.waitForTimeout(2000);
+  }
+  const creditsNav = page.locator('[data-settings-subnav="credits"]').first();
+  record('Credits & Billing lives under Account', (await creditsNav.count()) > 0,
+    `${await creditsNav.count()} sub-tab`);
   if (await creditsNav.count()) {
     await creditsNav.click();
     await page.waitForTimeout(2500);

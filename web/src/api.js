@@ -738,6 +738,17 @@ export const api = {
 
   // Message Admin Direct Channel
   changePassword: (currentPassword, newPassword) => request('/api/user/change-password', { method: 'POST', body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) }),
+  // ── Account profile (owner 2026-09-21) ────────────────────────────────────
+  // Display name and avatar are preferences; the public ID is the login
+  // identifier, so it goes through its own route that demands the password and
+  // refuses an API key outright.
+  getProfile: () => request('/api/user/profile', { method: 'GET' }),
+  updateProfile: (patch) => request('/api/user/profile', { method: 'PATCH', body: JSON.stringify(patch) }),
+  changePublicId: (newPublicId, password) =>
+    request('/api/user/profile/public-id', {
+      method: 'POST',
+      body: JSON.stringify({ new_public_id: newPublicId, password }),
+    }),
 
   // Forgot-password / recovery flow (operator 08-28)
   recoveryOptions: (publicId) => request(`/api/recovery/options?public_id=${encodeURIComponent(publicId)}`, { method: 'GET' }),

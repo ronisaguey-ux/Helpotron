@@ -15,13 +15,24 @@ import TrashPanel from './TrashPanel.jsx';
 
 export const SETTINGS_NAV_ITEMS = [
   { id: 'all', label: 'All Settings', icon: Sliders },
-  { id: 'account', label: 'Account', icon: User },
+  // Owner 2026-09-21: API Keys, Privacy & Security and Credits & Billing all live
+  // UNDER Account. They are the account's own settings — who you are, what can
+  // reach it, and what it costs — and a flat pill row made them look like peers
+  // of Appearance and Notifications. `children` renders as a sub-row beneath.
+  {
+    id: 'account',
+    label: 'Account',
+    icon: User,
+    children: [
+      { id: 'account', label: 'Profile', icon: User },
+      { id: 'apikeys', label: 'API Keys', icon: KeyRound },
+      { id: 'privacy', label: 'Privacy & Security', icon: Shield },
+      { id: 'credits', label: 'Credits & Billing', icon: CreditCard },
+    ],
+  },
   { id: 'appearance', label: 'Appearance', icon: Moon },
   { id: 'humanizer', label: 'AI Detection', icon: ScanSearch },
-  { id: 'apikeys', label: 'API Keys', icon: KeyRound },
   { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'privacy', label: 'Privacy & Security', icon: Shield },
-  { id: 'credits', label: 'Credits & Billing', icon: CreditCard },
   // Owner 2026-09-19: Insights moved off the nav — a niche analytics page
   // relevant to a small minority, so it sits in Settings rather than owning a
   // top-level product area.
@@ -180,12 +191,18 @@ export default function SettingsApp({
         {/* Section Navigation Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto p-1 rounded-2xl bg-surface-container-lowest/80 border border-outline-variant/25">
           {SETTINGS_NAV_ITEMS.map((item) => {
-            const isSelected = activeSection === item.id;
             const Icon = item.icon;
+            // A parent is "selected" when it OR one of its children is open, so
+            // opening API Keys keeps Account highlighted — otherwise the row
+            // shows nothing active and the sub-tabs look detached.
+            const childIds = (item.children || []).map((c) => c.id);
+            const isSelected =
+              activeSection === item.id || childIds.includes(activeSection);
             return (
               <button
                 key={item.id}
                 type="button"
+                data-settings-nav={item.id}
                 onClick={() => {
                   setActiveSection(item.id);
                   // Keep the hash in step so the section is linkable/shareable.
@@ -203,6 +220,45 @@ export default function SettingsApp({
             );
           })}
         </div>
+
+        {/* Sub-row: the open group's own sections. Rendered only when the group
+            is active, so the first row stays short for people who never go in. */}
+        {(() => {
+          const openGroup = SETTINGS_NAV_ITEMS.find(
+            (i) => i.children && (i.id === activeSection || i.children.some((c) => c.id === activeSection)),
+          );
+          if (!openGroup) return null;
+          return (
+            <div className="flex items-center gap-1.5 overflow-x-auto pl-3 ml-1 border-l-2 border-primary/30">
+              <span className="font-label-caps text-[10px] text-outline uppercase tracking-wider shrink-0 pr-1">
+                {openGroup.label}
+              </span>
+              {openGroup.children.map((child) => {
+                const isOn = activeSection === child.id;
+                const ChildIcon = child.icon;
+                return (
+                  <button
+                    key={child.id}
+                    type="button"
+                    data-settings-subnav={child.id}
+                    onClick={() => {
+                      setActiveSection(child.id);
+                      try { window.history.replaceState(null, '', `#${child.id}`); } catch (e) { /* non-fatal */ }
+                    }}
+                    className={`h-8 px-3 rounded-lg font-label-caps text-[11px] flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                      isOn
+                        ? 'bg-primary/15 text-primary font-semibold border border-primary/30'
+                        : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/40 border border-transparent'
+                    }`}
+                  >
+                    <ChildIcon className="w-3 h-3" />
+                    <span>{child.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
       </header>
 
       {/* Main Bare-Bones Sections */}
@@ -221,6 +277,7 @@ export default function SettingsApp({
           tokenBalance={tokenBalance}
           isAdmin={isAdmin}
           onGoTo={onGoTo}
+          onSelectSection={setActiveSection}
         />
       </main>
     </div>
