@@ -1152,7 +1152,7 @@ async def upload_avatar(
     db: Session = Depends(get_db),
 ):
     """Avatar upload for the user, the agent, or a subject (PNG/JPG only)."""
-    _get_current_user(request, db)
+    user = _get_current_user(request, db)
     content = await file.read()
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file uploaded.")
@@ -1170,9 +1170,25 @@ async def upload_avatar(
     _AVATAR_DIR.mkdir(parents=True, exist_ok=True)
     disk_name = f"{uuid.uuid4().hex}.{ext}"
     (_AVATAR_DIR / disk_name).write_bytes(content)
+    url = f"/uploads/avatars/{disk_name}"
+
+    # A user avatar has to LAND on the account, or the upload is a file on disk
+    # that nothing ever renders (owner 2026-09-21 — this endpoint and its client
+    # helper both existed, neither was called, so uploading a picture did nothing).
+    # Agent and subject avatars are left alone: they are chosen in their own
+    # surfaces, which already know what they belong to.
+    if (kind or "user") == "user":
+        locked = db.query(User).filter(User.id == user.id).with_for_update().first() or user
+        settings_now = dict(locked.settings or {})
+        prof = dict(settings_now.get("profile") or {})
+        prof["avatar_url"] = url
+        settings_now["profile"] = prof
+        locked.settings = settings_now
+        db.commit()
+
     return {
         "status": "ok",
-        "url": f"/uploads/avatars/{disk_name}",
+        "url": url,
         "kind": kind or "user",
         "subject": subject,
     }

@@ -95,6 +95,7 @@ try:
     from .admin import router as admin_router
     from .routes_features import router as features_router
     from .routes_calendar import router as calendar_router
+    from .routes_profile import router as profile_router
     from .routes_trial import router as trial_router
     from .routes_notifications import router as notifications_router
     from .routes_library import router as library_router
@@ -131,6 +132,7 @@ except (ImportError, ValueError):
     from server.admin import router as admin_router
     from server.routes_features import router as features_router
     from server.routes_calendar import router as calendar_router
+    from server.routes_profile import router as profile_router
     from server.routes_trial import router as trial_router
     from server.routes_notifications import router as notifications_router
     from server.routes_library import router as library_router
@@ -468,6 +470,7 @@ app.include_router(admin_advanced_router)
 app.include_router(admin_router)
 app.include_router(features_router)
 app.include_router(calendar_router)
+app.include_router(profile_router)
 app.include_router(recovery_router)
 app.include_router(overlord_router)
 app.include_router(simulation_router)
