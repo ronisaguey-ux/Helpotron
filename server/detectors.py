@@ -149,6 +149,76 @@ SAPLING_USD_PER_CHAR = 0.000005     # $0.005 / 1,000 chars
 PANGRAM_USD_PER_WORD = 0.00005      # $0.05 / 1,000 words
 PANGRAM_WORDS_PER_UNIT = 1000       # one billable unit = started 1,000-word block
 
+# -- Cheaper, in-process detectors (owner 2026-09-21) -------------------------
+# "for the free humanizers, dont make them free, still charge task tokens, but
+#  less ... dont say locally, cuz its on my computer, not theirs".
+#
+# ZipPy, RoBERTa, cadence and burstiness cost nothing at an API, which is why they
+# were labelled free. But "free to the user" and "free to run" are different
+# things: they execute on the operator's CPU, so they consume real electricity and
+# real machine time. Pricing that CPU time as electricity is the same technique
+# hip_humanizer.py uses, with the same calibration, so a cheap scan is a MEASURED
+# cost rather than an arbitrary minimum.
+#
+# Calibration (this box, HP ENVY 13, i7-8550U; measured 2026-09-17 in
+# hip_humanizer.py): 4.82 J per CPU-second, 18.27 c/kWh (EIA STEO Aug 2026).
+# A typical in-process scan of a 500-word draft costs well under a tenth of a
+# cent, so it lands in the sub-token range and is caught by the 1-token floor --
+# cheap, but not zero.
+JOULES_PER_CPU_SECOND = 4.82
+USD_PER_KWH = 0.1827
+_JOULES_PER_KWH = 3_600_000.0
+
+# The detectors that run in-process. Named here so the ledger can price them and
+# so nothing has to guess which side of the paid line a detector is on.
+IN_PROCESS_DETECTORS = ("zippy", "roberta_onnx", "perplexity_cadence", "burstiness_analyzer")
+
+
+def _cpu_seconds_now() -> Optional[float]:
+    """Total CPU seconds burned by THIS process (user + system).
+
+    /proc/self/stat is the right source: these detectors run inside the API
+    process, so the delta measured around the call IS their cost. Fields 14 and 15
+    (utime, stime) are counted after the comm field, which may itself contain
+    spaces, so the split is anchored on the closing paren.
+    """
+    try:
+        with open("/proc/self/stat", "r") as fh:
+            parts = fh.read().rsplit(") ", 1)[-1].split()
+        ticks = os.sysconf("SC_CLK_TCK")
+        return (int(parts[11]) + int(parts[12])) / ticks
+    except Exception:
+        return None
+
+
+def estimate_in_process_cost(name: str, cpu_seconds: float) -> float:
+    """USD for `cpu_seconds` of in-process work. Zero only when unmeasured."""
+    if cpu_seconds <= 0:
+        return 0.0
+    joules = cpu_seconds * JOULES_PER_CPU_SECOND
+    return joules / _JOULES_PER_KWH * USD_PER_KWH
+
+
+def _record_in_process_cost(name: str, cpu_seconds: float) -> None:
+    """Put an in-process detector CPU cost in the ledger. Never raises."""
+    if cpu_seconds <= 0:
+        return
+    try:
+        from .metering import record_service_cost
+        record_service_cost(
+            service=f"detector:{name}",
+            cost_usd=estimate_in_process_cost(name, cpu_seconds),
+            units=cpu_seconds,
+            metadata={
+                "detector": name,
+                "cpu_seconds": round(cpu_seconds, 4),
+                "in_process": True,
+            },
+            category="detector",
+        )
+    except Exception:
+        pass
+
 
 def estimate_detector_cost(name: str, text: str) -> float:
     """Measured cost in USD of running one detector over `text`.
@@ -487,8 +557,18 @@ def _cfg_global() -> "Any":
 
 async def _run_detector_group(detectors_list: List[Detector], text: str,
                               max_parallel: int = 5) -> List[DetectorResult]:
-    """Run a subset of the registry in parallel (funnel staging — same shape
-    as DetectorRegistry.detect_all but over an explicit list)."""
+    """Run a subset of the registry in parallel (funnel staging -- same shape
+    as DetectorRegistry.detect_all but over an explicit list).
+
+    This is the one sequential choke point every funnel stage passes through, so
+    it is also where the in-process detectors are METERED. They run in parallel
+    with each other, so a per-detector CPU delta would double-count any overlap;
+    measuring once around the whole group and attributing it to the in-process
+    detectors in that group is the honest number.
+    """
+    in_process = [d for d in detectors_list if d.name in IN_PROCESS_DETECTORS]
+    cpu_before = _cpu_seconds_now() if in_process else None
+
     sem = asyncio.Semaphore(max_parallel)
 
     async def run_one(detector: Detector) -> DetectorResult:
@@ -497,6 +577,14 @@ async def _run_detector_group(detectors_list: List[Detector], text: str,
 
     tasks = [run_one(d) for d in detectors_list]
     results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    if cpu_before is not None:
+        cpu_after = _cpu_seconds_now()
+        if cpu_after is not None:
+            _record_in_process_cost(
+                "+".join(sorted(d.name for d in in_process)),
+                cpu_after - cpu_before,
+            )
     out: List[DetectorResult] = []
     for i, r in enumerate(results):
         if isinstance(r, Exception):

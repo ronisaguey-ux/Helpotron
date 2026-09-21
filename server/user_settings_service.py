@@ -362,8 +362,24 @@ class UserSettingsService:
             # 4. Custom Subjects & Taxonomy
             "custom_subjects": DEFAULT_CUSTOM_SUBJECTS,
 
-            # 5. Multi-Scoped Subsetting Overrides Map
-            # Key: settingKey -> List of { id, target_type, target_value, value, label }
+            # 5. Scoped overrides — the per-area variants of a setting.
+            #
+            # CANONICAL SHAPE (matches humanize_skill._scoped_value, which is the
+            # code that actually resolves them):
+            #     settings["scoped"][path] = [{ id, scope: {level, ref}, value }]
+            #     path is a dotted setting path, e.g. "ai.humanizer"
+            #
+            # `scoped` is declared HERE so the API will accept it. It previously was
+            # not, which meant every override a client saved was silently dropped by
+            # filter_user_settings_payload: the user saw "saved", the value was never
+            # stored, and no override could ever take effect. `scoped_subsettings`
+            # below is the older key with a different shape ({target_type,
+            # target_value}) that nothing ever read; it is kept so anything already
+            # stored under it keeps resolving (see _scoped_value).
+            "scoped": {},
+
+            # Legacy key, kept readable for compatibility. New writes go to
+            # `scoped`. Do not build on this.
             "scoped_subsettings": {
                 "effort_score": [],
                 "academic_level": [],

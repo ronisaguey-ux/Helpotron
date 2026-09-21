@@ -13,6 +13,7 @@ import {
   Download,
 } from 'lucide-react';
 import { loadSettings, saveSettings } from '../lib/settings.js';
+import SettingOverrides from './SettingOverrides.jsx';
 
 const PERSONALITY_OPTIONS = [
   { id: 'global', label: 'Default (Global Preference)' },
@@ -40,7 +41,7 @@ const GLOBAL_DEFAULTS = {
 
 /**
  * SubjectSettingsPanel Component — Stitch Screen 3.4.2 Specification
- * 
+ *
  * Level 1 disclosure inline configuration for a subject module.
  * Features 6 three-state config widgets (§4.3):
  *  1. Educational Mode (segmented)
@@ -58,6 +59,7 @@ export default function SubjectSettingsPanel({
   onExport = null,
   onDelete = null,
   isCustom = false,
+  settings: serverSettings = null,
 }) {
   const [configs, setConfigs] = useState(null);
   const [overrides, setOverrides] = useState(new Set());
@@ -630,6 +632,76 @@ export default function SubjectSettingsPanel({
                 ))
               )}
             </div>
+          </div>
+
+          {/* ACCOUNT-WIDE SETTINGS THIS SUBJECT OVERRIDES.
+              Owner 2026-09-21: the main Settings page sets the global default,
+              and an individual area may override it here.
+
+              These write `settings.scoped` on the SERVER, which is the shape the
+              enforcement paths resolve. The widgets above save to localStorage
+              `subject_configs`, which no server code reads — so they were tuning
+              a value nothing executed. Do not add to them without moving the
+              read to the same place. Stored as scope.ref = the subject NAME,
+              because that is what builds the server's resolution context. */}
+          <div className="col-span-full p-5 rounded-2xl bg-surface-container-low/50 border border-outline-variant/20 flex flex-col gap-3">
+            <div className="flex flex-col">
+              <span className="font-label-caps text-label-caps text-on-surface font-semibold tracking-wider">
+                GLOBAL SETTINGS THIS SUBJECT OVERRIDES
+              </span>
+              <span className="font-body-sm text-body-sm text-on-surface-variant mt-1">
+                Set a different value here without changing your account default. Turn an
+                override off to follow the global setting again.
+              </span>
+            </div>
+
+            <SettingOverrides
+              path="ai.humanizer"
+              label="Humanizer"
+              description="Rewrites drafts to read as human-written. Override it here if this subject should not be humanized (or should be, when your default is off)."
+              ctx={{ subject: subject?.title }}
+              settings={serverSettings}
+              onSaved={() => onSettingsChanged?.(subjectId, 1)}
+            />
+
+            <SettingOverrides
+              path="ai.detection.enabled"
+              label="AI detection"
+              description="Scores drafts for AI-likelihood before they are delivered. Turn it off for a subject where you are writing by hand."
+              ctx={{ subject: subject?.title }}
+              settings={serverSettings}
+              onSaved={() => onSettingsChanged?.(subjectId, 1)}
+            />
+
+            <SettingOverrides
+              path="ai.detection.paid_verification"
+              label="External verification"
+              description="Adds the external detectors on top of the included ones. Costs more per scan, so override it on only if this subject needs the extra opinion."
+              ctx={{ subject: subject?.title }}
+              settings={serverSettings}
+              onSaved={() => onSettingsChanged?.(subjectId, 1)}
+            />
+
+            <SettingOverrides
+              path="ai.detection.detectors.roberta_onnx"
+              label="RoBERTa detector"
+              description="The slower classifier, consulted only when the fast checks disagree. Turn it off here to keep this subject's scans quick."
+              ctx={{ subject: subject?.title }}
+              settings={serverSettings}
+              onSaved={() => onSettingsChanged?.(subjectId, 1)}
+            />
+
+            <SettingOverrides
+              path="ai.effortScore"
+              label="Effort"
+              description="How hard the agent works on this subject. Lower spends fewer tokens; higher reasons further. Overrides your account-wide effort."
+              valueType="level"
+              min={1}
+              max={10}
+              ctx={{ subject: subject?.title }}
+              settings={serverSettings}
+              onSaved={() => onSettingsChanged?.(subjectId, 1)}
+            />
           </div>
         </div>
       </div>

@@ -669,8 +669,9 @@ export function SettingsSections({
                 AI Detection &amp; Humanizer
               </h2>
               <p className="font-body-sm text-body-sm text-on-surface-variant">
-                Humanization runs on your own machine. Detection is local by default; paid
-                verification is opt-in.
+                Humanization is applied as part of your work. The included detectors run on
+                every pass and cost a fraction of a token; the external verification tier is
+                opt-in and costs more per scan.
               </p>
             </div>
           </div>
@@ -682,7 +683,8 @@ export function SettingsSections({
                 Humanizer
               </span>
               <span className="font-code-sm text-[11px] text-outline">
-                Rewrites drafts to read as human-written. Runs locally — no data leaves this machine.
+                Rewrites drafts to read as human-written. Costs task tokens, measured
+                from the work each pass actually does.
               </span>
             </div>
             <input
@@ -693,29 +695,81 @@ export function SettingsSections({
             />
           </label>
 
-          {/* Local tier — always on, free, in-process. */}
+          {/* Included detectors — selectable, always available, and METERED.
+              They used to be labelled "Free". They are not: running them consumes
+              CPU, which costs real money, and "local" would describe where they
+              execute rather than anything the user experiences. They are cheap,
+              not free (owner 2026-09-21). */}
           <div className="flex flex-col gap-2">
             <span className="font-label-caps text-[11px] text-outline uppercase tracking-wider">
               Included detectors
             </span>
             {[
-              { label: 'ZipPy', desc: 'Local compression heuristic' },
-              { label: 'RoBERTa-ONNX', desc: 'Local classifier running on this machine' },
-              { label: 'Cadence & burstiness', desc: 'Statistical rhythm analysis' },
-            ].map((d) => (
-              <div
-                key={d.label}
-                className="flex items-center justify-between p-unit-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/10"
-              >
-                <div className="flex flex-col pr-2">
-                  <span className="font-body-sm text-xs font-semibold text-on-surface">{d.label}</span>
-                  <span className="font-code-sm text-[11px] text-outline">{d.desc}</span>
-                </div>
-                <span className="font-code-sm text-[11px] px-2 py-0.5 rounded-full bg-sem-green/10 text-sem-green border border-sem-green/20">
-                  Free
-                </span>
-              </div>
-            ))}
+              {
+                key: 'zippy',
+                label: 'ZipPy',
+                desc: 'Compression heuristic. Compares your draft against a corpus of '
+                  + 'machine-written and human-written text to see which it reads closer to. '
+                  + 'Best at catching text that is fluent but was generated wholesale.',
+              },
+              {
+                key: 'roberta_onnx',
+                label: 'RoBERTa',
+                desc: 'Trained classifier. Judges the draft as a whole and returns an '
+                  + 'AI-likelihood. Slower than the heuristics, so it is consulted only when '
+                  + 'the faster checks disagree — genuinely ambiguous drafts, not every pass.',
+              },
+              {
+                key: 'cadence',
+                label: 'Cadence & burstiness',
+                desc: 'Rhythm analysis. Measures how much sentence length and structure vary. '
+                  + 'Human writing swings between short and long; generated text sits in a '
+                  + 'narrow band. Always runs — it is the baseline the other detectors are '
+                  + 'read against, and it costs almost nothing.',
+              },
+            ].map((d) => {
+              const toggleable = d.key !== 'cadence';
+              const on = toggleable
+                ? (settings?.ai?.detection?.detectors?.[d.key] ?? true)
+                : true;
+              return (
+                <label
+                  key={d.key}
+                  className={`flex items-start justify-between gap-unit-3 p-unit-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/10 ${
+                    toggleable ? 'cursor-pointer hover:bg-surface-container-low transition-colors' : ''
+                  }`}
+                >
+                  <div className="flex flex-col pr-2">
+                    <span className="font-body-sm text-xs font-semibold text-on-surface">
+                      {d.label}
+                    </span>
+                    <span className="font-code-sm text-[11px] text-outline leading-relaxed">
+                      {d.desc}
+                    </span>
+                  </div>
+                  {toggleable ? (
+                    <input
+                      type="checkbox"
+                      data-detector-toggle={d.key}
+                      checked={on}
+                      onChange={(e) => set(setHumanizerSettings(settings, {
+                        detection: {
+                          detectors: {
+                            ...(settings?.ai?.detection?.detectors || {}),
+                            [d.key]: e.target.checked,
+                          },
+                        },
+                      }))}
+                      className="w-4 h-4 mt-0.5 rounded text-primary focus:ring-primary cursor-pointer shrink-0"
+                    />
+                  ) : (
+                    <span className="font-code-sm text-[10px] mt-0.5 px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant border border-outline-variant/20 shrink-0">
+                      Always on
+                    </span>
+                  )}
+                </label>
+              );
+            })}
           </div>
 
           {/* Paid tier — explicit opt-in. */}
@@ -725,8 +779,8 @@ export function SettingsSections({
                 Paid detection verification
               </span>
               <span className="font-code-sm text-[11px] text-outline">
-                Runs the external detectors (Pangram, Sapling) for extra verification. Each scan
-                costs credits, so this is off unless you turn it on.
+                Adds the external detectors (Pangram, Sapling) on top of the included
+                ones. Each scan costs noticeably more per call, so this is off unless you turn it on.
               </span>
             </div>
             <input

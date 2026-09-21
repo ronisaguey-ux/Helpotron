@@ -672,6 +672,7 @@ export function AssignmentCardDashboard({
                   onExport={() => handleExportBubble(bubble.title)}
                   onDelete={() => handleDeleteBubble(bubble.id)}
                   isCustom={bubble.is_custom}
+                  settings={loadSettings()}
                 />
               )}
 

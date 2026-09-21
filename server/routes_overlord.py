@@ -2140,7 +2140,7 @@ def _chat_reply(db, user, thread_key, text, **kw) -> Dict[str, Any]:
     return msg
 
 
-def resolve_agent_effort(settings: dict) -> int:
+def resolve_agent_effort(settings: dict, ctx: Optional[dict] = None) -> int:
     """The user's effort, on the 1..1000 scale the router bands.
 
     Precedence matters and was wrong: `settings["ai"]["effortScore"]` is what the
@@ -2160,6 +2160,21 @@ def resolve_agent_effort(settings: dict) -> int:
     pin every user to level 1.
     """
     from .screen_vision import parse_effort_score
+    from .humanize_skill import _scoped_value
+
+    # A subject or assignment may override effort. Checked BEFORE the global
+    # candidates so a subject set to a cheaper model is not silently outvoted by
+    # the account-wide slider (owner 2026-09-21: per-area settings override the
+    # global default).
+    if ctx:
+        scoped_effort = _scoped_value(settings, "ai.effortScore", ctx)
+        if scoped_effort is None:
+            scoped_effort = _scoped_value(settings, "effort_score", ctx)
+        if scoped_effort is not None:
+            try:
+                return parse_effort_score(scoped_effort)
+            except Exception:
+                pass
 
     ai = settings.get("ai") if isinstance(settings.get("ai"), dict) else {}
     for candidate in (
@@ -2196,6 +2211,9 @@ def _build_agent_chat_prompt(user, payload: ChatMessageRequest, db: Session) -> 
                 humanizer_ctx = {
                     "assignment": _assign_row.title,
                     "subject": _prog.get("subject") or _prog.get("course") or "",
+                    # The surface is scoped too, so My Agent / the extension can
+                    # carry their own overrides (owner 2026-09-21).
+                    "place": agent_node,
                 }
                 humanizer_ctx = {k: v for k, v in humanizer_ctx.items() if v}
                 if not humanizer_ctx:
