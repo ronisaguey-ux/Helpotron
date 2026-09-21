@@ -156,23 +156,71 @@ detector report was supplied before the rewrite, address every flag it
 raised — that is the acceptance list."""
 
 
-def _scoped_value(settings: Dict[str, Any], path: str, ctx: Optional[Dict[str, Any]]) -> Optional[Any]:
-    """Most-specific-wins scoped variant (assignment > subject), mirroring
-    ScopedSetting.resolveScopedValue. None when no variant matches the ctx."""
-    scoped = settings.get("scoped") if isinstance(settings.get("scoped"), dict) else {}
-    variants = scoped.get(path)
-    if not isinstance(variants, list):
-        return None
-    for level, ref in (("assignment", ctx.get("assignment") if ctx else None),
-                       ("subject", ctx.get("subject") if ctx else None)):
-        if not ref:
+# The scope levels, most-specific first. Both the resolver and the UI use this
+# order, so a variant can never resolve differently in one place than the other.
+_SCOPE_ORDER = ("assignment", "subject", "place")
+
+
+def _normalise_variants(raw: Any) -> list:
+    """Accept both stored shapes and return the canonical one.
+
+    Canonical (what new writes use)::
+
+        {"scope": {"level": "subject", "ref": "Biology"}, "value": ...}
+
+    Legacy `scoped_subsettings` used::
+
+        {"target_type": "subject", "target_value": "Biology", "value": ...}
+
+    Both are read so overrides saved under either name keep working; this is a
+    read-side shim only, and nothing new writes the legacy form.
+    """
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for v in raw:
+        if not isinstance(v, dict):
             continue
-        for v in variants:
-            if not isinstance(v, dict) or not isinstance(v.get("scope"), dict):
+        scope = v.get("scope")
+        if not isinstance(scope, dict):
+            scope = {
+                "level": v.get("target_type") or v.get("level"),
+                "ref": v.get("target_value") or v.get("ref"),
+            }
+        if not scope.get("level") or not scope.get("ref"):
+            continue
+        out.append({"scope": scope, "value": v.get("value")})
+    return out
+
+
+def _scoped_value(settings: Dict[str, Any], path: str, ctx: Optional[Dict[str, Any]]) -> Optional[Any]:
+    """Most-specific-wins scoped variant (assignment > subject > place). None when
+    no variant matches the ctx.
+
+    Reads BOTH storage names. `scoped` is canonical and is what the UI writes;
+    `scoped_subsettings` is the older key with a different shape that was declared
+    and writable but never read here — so anything a user had saved under it
+    silently did nothing. It is still consulted, last, so those overrides start
+    working instead of staying dead.
+    """
+    buckets = []
+    for name in ("scoped", "scoped_subsettings"):
+        bucket = settings.get(name)
+        if isinstance(bucket, dict):
+            buckets.append(bucket)
+
+    for bucket in buckets:
+        variants = _normalise_variants(bucket.get(path))
+        if not variants:
+            continue
+        for level in _SCOPE_ORDER:
+            ref = ctx.get(level) if ctx else None
+            if not ref:
                 continue
-            scope = v["scope"]
-            if scope.get("level") == level and str(scope.get("ref") or "") == str(ref):
-                return v.get("value")
+            for v in variants:
+                scope = v["scope"]
+                if scope.get("level") == level and str(scope.get("ref")) == str(ref):
+                    return v.get("value")
     return None
 
 
@@ -236,11 +284,16 @@ def humanizer_block(settings: Optional[Dict[str, Any]], node: str = "my_agent",
 # vote below pools the healthy local tier instead — the standard still
 # enforces, at zero paid cost.
 
+# Names only. The tier suffix ("(local)") is gone from every user-facing
+# surface: the computation happens on the operator's infrastructure, not on
+# the user's device, so calling it "local" described the host rather than the
+# user's experience — and it read as a privacy claim that is not ours to make
+# (owner 2026-09-21).
 DETECTOR_DISPLAY = {
     "sapling": "Sapling",
     "pangram": "Pangram",
-    "zippy": "ZipPy (local)",
-    "roberta_onnx": "RoBERTa-ONNX (local)",
+    "zippy": "ZipPy",
+    "roberta_onnx": "RoBERTa",
 }
 
 # The detectors that cost money per call. Local by default — a user has to turn
@@ -291,11 +344,16 @@ def detection_detectors(settings: Optional[Dict[str, Any]],
                         ctx: Optional[Dict[str, Any]] = None) -> list:
     """Enabled detector names (registry keys).
 
-    LOCAL BY DEFAULT (owner 2026-09-17): only the in-process tier (ZipPy,
-    RoBERTa-ONNX) plus the always-on heuristics run unless the user explicitly
-    turns on "paid detection verification". The humanizer is the thing doing the
-    work, so the extra paid detectors are a verification nicety, not a
-    requirement — and paying per call by default is not what "stay local" means.
+    The INCLUDED tier by default (owner 2026-09-17, reworded 2026-09-21): the
+    in-process detectors plus the always-on heuristics run unless the user
+    explicitly turns on "paid detection verification". The humanizer is the thing
+    doing the work, so the external detectors are a verification nicety, not a
+    requirement — and paying per call by default is not a decision to make for
+    someone.
+
+    Each included detector is individually selectable, and that choice is scoped:
+    an assignment or subject can turn one off without changing the account
+    default.
 
     node/ctx are threaded through to the paid-verification check so a SUBJECT-
     or ASSIGNMENT-scoped opt-in is honoured here too. Omitting them silently
@@ -312,6 +370,14 @@ def detection_detectors(settings: Optional[Dict[str, Any]],
     names = []
     for name in DETECTOR_DISPLAY:
         if name in PAID_DETECTOR_NAMES and not paid_on:
+            continue
+        # The per-detector toggle is itself scope-aware, so a subject or
+        # assignment can turn one detector off without touching the account
+        # default: settings["scoped"]["ai.detection.detectors.<name>"].
+        scoped_hit = _scoped_on_off(settings, f"ai.detection.detectors.{name}", ctx)
+        if scoped_hit is not None:
+            if scoped_hit:
+                names.append(name)
             continue
         if cfg.get(name, DETECTOR_DEFAULTS.get(name, True)):
             names.append(name)
