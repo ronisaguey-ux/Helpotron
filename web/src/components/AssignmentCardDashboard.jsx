@@ -11,6 +11,7 @@ import api from '../api';
 import { normalizeCards } from '../lib/assignmentEvents';
 import { getAssignmentBucket } from '../lib/assignmentBuckets.js';
 import { loadSettings } from '../lib/settings.js';
+import { useScopedMap, overriddenPathsAt } from '../lib/scopedSettings.js';
 import {
   Plus,
   Download,
@@ -344,12 +345,20 @@ export function AssignmentCardDashboard({
   }, [allSubjectBubbles, unassigned.length]);
 
   // Read overrides count for a given subject
-  const getSubjectOverrideCount = (subjId) => {
-    const settings = loadSettings();
-    const stored = settings.subject_configs?.[subjId];
-    if (!stored) return 0;
-    return Object.keys(stored).length;
-  };
+  // Overrides the SERVER actually resolves, matched on the subject NAME.
+  //
+  // The previous version read `settings.subject_configs[subjId]` — a localStorage
+  // only, id-keyed store that no server code reads — so this indicator lit up for
+  // legacy local junk and stayed dark for every real override. Overrides live in
+  // `settings.scoped` on the server and are keyed by name, because that is what the
+  // resolver gets in its context (`routes_overlord` passes the subject NAME).
+  //
+  // The map comes from the server (localStorage never receives it — see the header
+  // of `lib/scopedSettings.js`), not from `loadSettings()`.
+  const scopedMap = useScopedMap();
+  const getSubjectOverridePaths = (subjectTitle) =>
+    overriddenPathsAt(scopedMap, 'subject', subjectTitle);
+  const getSubjectOverrideCount = (subjectTitle) => getSubjectOverridePaths(subjectTitle).length;
 
   // 1. FIRST-LOAD SKELETON STATE
   if (loading && cards.length === 0) {
@@ -536,6 +545,19 @@ export function AssignmentCardDashboard({
                     <p className="font-code-sm text-xs text-on-surface-variant mt-1">
                       {subjectCards.length} {subjectCards.length === 1 ? 'assignment' : 'assignments'} present
                     </p>
+                    {/* Overrides change this subject's behaviour silently, so they
+                        have to be visible from here — the controls are one level in. */}
+                    {getSubjectOverridePaths(bubble.title).length > 0 && (
+                      <span
+                        data-subject-overridden={bubble.title}
+                        title={`${getSubjectOverridePaths(bubble.title).length} setting(s) override the global default for this subject`}
+                        className="inline-flex items-center gap-1.5 mt-1.5 text-[10px] font-chip-status uppercase tracking-wider text-sem-amber"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-sem-amber" />
+                        {getSubjectOverridePaths(bubble.title).length} override
+                        {getSubjectOverridePaths(bubble.title).length === 1 ? '' : 's'} vs global
+                      </span>
+                    )}
                   </div>
                 </button>
 
@@ -610,7 +632,7 @@ export function AssignmentCardDashboard({
             (c) => getAssignmentBucket(c.status) === 'in_progress'
           );
 
-          const overrideCount = getSubjectOverrideCount(bubble.id);
+          const overrideCount = getSubjectOverrideCount(bubble.title);
           const isSettingsOpen = openSettingsSubjectId === bubble.id;
 
           return (

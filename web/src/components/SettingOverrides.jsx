@@ -47,17 +47,20 @@ export default function SettingOverrides({
     useScopedOverrides(settings, path, ctx);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const run = async (fn) => {
     setBusy(true);
+    setFailed(false);
     try {
       await fn();
       setFlash(true);
       window.setTimeout(() => setFlash(false), 1600);
       onSaved?.();
     } catch (e) {
-      // Surfaced rather than swallowed: a failed write must not look saved.
-      window.alert(e?.message || 'Could not save that override.');
+      // Surfaced rather than swallowed: a failed write must not look saved. Rendered
+      // inline instead of window.alert, which blocks the page and cannot be read.
+      setFailed(e?.message || 'Could not save that override.');
     } finally {
       setBusy(false);
     }
@@ -87,13 +90,23 @@ export default function SettingOverrides({
         </div>
       );
     }
-    const on = isOverridden ? !!scopedValue : globalValue !== false && globalValue !== 'off';
+    const globalOn = globalValue !== false && globalValue !== 'off';
+    const on = isOverridden ? !!scopedValue : globalOn;
+    // Three reachable states, and the click has to distinguish them:
+    //   not overridden -> override to the OPPOSITE of the global (so a global ON
+    //     can actually be turned OFF for this area — the whole point of the control)
+    //   overridden     -> flip the explicit value (an explicit OFF can be turned back ON)
+    //   clearing       -> only ever via "Use global"
+    // Clicking clearOverride() from a non-overridden state is a silent no-op, which
+    // is what made the toggle do nothing whenever the global was on.
+    const nextValue = isOverridden ? !scopedValue : !globalOn;
     return (
       <button
         type="button"
         disabled={busy}
-        onClick={() => run(() => (on ? clearOverride() : setOverride(true)))}
+        onClick={() => run(() => setOverride(nextValue))}
         aria-pressed={on}
+        aria-label={isOverridden ? `${label} for this area (overridden)` : `${label} for this area`}
         className={`w-10 h-6 rounded-full border flex items-center px-0.5 transition-all cursor-pointer disabled:opacity-50 ${
           on
             ? 'bg-primary/30 border-primary/50 justify-end'
@@ -106,7 +119,11 @@ export default function SettingOverrides({
   };
 
   return (
-    <div className="flex items-start justify-between gap-unit-3 p-unit-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/10">
+    <div
+      data-override-key={path}
+      data-override-state={isOverridden ? 'overridden' : 'global'}
+      className="flex items-start justify-between gap-unit-3 p-unit-3 rounded-xl bg-surface-container-low/40 border border-outline-variant/10"
+    >
       <div className="flex flex-col pr-2 min-w-0">
         <span className="font-body-sm text-xs font-semibold text-on-surface">{label}</span>
         <span className="font-code-sm text-[11px] text-outline leading-relaxed">{description}</span>
@@ -132,6 +149,11 @@ export default function SettingOverrides({
             </>
           )}
         </span>
+        {failed && (
+          <span data-override-error className="font-code-sm text-[10px] mt-1 text-error">
+            {failed}
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-2 shrink-0 pt-0.5">
         {flash && <Check className="w-3.5 h-3.5 text-primary" />}
