@@ -126,7 +126,7 @@ export default function AgentConfigsSidebar({
       badgeVariant: 'primary',
       reasoningDepth: 'Custom',
       writingStyle: 'User Defined',
-      detectorStealth: 'Humanizer ready',
+      humanStyleStatus: 'Humanizer ready',
       iconType: 'custom',
     };
     onAddIdentity(newId);
@@ -385,7 +385,7 @@ export default function AgentConfigsSidebar({
                             Humanizer
                           </span>
                           <span className="font-tabular-stat-md text-[11px] text-sem-green font-medium mt-0.5 truncate">
-                            {persona.detectorStealth || 'Standard'}
+                            {persona.humanStyleStatus || persona.detectorStealth || 'Standard'}
                           </span>
                         </div>
                       </div>

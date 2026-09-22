@@ -24,14 +24,14 @@ export const DEFAULT_PIPELINE_NODES = [
     id: 'node_humanize',
     name: 'Cadence Humanization',
     role: 'Style Matching',
-    description: 'Vary syntactic complexity, calibrate burstiness, and eradicate synthetic watermarks.',
+    description: 'Vary syntactic complexity, calibrate burstiness, and align prose cadence to student style.',
     estimatedDuration: '0.8s',
   },
   {
     id: 'node_integrity',
     name: 'Quality & Integrity Seal',
     role: 'Integrity Validator',
-    description: 'Audit citation topology, verify stealth threshold, and lock final submission package.',
+    description: 'Audit citation topology, verify human-style review score, and lock final submission package.',
     estimatedDuration: '0.3s',
   },
 ];

@@ -391,7 +391,7 @@ export default function SubjectSettingsPanel({
                   <span className="font-tabular-stat text-2xl font-bold text-primary">
                     {configs.human_score_min}%
                   </span>
-                  <span className="font-code-sm text-xs text-on-surface-variant">STEALTH INDEX</span>
+                  <span className="font-code-sm text-xs text-on-surface-variant">HUMAN-STYLE SCORE</span>
                 </div>
                 <div className="flex items-center gap-1 bg-surface-container-lowest p-1 rounded-xl border border-outline-variant/20">
                   <button
