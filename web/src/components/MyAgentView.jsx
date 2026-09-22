@@ -1040,12 +1040,16 @@ export default function MyAgentView({
       {/* Flyout Configs Sidebar (Drawer) */}
       {showConfigsSidebar && (
         <div className="fixed inset-y-0 right-0 z-50 flex animate-in slide-in-from-right duration-200">
-          <AgentConfigsSidebar
-              ai={settings.ai}
-              /* The agent's display name. The greeting ("<name> Agent online")
-               * is rendered server-side from `settings.ai.aiName`, so this must
-               * PATCH the server too — a local-only write would look saved and
-               * then revert on the next reload. */
+            <AgentConfigsSidebar
+                ai={settings.ai}
+                /* The full blob, so the Behaviour tab's per-area overrides can show
+                 * the global value they deviate from. */
+                settings={settings}
+                onSettingsChanged={() => setSettings((s) => ({ ...s }))}
+                /* The agent's display name. The greeting ("<name> Agent online")
+                 * is rendered server-side from `settings.ai.aiName`, so this must
+                 * PATCH the server too — a local-only write would look saved and
+                 * then revert on the next reload. */
               onSaveAgentName={(name) => {
                 const ai = { ...(settings.ai || {}), aiName: name };
                 const updated = { ...settings, ai };

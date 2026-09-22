@@ -2199,7 +2199,12 @@ def _build_agent_chat_prompt(user, payload: ChatMessageRequest, db: Session) -> 
                             else None)
     agent_node = "assignment_team" if bubble_assignment_id else "my_agent"
     assignment_ctx = ""
-    humanizer_ctx = None
+    # The SURFACE is always a scope, even with no assignment in play. Building this
+    # only inside the `if bubble_assignment_id` branch left it None on My Agent, so a
+    # `place: "my_agent"` override had no context to match against and was silently
+    # inert — the control would save, the server would store it, and nothing would
+    # ever consult it. The assignment/subject dimensions are added on top when known.
+    humanizer_ctx = {"place": agent_node}
     if bubble_assignment_id:
         try:
             _assign_row = db.query(Assignment).filter(
@@ -2220,7 +2225,7 @@ def _build_agent_chat_prompt(user, payload: ChatMessageRequest, db: Session) -> 
                     humanizer_ctx = None
         except Exception:
             assignment_ctx = ""
-            humanizer_ctx = None
+            humanizer_ctx = {"place": agent_node}
     try:
         from .overlord_agent import load_chat_history_from_db
         load_chat_history_from_db(db, user.id, thread_key)

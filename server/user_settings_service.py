@@ -556,12 +556,29 @@ class UserSettingsService:
 
         return settings
 
+    #: Keys whose value is a COMPLETE document rather than a bag of independent
+    #: preferences, and which must therefore be REPLACED on write, not merged.
+    #:
+    #: `scoped` holds `{path: [variants]}`. The generic merge below (`current[k].update(v)`)
+    #: makes deletion impossible: sending `{}` merges nothing and every existing key
+    #: survives, so a client could never clear its overrides and a stale entry was
+    #: permanent. Verified live — `PATCH {"scoped": {}}` returned 200 and changed
+    #: nothing, while `{"scoped": {"<path>": []}}` worked. Patching one path at a time
+    #: cannot remove a path that is no longer wanted, which is a leak the user cannot
+    #: see or fix. The client always sends the full map, so replacing is also what it
+    #: already means. This is why the merge must be opted OUT of rather than the
+    #: caller working around it.
+    REPLACE_ON_WRITE = frozenset({"scoped"})
+
     @staticmethod
     def update_user_settings(db: Session, user: User, updates: Dict[str, Any]) -> Dict[str, Any]:
         """Merges updates into user settings and commits."""
         current = UserSettingsService.get_user_settings(user)
         for k, v in updates.items():
-            if isinstance(v, dict) and isinstance(current.get(k), dict):
+            if k in UserSettingsService.REPLACE_ON_WRITE:
+                # Still copy, so the caller's object cannot alias the stored JSON.
+                current[k] = copy.deepcopy(v)
+            elif isinstance(v, dict) and isinstance(current.get(k), dict):
                 current[k].update(v)
             else:
                 current[k] = v
