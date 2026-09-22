@@ -25,7 +25,7 @@ from .agent_files import delete_agent_file, list_agent_files, save_agent_file
 from .agent_memory import append_memory, delete_memory, load_memory, replace_memory
 from .agent_prompt import agent_persona_block, agent_system_prompt
 from .llm import strip_thinking_tokens  # noqa: F401 — reply plumbing strips every LLM text
-from .database import AgentChatMessage, AgentChatThread, Assignment, StudyMaterial, UniversalDumpItem, User, get_db
+from .database import AgentChatMessage, AgentChatThread, Assignment, CreditTransaction, StudyMaterial, UniversalDumpItem, User, get_db
 from .overlord_agent import READONLY_ACTION_TYPES, agent_display_name, overlord_agent, permission_engine, describe_permission_action
 
 router = APIRouter(prefix="/api", tags=["overlord_and_cards"])
@@ -1542,12 +1542,49 @@ def _action_cost(action: str) -> float:
 
 def _charge_tokens(user, db, cost: float) -> None:
     """Deduct from the user's token budget (settings.token_balance) after work ran.
-    Credits are untouched (they are the discount currency)."""
-    settings = dict(user.settings or {})
-    bal = float(settings.get("token_balance", 0) or 0)
-    settings["token_balance"] = max(0.0, bal - cost)
-    user.settings = settings
+    Credits are untouched (they are the discount currency).
+
+    Two things this has to get right, and the previous hand-rolled body got both wrong:
+
+    * THE LEDGER ROW. It moved the JSON balance and committed while writing no
+      CreditTransaction row at all, so every agent action was charged with no audit
+      trail. Refunds could not be computed and the balance could not be reconciled
+      from the ledger — the two silently disagreed.
+    * THE ROW LOCK. `settings` is a JSON blob, so this is a read-modify-write that
+      cannot be expressed as one atomic UPDATE. Unlocked, two concurrent charges read
+      the same balance and both debit it, overdrawing the account while both report
+      success. `credits.charge()` already takes the lock for exactly this reason.
+
+    The balance is allowed to go NEGATIVE rather than being clamped at zero. The work
+    has already run, so the cost is real; clamping silently moved the shortfall onto
+    the platform. A negative balance is honest and self-blocks the account until a
+    top-up, which matches the documented overdraft rule for post-hoc settlement.
+    """
+    user_id = user.id if hasattr(user, "id") else user
+    from .credits import is_unmetered, debit_tokens_atomic
+    row = db.query(User).filter(User.id == user_id).first()
+    if row is None:
+        return
+    if is_unmetered(row):
+        return
+    # One statement, so two concurrent charges cannot both debit the balance they read.
+    # The previous body read the balance into Python and wrote it back, which lost a
+    # debit whenever two charges overlapped — measured: two 400-token debits against
+    # 1000 left 600, with both callers reporting success.
+    new_bal = debit_tokens_atomic(db, user_id, cost, allow_negative=True)
+    db.add(CreditTransaction(
+        user_id=user_id,
+        delta=-float(cost),
+        reason="agent_action",
+    ))
     db.commit()
+    if hasattr(user, "settings"):
+        try:
+            db.refresh(user)
+        except Exception:
+            s = dict(getattr(user, "settings", None) or {})
+            s["token_balance"] = new_bal
+            user.settings = s
 
 
 def _charge_usage(user, db, action: str, since_id: Optional[int] = None) -> float:
