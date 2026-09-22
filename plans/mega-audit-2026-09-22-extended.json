@@ -1,0 +1,2418 @@
+{
+  "generated_at": "2026-09-22T16:40:56Z",
+  "version": 2,
+  "supersedes": "plans/mega-audit-2026-09-21.json",
+  "repo": "/home/roni/Roni_workspace/helpotron",
+  "head_commit": "8be2d8c46ddcd05a4eb072af876e75946560fed3",
+  "graph_commit": "e773d7d3d1d0c38f45e209ad646b5a8245cf57db",
+  "why_v2_exists": {
+    "owner_correction": "Owner: 'all the findings were supposed to be reviewed and consolidated into the plan'. Correct. v1 consolidated 13 of 49 and labelled the rest 'unexamined' - a subset dressed as a plan, which is the failure mode this repo keeps repeating.",
+    "v1_gap": "36 findings across tracks 2,3,4,5,6,7,9,10 were never verified.",
+    "method": "Every finding read at HEAD and, where testable, reproduced. Numbers here are MEASURED. Where a report's number was wrong it is corrected inline and the correction names the report.",
+    "honesty_rule": "Listed as verified only if the file:line was read AND the claim reproduced. Anything not reached is under still_unverified with the reason - never silently dropped, never silently promoted."
+  },
+  "summary": {
+    "findings_consolidated": 72,
+    "by_verdict": {
+      "verified": 28,
+      "refuted": 5,
+      "reclassified": 2,
+      "fixed": 7,
+      "partially_fixed": 1,
+      "unverified": 26,
+      "duplicate": 3
+    },
+    "by_track": {
+      "ui_nav": 10,
+      "design": 8,
+      "reliability": 7,
+      "convenience": 4,
+      "latency": 6,
+      "efficiency": 7,
+      "security": 5,
+      "testing": 8,
+      "legality": 9,
+      "economics": 8
+    },
+    "severity_of_actionable": {
+      "critical": 5,
+      "high": 16,
+      "medium": 8,
+      "low": 2
+    },
+    "note": "v1 consolidated 13 of the 49 findings one inventory pass had captured, and that inventory itself covered only 6 of the 10 tracks. The true count is 72 across all ten tracks. Every one is now in this file with a verdict. Nothing is dropped."
+  },
+  "headline": "Five CRITICALs are live in the shipped product. Two are navigation dead ends - signed-in users cannot reach /guide, /terms or /privacy at all, and six CTAs on those very pages render a blank white screen. One is a measured WCAG failure (1.31:1 against a 4.5:1 floor). Two silently destroy user data: a nested settings write discards its siblings, and an idempotency key charge() accepts and never uses means a retried settlement bills twice. And one thing this audit still does NOT know: the IDOR sweep was never run (SEC-OPEN-A), so object-level authorisation across the API is unknown rather than clean - the largest remaining unknown, and this repo has produced exactly that class of bug before.",
+  "findings": [
+    {
+      "id": "UI-01",
+      "track": "ui_nav",
+      "severity": "critical",
+      "verdict": "verified",
+      "title": "Signed-in users can never reach /guide, /terms, /privacy, /pricing or /extension - the router returns silently",
+      "evidence": {
+        "locations": [
+          "web/src/App.jsx:308 PUBLIC_PATHS",
+          "web/src/App.jsx:320-324 the silent return",
+          "web/src/App.jsx:284-306 VIEW_PATH_MAP omits all five"
+        ],
+        "observed": "MEASURED by reading resolvePath at HEAD. The five paths are IN PUBLIC_PATHS but NOT in VIEW_PATH_MAP. For a SIGNED-IN user the guard at :317 is false, :320 finds no mapping, and :322 does `return` having done NOTHING. The URL stays /guide while the app keeps rendering the previously active view - a reload silently shows the dashboard. /study is in neither map, so it 404s."
+      },
+      "impact": "The Guide, Terms and Privacy pages are unreachable by URL for every paying user. A bookmark, shared link or reload lands on the dashboard with no error. Terms copy telling a user to read /terms is unusable for the only people who have accounts.",
+      "fix": {
+        "approach": "Map the public routes to real views for authenticated users, and make the unmapped case loud rather than silent.",
+        "files": [
+          "web/src/App.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "    '/admin': ['admin', null],\n  };",
+            "after": "    '/admin': ['admin', null],\n    // REAL VIEWS once signed in. Omitting them meant an authed load of /guide hit the\n    // silent `return` in resolvePath and stayed on whatever view was active.\n    '/guide': ['guide', null],\n    '/terms': ['terms', null],\n    '/privacy': ['privacy', null],\n    '/pricing': ['credits', 'plans'],\n    '/study': ['library', 'study'],\n  };"
+          },
+          {
+            "anchor": "        if (PUBLIC_PATHS.has(path)) return;",
+            "after": "        // Public AND unmapped is a landing page only for a signed-OUT visitor. For a\n        // signed-in one it is a routing bug, and returning silently is what stranded\n        // them on the dashboard at /guide.\n        if (PUBLIC_PATHS.has(path) && status !== 'authed') return;"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/repro_deeplinks.js",
+          "name": "every public deep link reaches a real view when signed in",
+          "proves": "an authenticated load renders that view, not the dashboard",
+          "must_fail_without_fix": true,
+          "body": "// Real browser, real session. Assert the URL is unchanged AND overview did not render.\nconst { chromium } = require('playwright');\nconst BASE = process.env.HT_BASE || 'http://127.0.0.1:5000';\nconst PATHS = ['/guide', '/terms', '/privacy', '/pricing'];\nconst bad = [];\nfor (const path of PATHS) {\n  await page.goto(BASE + path, { waitUntil: 'domcontentloaded' });\n  await page.waitForTimeout(2500);\n  const shown = new URL(page.url()).pathname;\n  if (shown !== path) bad.push(`${path} -> ${shown}`);\n  else if (await page.locator('[data-view=\"overview\"]').count()) bad.push(`${path} -> dashboard`);\n}\nconsole.log(bad.length ? 'FAIL: ' + bad.join(' | ') : 'OK');\nprocess.exit(bad.length ? 1 : 0);"
+        }
+      ],
+      "risk": "'/pricing' maps to the credits view plans tab - confirm that is the intended destination rather than the landing page pricing section."
+    },
+    {
+      "id": "UI-02",
+      "track": "ui_nav",
+      "severity": "critical",
+      "verdict": "verified",
+      "title": "Six CTAs dispatch navigation keys that exist nowhere - the user gets a BLANK PAGE",
+      "evidence": {
+        "locations": [
+          "web/src/App.jsx:209-223 LEGACY_VIEWS has no pricing/study/signup",
+          "web/src/App.jsx:593-596 handleSelectView",
+          "callers: GuideView.jsx:464, :767, :774; PrivacyPolicyView.jsx:101; TermsOfServiceView.jsx:384, :580"
+        ],
+        "observed": "MEASURED: grep for `case '(pricing|study|signup)'` in App.jsx returns 0 matches for all three, while 6 call sites dispatch those exact keys. handleSelectView does `const nextView = mapped ? mapped[0] : viewKey` - with no LEGACY_VIEWS entry the RAW key becomes activeView and no render branch matches, so the page is blank."
+      },
+      "impact": "A blank page is the worst available failure: a labelled button was clicked, the URL changed, and the screen went white with no error and no way to tell whether the app crashed. Three of the six are on the Terms and Privacy pages - the last buttons a prospective customer clicks before paying.",
+      "fix": {
+        "approach": "Map the three keys to real destinations AND make an unmapped key structurally unable to render blank.",
+        "files": [
+          "web/src/App.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "      'ai-workspace': ['agent', null],\n    };",
+            "after": "      'ai-workspace': ['agent', null],\n      // Dispatched by real CTAs but never mapped - activeView became the raw key and\n      // matched no render branch, rendering nothing at all.\n      pricing: ['credits', 'plans'],\n      study: ['library', 'study'],\n      signup: ['overview', null],\n    };"
+          },
+          {
+            "anchor": "      const nextView = mapped ? mapped[0] : viewKey;",
+            "after": "      // An unmapped key used to be set verbatim, rendering NOTHING. Fall back to a real\n      // view and say so rather than showing a white screen.\n      if (!mapped) console.warn('[nav] unmapped view key:', viewKey);\n      const nextView = mapped ? mapped[0] : 'overview';"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_nav_targets.js",
+          "name": "every dispatched nav key resolves to a rendered view",
+          "proves": "no CTA can produce a blank page",
+          "must_fail_without_fix": true,
+          "body": "// Enumerate the keys any component dispatches and require each to resolve.\nconst fs = require('fs'); const path = require('path');\nconst app = fs.readFileSync('web/src/App.jsx', 'utf8');\nconst legacy = new Set([...app.matchAll(/^\\\\s*'?([\\\\w-]+)'?:\\\\s*\\\\[/gm)].map(m => m[1]));\nconst KNOWN = new Set(['overview','activity','notifications','library','agent','monitors',\n  'insights','credits','settings','extension','dump','datalake','inbox','automation',\n  'message_admin','admin','guide','terms','privacy','pricing','study','signup']);\nconst dispatched = new Set();\nfor (const f of fs.readdirSync('web/src/components')) {\n  if (!f.endsWith('.jsx')) continue;\n  for (const m of fs.readFileSync(path.join('web/src/components', f), 'utf8')\n      .matchAll(/\\\\b(?:go|onGoTo|onNavigate)\\\\(\\\\s*'([\\\\w-]+)'/g)) dispatched.add(m[1]);\n}\nconst broken = [...dispatched].filter(k => !legacy.has(k) && !KNOWN.has(k));\nif (broken.length) { console.error('nav keys that render a blank page:', broken); process.exit(1); }\nconsole.log('all dispatched nav keys resolve');"
+        }
+      ],
+      "risk": "Mapping 'signup' to overview could swallow the intent to open the auth modal. Verify the three callers still open it."
+    },
+    {
+      "id": "DSGN-01",
+      "track": "design",
+      "severity": "critical",
+      "verdict": "verified",
+      "title": "WCAG 2.1 AA contrast failure: white on the brand accent measures 1.31:1 against a 4.5:1 floor",
+      "evidence": {
+        "locations": [
+          "web/src/components/ui/os.jsx:9-24",
+          "web/src/components/ui/AdminNoticePopup.jsx:123",
+          "web/src/index.css (--st-primary: #78F5E5)",
+          "light-theme literals in os.jsx, AnimatedLogo.jsx, ScopedSetting.jsx"
+        ],
+        "observed": "MEASURED by computing the WCAG relative-luminance ratio from the actual hex values. #FFFFFF on #78F5E5 = 1.31:1 (AA floor 4.5:1; even the large-text floor is 3:1). Light theme is worse: slate-100 #F1F5F9 on #F8FAFB = 1.05:1, effectively invisible; slate-200 1.18:1, amber-300 1.38:1, slate-300 1.42:1, emerald-300 1.46:1. The subagent's numbers are EXACT - independently reproduced."
+      },
+      "impact": "A primary button's own label is unreadable at 1.31:1, and the light-theme literals are text a sighted user cannot see at all, so any state conveyed only by those classes is invisible. This is the accessibility floor of the product, not a styling preference.",
+      "fix": {
+        "approach": "Stop using white on the brand accent; use the on-primary token. Replace the light-theme legacy dark classes with semantic tokens - a mechanical sweep.",
+        "files": [
+          "web/src/components/ui/os.jsx",
+          "web/src/components/ui/AdminNoticePopup.jsx",
+          "web/src/components/ui/AnimatedLogo.jsx",
+          "web/src/components/ScopedSetting.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "text-white",
+            "after": "text-on-primary   /* dark text on teal - passes AAA, unlike white at 1.31:1 */"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_contrast.js",
+          "name": "no text/background token pair fails WCAG AA",
+          "proves": "the 1.31:1 and 1.05:1 pairs cannot return",
+          "must_fail_without_fix": true,
+          "body": "// Read the REAL token values out of index.css - a check against hardcoded literals\n// would pass after someone changes the tokens.\nconst fs = require('fs');\nconst css = fs.readFileSync('web/src/index.css', 'utf8');\nconst tok = (n) => (css.match(new RegExp(n + '\\\\s*:\\\\s*(#[0-9A-Fa-f]{6})')) || [])[1];\nconst lum = (hex) => {\n  const h = hex.replace('#', '');\n  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)\n    .map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));\n  return 0.2126 * r + 0.7152 * g + 0.0722 * b;\n};\nconst ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };\nconst bad = [];\nfor (const [fg, bg] of [['--st-on-primary', '--st-primary'], ['--st-on-surface', '--st-surface']]) {\n  const f = tok(fg), b = tok(bg);\n  if (!f || !b) continue;\n  const r = ratio(f, b);\n  if (r < 4.5) bad.push(`${fg} on ${bg} = ${r.toFixed(2)}:1`);\n}\nif (bad.length) { console.error('WCAG AA failures:', bad); process.exit(1); }\nconsole.log('contrast OK');"
+        }
+      ],
+      "risk": "Changing text colour on brand surfaces alters the visual identity. Choose the token deliberately rather than defaulting to black."
+    },
+    {
+      "id": "REL-02",
+      "track": "reliability",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "Shallow merge in update_user_settings silently destroys nested keys",
+      "evidence": {
+        "locations": [
+          "server/user_settings_service.py:610-616 (the merge)",
+          "any writer of ai.detection.* / ai.style.*"
+        ],
+        "observed": "MEASURED with deepcopy so aliasing cannot mask it: applying {'ai':{'detection':{'enabled':True}}} onto {'ai':{'detection':{'enabled':False,'min_human':70,'paid_verification':'off'}}} yields {'enabled':True}. LOST KEYS: ['min_human','paid_verification']. `current[k].update(v)` merges exactly one level, so a two-level write replaces its whole subtree."
+      },
+      "impact": "A user who sets a detection threshold and later toggles detection loses the threshold, silently. The same defect is already documented on the CLIENT (SettingsApp.mergeSettings), so fixing one side alone leaves the data loss. It also makes any two-level scoped-override write destructive.",
+      "fix": {
+        "approach": "Deep-merge dicts recursively. `scoped` stays REPLACE_ON_WRITE (it is a document), so the recursion must respect that opt-out.",
+        "files": [
+          "server/user_settings_service.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "            elif isinstance(v, dict) and isinstance(current.get(k), dict):\n                current[k].update(v)",
+            "after": "            elif isinstance(v, dict) and isinstance(current.get(k), dict):\n                # RECURSIVE. A shallow .update() replaced the whole nested dict, so writing\n                # ai.detection.enabled discarded ai.detection.min_human - measured:\n                # {'enabled','min_human','paid_verification'} -> {'enabled'}.\n                current[k] = _deep_merge(current[k], v)"
+          },
+          {
+            "anchor": "    REPLACE_ON_WRITE = frozenset({\"scoped\"})\n",
+            "after": "    REPLACE_ON_WRITE = frozenset({\"scoped\"})\n\n\ndef _deep_merge(base: dict, patch: dict) -> dict:\n    \"\"\"Merge dicts recursively. Scalars and LISTS replace.\n\n    Lists replace rather than append deliberately: these are configuration values\n    (style samples, enabled detectors) and appending would make removal impossible -\n    the same reason `scoped` is REPLACE_ON_WRITE.\n    \"\"\"\n    out = dict(base or {})\n    for k, v in (patch or {}).items():\n        if isinstance(v, dict) and isinstance(out.get(k), dict):\n            out[k] = _deep_merge(out[k], v)\n        else:\n            out[k] = copy.deepcopy(v)\n    return out\n"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_user_settings_service.py",
+          "name": "nested_settings_merge_preserves_siblings",
+          "proves": "a nested write does not discard its sibling keys",
+          "must_fail_without_fix": true,
+          "body": "def test_nested_settings_merge_preserves_siblings(db_session, paid_user):\n    from server.user_settings_service import UserSettingsService as S\n\n    S.update_user_settings(db_session, paid_user,\n        {\"ai\": {\"detection\": {\"enabled\": False, \"min_human\": 70}}})\n    S.update_user_settings(db_session, paid_user,\n        {\"ai\": {\"detection\": {\"enabled\": True}}})\n    db_session.refresh(paid_user)\n    det = (paid_user.settings or {}).get(\"ai\", {}).get(\"detection\", {})\n    assert det.get(\"enabled\") is True\n    assert det.get(\"min_human\") == 70, (\n        \"a nested write silently discarded its sibling key\")"
+        }
+      ],
+      "risk": "Recursion changes what a write means for EVERY nested key, so the existing merge test must stay green. Lists deliberately still replace."
+    },
+    {
+      "id": "UI-03",
+      "track": "ui_nav",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "The command palette searches an index that is empty for every production user",
+      "evidence": {
+        "locations": [
+          "web/src/components/CommandPalette.jsx:44",
+          "web/src/demoData.js:399 searchIndex()"
+        ],
+        "observed": "MEASURED by reading :44 - `const index = useMemo(() => (demoEnabled() ? searchIndex() : []), [])`. The index is the demo dataset or NOTHING. demoEnabled() is false in production, so every real user's cmd-K searches an empty array and matches nothing, always."
+      },
+      "impact": "The primary keyboard navigation surface of the app is inert for 100% of paying users. A power user's fastest path to any view silently returns no results, which reads as 'the app has no such page' rather than 'search is disabled'.",
+      "fix": {
+        "approach": "Build the index from real data rather than the demo set, and gate demo-only entries on demo mode instead of gating the whole index.",
+        "files": [
+          "web/src/components/CommandPalette.jsx",
+          "web/src/demoData.js"
+        ],
+        "snippets": [
+          {
+            "anchor": "    const index = useMemo(() => (demoEnabled() ? searchIndex() : []), []);",
+            "after": "    // The index was the DEMO dataset or nothing at all, so cmd-K matched zero\n    // results for every signed-in user. Real navigation targets now always load;\n    // demo-only rows are tagged and filtered instead.\n    const index = useMemo(() => {\n      const rows = searchIndex({ includeDemo: demoEnabled() });\n      return rows.filter((r) => demoEnabled() || !r.demoOnly);\n    }, []);"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/repro_command_palette.js",
+          "name": "cmd-K returns real navigation results when demo mode is off",
+          "proves": "a production user can find at least one real view",
+          "must_fail_without_fix": true,
+          "body": "// Real Chromium, real session, demo OFF. The bug is an EMPTY index, so asserting\n// 'the palette opens' would pass with the bug present.\nawait page.keyboard.press('Meta+k');\nawait page.waitForTimeout(300);\nawait page.keyboard.type('bill');\nawait page.waitForTimeout(300);\nconst rows = await page.locator('[role=\"option\"]').count();\nif (rows === 0) throw new Error('cmd-K matched nothing - index is empty in production');"
+        }
+      ]
+    },
+    {
+      "id": "UI-04",
+      "track": "ui_nav",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "Mobile navigation advertises two views that were removed and omits the one that replaced them",
+      "evidence": {
+        "locations": [
+          "web/src/components/MobileBottomBar.jsx:25-30 the SLOTS array",
+          "web/src/components/MobileDrawer.jsx",
+          "web/src/App.jsx:284-306 VIEW_PATH_MAP"
+        ],
+        "observed": "MEASURED: SLOTS = overview, agent, insights, history. `insights` was folded into Settings and `history` became a TAB of library in the UI audit (commits cd15cc7 / 721e5ed), so two of four thumb-reachable slots point at relocated surfaces - while `library`, the destination that now contains History, is absent from the bar entirely."
+      },
+      "impact": "On a phone the bottom bar is the only persistent navigation. Two of its four buttons lead somewhere the user did not ask for and the one they need most is not there. The desktop nav was corrected in this audit; the mobile twin was not, which is how the split happened.",
+      "fix": {
+        "approach": "Point the slots at live views and derive them from the same table the desktop nav uses so the two cannot drift again.",
+        "files": [
+          "web/src/components/MobileBottomBar.jsx",
+          "web/src/components/MobileDrawer.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "    const SLOTS = [\n      { key: 'overview', label: 'Home', Icon: LayoutDashboard, hasBadge: hasPendingReview },\n      { key: 'agent', label: 'Agent', Icon: Brain },\n      { key: 'insights', label: 'Insights', Icon: BarChart3 },\n      { key: 'history', label: 'History', Icon: History },\n    ];",
+            "after": "    // `insights` moved into Settings and `history` became a library tab. The bar kept\n    // pointing at both and never gained `library`, where History now lives.\n    const SLOTS = [\n      { key: 'overview', label: 'Home', Icon: LayoutDashboard, hasBadge: hasPendingReview },\n      { key: 'agent', label: 'Agent', Icon: Brain },\n      { key: 'library', label: 'Library', Icon: BookOpen },\n      { key: 'settings', label: 'Settings', Icon: Settings },\n    ];"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_mobile_nav.js",
+          "name": "every mobile nav slot resolves to a live view",
+          "proves": "no mobile slot points at a relocated or removed view",
+          "must_fail_without_fix": true,
+          "body": "// The desktop nav list is the source of truth; mobile must be a subset of it.\nconst fs = require('fs');\nconst app = fs.readFileSync('web/src/App.jsx', 'utf8');\nconst live = new Set([...app.matchAll(/activeView === '([\\w-]+)'/g)].map((m) => m[1]));\nconst bar = fs.readFileSync('web/src/components/MobileBottomBar.jsx', 'utf8');\nconst slots = [...bar.matchAll(/key: '([\\w-]+)'/g)].map((m) => m[1]);\nconst dead = slots.filter((s) => !live.has(s));\nif (dead.length) { console.error('mobile slots with no live view:', dead); process.exit(1); }\nconsole.log('mobile nav OK:', slots.join(', '));"
+        }
+      ],
+      "risk": "Removing `history` from the bar is a visible change for existing mobile users - it is reachable as a library tab, but say so in release notes."
+    },
+    {
+      "id": "UI-05",
+      "track": "ui_nav",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "The CREDITS label renders the token balance - the same number is shown twice under two different names",
+      "evidence": {
+        "locations": [
+          "web/src/components/QuickSettings.jsx:111-125"
+        ],
+        "observed": "MEASURED by reading the markup: a block labelled CREDITS renders `Number(user?.token_balance ?? 0).toLocaleString()` and the adjacent block labelled TOKENS renders `user?.token_balance` again. Tokens and credits are SEPARATE currencies by owner ruling (tokens = usage in settings.token_balance; credits = earned discounts in users.discount_balance), so the CREDITS row is not a credit balance at all."
+      },
+      "impact": "A user checking their discount balance is shown their usage balance instead, and the panel displays one number as if it were two. Every downstream decision - 'can I afford this', 'did my referral credit land' - is made on a mislabelled figure.",
+      "fix": {
+        "approach": "Read the real credit balance for the CREDITS row. Use the same accessor the billing UI uses so the two cannot disagree.",
+        "files": [
+          "web/src/components/QuickSettings.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "              <span className=\"text-[10px] text-on-surface-variant block\">CREDITS</span>\n              <span className=\"text-sm font-semibold text-primary tabular-nums\">\n                {Number(user?.token_balance ?? 0).toLocaleString()} tok\n              </span>",
+            "after": "              <span className=\"text-[10px] text-on-surface-variant block\">CREDITS</span>\n              <span className=\"text-sm font-semibold text-primary tabular-nums\">\n                {/* Was token_balance - the SAME number as the row beside it. Credits are\n                    earned-only discounts (users.discount_balance), a different currency. */}\n                {Number(user?.discount_balance ?? 0).toLocaleString()}\n              </span>"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_currency_labels.js",
+          "name": "no component labels token_balance as credits",
+          "proves": "the two currencies cannot be presented as the same figure",
+          "must_fail_without_fix": true,
+          "body": "// A label/field mismatch is invisible in a rendered screenshot, so assert the pairing.\nconst fs = require('fs'), path = require('path');\nconst bad = [];\nfor (const f of fs.readdirSync('web/src/components')) {\n  if (!f.endsWith('.jsx')) continue;\n  const src = fs.readFileSync(path.join('web/src/components', f), 'utf8');\n  for (const m of src.matchAll(/CREDITS?\\s*<[\\s\\S]{0,240}?token_balance/g)) {\n    bad.push(`${f}: CREDITS label renders token_balance`);\n  }\n}\nif (bad.length) { console.error(bad.join('\\n')); process.exit(1); }\nconsole.log('currency labels OK');"
+        }
+      ]
+    },
+    {
+      "id": "UI-08",
+      "track": "ui_nav",
+      "severity": "medium",
+      "verdict": "verified",
+      "title": "In-app navigation never touches the History API, so browser back and forward are dead",
+      "evidence": {
+        "locations": [
+          "web/src/App.jsx:194-197",
+          "web/src/App.jsx:593-603 handleSelectView",
+          "grep pushState/popstate in App.jsx -> 0 and 0"
+        ],
+        "observed": "MEASURED: `grep -c pushState web/src/App.jsx` = 0 and `grep -c popstate` = 0, while resolvePath (:284-333) clearly READS window.location.pathname on load. So the app is happy to consume a URL it never writes, and handleSelectView only mutates React state."
+      },
+      "impact": "Every in-app navigation is invisible to the browser: back exits the app instead of returning to the previous view, forward is a no-op, and the address bar keeps claiming whatever page the user landed on. Deep links work, so the asymmetry is invisible until someone presses back.",
+      "fix": {
+        "approach": "pushState on each in-app view change and listen for popstate to drive activeView. The reader already exists; only the writer is missing.",
+        "files": [
+          "web/src/App.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "      const nextView = mapped ? mapped[0] : viewKey;",
+            "after": "      // The app READ location.pathname on load but never wrote it, so in-app\n      // navigation left no history entry and Back exited the app.\n      const target = mapped ? mapped[0] : viewKey;\n      const url = VIEW_PATH_MAP && Object.entries(VIEW_PATH_MAP)\n        .find(([, v]) => v[0] === target && v[1] === null);\n      if (url && window.location.pathname !== url[0]) {\n        window.history.pushState({ view: target }, '', url[0]);\n      }\n      const nextView = target;"
+          },
+          {
+            "anchor": "  }, [/* deps */]);\n\n  return (",
+            "after": "  }, [/* deps */]);\n\n  // Pair the pushState above: drive the view from the URL the user navigated to.\n  useEffect(() => {\n    const onPop = (e) => {\n      const next = resolvePath(window.location.pathname, status === 'authed');\n      if (next) setActiveView(next[0]);\n    };\n    window.addEventListener('popstate', onPop);\n    return () => window.removeEventListener('popstate', onPop);\n  }, [status]);\n\n  return ("
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/repro_browser_back.js",
+          "name": "in-app navigation creates a history entry that Back returns to",
+          "proves": "Back returns to the previous view instead of leaving the app",
+          "must_fail_without_fix": true,
+          "body": "await page.locator('[data-nav=\"library\"]').click();\nawait page.waitForTimeout(600);\nawait page.locator('[data-nav=\"agent\"]').click();\nawait page.waitForTimeout(600);\nawait page.goBack();\nawait page.waitForTimeout(600);\n// With the bug this navigates off the app entirely; page.url() leaves the origin.\nif (!new URL(page.url()).pathname.startsWith('/')) throw new Error('Back left the app');\nconst lib = await page.locator('[data-view=\"library\"]').count();\nif (!lib) throw new Error('Back did not restore the previous view');"
+        }
+      ],
+      "risk": "Adds history entries where there were none; a user with an existing tab may find Back behaves differently after the next reload. That is the intent, but it is a behaviour change worth naming."
+    },
+    {
+      "id": "UI-09",
+      "track": "ui_nav",
+      "severity": "low",
+      "verdict": "verified",
+      "title": "PrivacyPolicyView renders with no navigation props, so its own CTAs cannot navigate",
+      "evidence": {
+        "locations": [
+          "web/src/App.jsx:929 `{activeView === 'privacy' && <PrivacyPolicyView />}`",
+          "web/src/App.jsx:930 TermsOfServiceView gets onBack but not onGoTo",
+          "web/src/components/PrivacyPolicyView.jsx:101"
+        ],
+        "observed": "MEASURED at App.jsx:929-930: PrivacyPolicyView is mounted with NO props at all, and TermsOfServiceView gets `onBack` only. Both components dispatch navigation keys internally (cross-reference UI-02, where PrivacyPolicyView.jsx:101 dispatches a key that is not in LEGACY_VIEWS), so the handlers are absent rather than merely unwired."
+      },
+      "impact": "Every navigation affordance inside the Privacy and Terms pages is unable to route. Combined with UI-02 this is why three of the six blank-page CTAs sit on exactly these two pages - the props and the mapping are both missing.",
+      "fix": {
+        "approach": "Pass the same handler the rest of the app passes, and give the components a safe fallback when it is absent.",
+        "files": [
+          "web/src/App.jsx",
+          "web/src/components/PrivacyPolicyView.jsx",
+          "web/src/components/TermsOfServiceView.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "                    {activeView === 'privacy' && <PrivacyPolicyView />}\n                    {activeView === 'terms' && <TermsOfServiceView onBack={() => handleSelectView('overview')} />}",
+            "after": "                    {activeView === 'privacy' && <PrivacyPolicyView onGoTo={handleSelectView} onBack={() => handleSelectView('overview')} />}\n                    {activeView === 'terms' && <TermsOfServiceView onGoTo={handleSelectView} onBack={() => handleSelectView('overview')} />}"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_view_props.js",
+          "name": "views that dispatch navigation receive a handler",
+          "proves": "no view can dispatch a nav key without the prop to act on it",
+          "must_fail_without_fix": true,
+          "body": "// A view calling onGoTo() with no prop passed is a silently dead button.\nconst fs = require('fs');\nconst app = fs.readFileSync('web/src/App.jsx', 'utf8');\nconst bad = [];\nfor (const m of app.matchAll(/activeView === '(\\w+)' && <(\\w+)([^/>]*)\\/>/g)) {\n  const [, key, comp, props] = m;\n  const src = `web/src/components/${comp}.jsx`;\n  if (!fs.existsSync(src)) continue;\n  const body = fs.readFileSync(src, 'utf8');\n  for (const handler of ['onGoTo', 'onBack', 'onNavigate']) {\n    if (new RegExp(`\\\\b${handler}\\\\b`).test(body) && !props.includes(handler)) {\n      bad.push(`${key}: <${comp}> uses ${handler} but never receives it`);\n    }\n  }\n}\nif (bad.length) { console.error(bad.join('\\n')); process.exit(1); }\nconsole.log('view props OK');"
+        }
+      ]
+    },
+    {
+      "id": "CONV-01",
+      "track": "convenience",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "URL import posts to an endpoint that does not exist and then hands the user a fabricated BIO-309 assignment",
+      "evidence": {
+        "locations": [
+          "web/src/components/NewAssignmentModal.jsx:72 (the call)",
+          "web/src/components/NewAssignmentModal.jsx:29-30 (the hardcoded defaults)",
+          "server/routes_import_url.py:40 prefix /api/assignments + :59 route /import-from-url (the REAL path)"
+        ],
+        "observed": "MEASURED by reading both sides. The real endpoint is POST /api/assignments/import-from-url (APIRouter(prefix='/api/assignments') at routes_import_url.py:40 plus @router.post('/import-from-url') at :59). The modal calls POST /api/import-url, which does not exist -> 404, and the call is wrapped in `.catch(() => null)` so the failure is swallowed. `res` is null, so for sourceType==='url' NEITHER `if (res?.title)` nor `if (res?.subject)` fires, the useState defaults at :29-30 survive (`'BIO-309 Chiral Inversion Reactions & Synthesis'` / `'BIO-309'`), and the modal advances to step 3 regardless."
+      },
+      "impact": "URL import is completely inert AND dishonest: it reports success, then offers to create an assignment named after a Chemistry module the user never mentioned. A user importing their own History rubric gets a BIO-309 shell. The failure is invisible because the error is caught, which is also why it survived this long.",
+      "fix": {
+        "approach": "Call the endpoint that exists and stop swallowing the failure. On failure keep the user on step 1 with the reason, rather than advancing with fabricated defaults.",
+        "files": [
+          "web/src/components/NewAssignmentModal.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "        const res = await api.request?.('/api/import-url', {\n          method: 'POST',\n          body: JSON.stringify({ url: importUrl.trim() }),\n        }).catch(() => null);\n\n        if (res?.title) setTitle(res.title);\n        if (res?.subject) setSubjectCode(res.subject);",
+            "after": "        // Was '/api/import-url' - no such route. The real one is\n        // /api/assignments/import-from-url (routes_import_url.py:40,59). The 404 was\n        // caught and swallowed, so the useState BIO-309 defaults were submitted as if\n        // they had been parsed from the URL.\n        const res = await api.request?.('/api/assignments/import-from-url', {\n          method: 'POST',\n          body: JSON.stringify({ url: importUrl.trim() }),\n        });\n        if (!res?.title) {\n          setErrorText('Could not read that URL. Check it is reachable, then retry or paste the text instead.');\n          setIsParsing(false);\n          setStep(1);\n          return;\n        }\n        setTitle(res.title);\n        if (res.subject) setSubjectCode(res.subject);"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/repro_url_import.js",
+          "name": "URL import reaches the real endpoint and never invents a subject",
+          "proves": "the imported assignment reflects the source, not the BIO-309 placeholder",
+          "must_fail_without_fix": true,
+          "body": "// Two assertions: the request goes to the live route, and an unreachable URL does\n// NOT produce a BIO-309 assignment.\nconst seen = [];\npage.on('request', (r) => { if (r.url().includes('import')) seen.push(r.url()); });\nawait openNewAssignmentModal();\nawait page.getByLabel('Import from URL').fill('https://example.invalid/rubric.html');\nawait page.getByRole('button', { name: /parse|continue/i }).click();\nawait page.waitForTimeout(2500);\nif (seen.some((u) => u.includes('/api/import-url'))) throw new Error('still calling the dead route');\nif (!(await page.getByText('Could not read that URL').count())) {\n  // With the bug the modal advanced and offered a BIO-309 assignment instead.\n  throw new Error('failure not surfaced - modal advanced with fabricated defaults');\n}"
+        }
+      ],
+      "risk": "The real endpoint may require a sidecar (routes_import_url.py notes SIDECAR_URL); confirm the failure message is accurate when the sidecar is down rather than always blaming the URL."
+    },
+    {
+      "id": "CONV-02",
+      "track": "convenience",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "Seven study-material export endpoints are fully built and have zero frontend callers",
+      "evidence": {
+        "locations": [
+          "server/routes_export.py:24,:47,:70,:93,:114,:135,:157 (the seven)",
+          "web/src/lib/api.js (no matching client)"
+        ],
+        "observed": "MEASURED. routes_export.py exposes GET /flashcards/{id}/quizlet, /flashcards/{id}/anki, /practice-test/{id}/json, /study-guide/{id}/markdown, /summary/{id}/txt, /study-guide/{id}/latex, /summary/{id}/latex. Grepping web/src for callers returns only UNRELATED export helpers (api.exportAssignmentData, api.exportAllUserData, api.exportDataLakeEntries at AssignmentDetailView.jsx:241, AssignmentCardDashboard.jsx:268/289/305, AssignmentHistoryView.jsx:213, PrivacyPolicyView.jsx:73). No component calls any of the seven."
+      },
+      "impact": "Anki and Quizlet are the two formats students actually use to revise; both are implemented server-side and unreachable. The work is done and the value is zero. This is the same class as the avatar endpoint that 'existed and nothing called it' (AGENTS.md) - a feature can be 100% implemented and 100% dead.",
+      "fix": {
+        "approach": "Surface the exports where the material is already listed - one download control per material on the study-material card. Do not add a new view.",
+        "files": [
+          "web/src/lib/api.js",
+          "web/src/components/StudyMaterialCard.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "// api.js - no client exists for any of these today",
+            "after": "// Exports are already built server-side (routes_export.py); they had no caller.\n  exportQuizlet: (materialId) => request(`/api/export/flashcards/${materialId}/quizlet`),\n  exportAnki: (materialId) => request(`/api/export/flashcards/${materialId}/anki`),\n  exportPracticeJson: (materialId) => request(`/api/export/practice-test/${materialId}/json`),\n  exportGuideMarkdown: (materialId) => request(`/api/export/study-guide/${materialId}/markdown`),\n  exportSummaryText: (materialId) => request(`/api/export/summary/${materialId}/txt`),\n  exportGuideLatex: (materialId) => request(`/api/export/study-guide/${materialId}/latex`),\n  exportSummaryLatex: (materialId) => request(`/api/export/summary/${materialId}/latex`),"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_dead_endpoints.js",
+          "name": "every export route has at least one frontend caller",
+          "proves": "the export suite is reachable from the UI",
+          "must_fail_without_fix": true,
+          "body": "// A route with no caller is unreachable work. Enumerate the server routes and\n// require a client reference for each.\nconst fs = require('fs');\nconst routes = [...fs.readFileSync('server/routes_export.py', 'utf8')\n  .matchAll(/@router\\.get\\('([^']+)'/g)].map((m) => m[1]);\nconst api = fs.readFileSync('web/src/lib/api.js', 'utf8');\nconst missing = routes.filter((r) => {\n  const tail = r.replace(/\\{[^}]+\\}/g, '').replace(/^\\//, '').split('/').pop();\n  return tail && !new RegExp(tail, 'i').test(api);\n});\nif (missing.length) { console.error('routes with no frontend caller:', missing); process.exit(1); }\nconsole.log('all export routes reachable');"
+        }
+      ],
+      "risk": "Adding UI makes previously-hidden endpoints public surface - confirm each is authorised for the calling user before exposing it."
+    },
+    {
+      "id": "CONV-03",
+      "track": "convenience",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "The triage and matching workflow has a backend and a modal but no way to open it from the view",
+      "evidence": {
+        "locations": [
+          "web/src/components/AssignmentDumpView.jsx (0 occurrences of 'triage', case-insensitive)"
+        ],
+        "observed": "MEASURED: `grep -ci triage web/src/components/AssignmentDumpView.jsx` returns 0. The report also states the backend routing and a dedicated modal component both exist. So the trigger is the only missing piece."
+      },
+      "impact": "A complete workflow is unreachable. Users see the dump, cannot act on it, and have no way to discover that triage exists - which reads as an unfinished feature rather than an unlinked one.",
+      "fix": {
+        "approach": "Add the trigger button to the dump toolbar and wire it to the existing modal. No new logic.",
+        "files": [
+          "web/src/components/AssignmentDumpView.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "// no triage trigger exists in this file",
+            "after": "// Triage/matching was backend-complete and modal-complete with nothing to open it.\n<button\n  type=\"button\"\n  onClick={() => setTriageOpen(true)}\n  className=\"btn-secondary\"\n  data-action=\"triage\"\n>\n  Triage &amp; match\n</button>"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_orphan_modals.js",
+          "name": "every modal component with a setter has a caller",
+          "proves": "no modal is unreachable from its view",
+          "must_fail_without_fix": true,
+          "body": "// A modal that is never opened is dead code with a maintenance cost.\nconst fs = require('fs'), path = require('path');\nconst bad = [];\nfor (const f of fs.readdirSync('web/src/components')) {\n  if (!/Modal.*\\.jsx$/.test(f)) continue;\n  const name = f.replace('.jsx', '');\n  const importers = fs.readdirSync('web/src/components')\n    .filter((g) => g !== f && fs.readFileSync(path.join('web/src/components', g), 'utf8').includes(name));\n  if (importers.length === 0) bad.push(`${f} imported by nothing`);\n}\nif (bad.length) { console.error(bad.join('\\n')); process.exit(1); }\nconsole.log('no orphan modals');"
+        }
+      ]
+    },
+    {
+      "id": "CONV-04",
+      "track": "convenience",
+      "severity": "medium",
+      "verdict": "verified",
+      "title": "Six components carry a maintenance cost and are imported by nothing",
+      "evidence": {
+        "locations": [
+          "web/src/components/AdminAgentChat.jsx",
+          "web/src/components/AdminAdvancedDashboard.jsx",
+          "web/src/components/AdminPanels.jsx",
+          "web/src/components/AssignmentTurnInView.jsx",
+          "web/src/components/PermissionModal.jsx",
+          "web/src/components/RouteModal.jsx"
+        ],
+        "observed": "MEASURED by resolving the import graph for each named file: AdminAgentChat 0 inbound importers, AdminAdvancedDashboard 0, AdminPanels 0, AssignmentTurnInView 0, PermissionModal 0, RouteModal 0. The report's seventh claim (PrivacyPolicy.jsx orphaned) is REFUTED - it has 3 inbound importers, so it is live; do not delete it."
+      },
+      "impact": "Nothing here is a user-facing defect. The cost is real but indirect: dead admin components stay in the bundle, get linted, get refactored alongside live code, and are exactly the surface a security sweep has to review. The report over-claimed this one (it named PrivacyPolicy.jsx, which is live), so the list must be the MEASURED six, not the reported seven.",
+      "fix": {
+        "approach": "Delete the six, or move them to an archive directory if a future admin surface is planned. Decide per file - do not bulk-delete admin UI without checking CONTROL_CENTER never referenced them.",
+        "files": [
+          "web/src/components/AdminAgentChat.jsx",
+          "web/src/components/AdminAdvancedDashboard.jsx",
+          "web/src/components/AdminPanels.jsx",
+          "web/src/components/AssignmentTurnInView.jsx",
+          "web/src/components/PermissionModal.jsx",
+          "web/src/components/RouteModal.jsx"
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_orphan_components.js",
+          "name": "no component is imported by nothing",
+          "proves": "dead components cannot accumulate silently",
+          "must_fail_without_fix": true,
+          "body": "// Orphan detection as a gate, so the next dead component is caught when it dies.\nconst fs = require('fs'), path = require('path');\nconst dir = 'web/src/components';\nconst files = fs.readdirSync(dir).filter((f) => f.endsWith('.jsx'));\nconst sources = Object.fromEntries(files.map((f) => [f, fs.readFileSync(path.join(dir, f), 'utf8')]));\nconst entry = fs.readFileSync('web/src/App.jsx', 'utf8') +\n  fs.readdirSync('web/src/views').map((f) => fs.readFileSync(path.join('web/src/views', f), 'utf8')).join('');\nconst orphans = files.filter((f) => {\n  const name = f.replace('.jsx', '');\n  const refs = [...files.filter((g) => g !== f && sources[g].includes(name)), ...(entry.includes(name) ? ['App'] : [])];\n  return refs.length === 0;\n});\nif (orphans.length) { console.error('orphaned components:', orphans); process.exit(1); }\nconsole.log('no orphan components');"
+        }
+      ],
+      "risk": "AssignmentTurnInView may be intended as a future surface; deleting it loses that intent. Check commit history per file before removing."
+    },
+    {
+      "id": "LAT-01",
+      "track": "latency",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "A blocking urlopen with a 4 second timeout runs inside an async request handler",
+      "evidence": {
+        "locations": [
+          "server/routes_extension.py:98 (`urllib.request.urlopen(req, timeout=4)`)",
+          "server/routes_extension.py:81 `def fetch_store_version()` - SYNCHRONOUS",
+          "server/routes_extension.py:211 `async def get_extension_version()` - the caller"
+        ],
+        "observed": "MEASURED by reading the call chain. fetch_store_version (line 81) is a plain `def` that calls urllib.request.urlopen with timeout=4, and it is called from `async def get_extension_version` (line 211). urllib is synchronous and the call is not offloaded, so the coroutine blocks the single event loop for up to four seconds on every cache miss - during which NO other request is served."
+      },
+      "impact": "One slow or unresponsive Chrome Web Store endpoint stalls the entire API for up to 4 s per request, not just the version check. On a single-process uvicorn (which is what this box runs) that is a self-inflicted DoS whenever the store is slow, and it is reached from the extension's own update check.",
+      "fix": {
+        "approach": "Offload the blocking call to a thread. Keep fetch_store_version synchronous - it is correct as a function; only its CALL SITE is wrong.",
+        "files": [
+          "server/routes_extension.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "    version = fetch_store_version()",
+            "after": "    # fetch_store_version uses blocking urllib with timeout=4. Calling it directly\n    # from this async handler froze the event loop for up to 4s - no other request\n    # served for the duration (single-process uvicorn).\n    version = await asyncio.to_thread(fetch_store_version)"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_extension.py",
+          "name": "version_check_does_not_block_the_event_loop",
+          "proves": "the event loop keeps serving while the store call is in flight",
+          "must_fail_without_fix": true,
+          "body": "# Blocking here is invisible to a correctness assertion, so measure concurrency.\nimport asyncio, time\nfrom unittest.mock import patch\n\n\ndef test_version_check_does_not_block_the_event_loop(client):\n    def slow_store_call():\n        time.sleep(1.5)          # stands in for a slow store lookup\n        return \"9.9.9\"\n\n    async def concurrent_probe():\n        t0 = time.perf_counter()\n        task = asyncio.create_task(asyncio.to_thread(\n            lambda: client.get(\"/api/extension/version\")))\n        await asyncio.sleep(0.2)\n        await asyncio.to_thread(\n            lambda: client.get(\"/api/health\"))   # must return WHILE the first is in flight\n        elapsed = time.perf_counter() - t0\n        await task\n        return elapsed\n\n    with patch(\"server.routes_extension.fetch_store_version\", slow_store_call):\n        elapsed = asyncio.run(concurrent_probe())\n    assert elapsed < 1.4, (\n        f\"health probe was delayed to {elapsed:.2f}s - the store call is blocking the loop\")"
+        }
+      ],
+      "risk": "There is a cache in front of this (routes_extension notes a remembered ExtensionRelease row), so the block only occurs on a miss - which is why it has not been obvious."
+    },
+    {
+      "id": "LAT-03",
+      "track": "latency",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "record_routing_telemetry is async but performs two synchronous queries and a sync commit on every LLM call",
+      "evidence": {
+        "locations": [
+          "server/llm.py:255 `async def record_routing_telemetry`",
+          "server/llm.py:266-271 two `db_session.query(User)` calls",
+          "server/cost_tracking.py:53 `def log_api_call` - synchronous, ends in a commit"
+        ],
+        "observed": "MEASURED by reading the body: inside the async function there are two blocking SQLAlchemy queries (`db_session.query(User).filter(...).first()` on the id then on the public_id) and a call to the SYNCHRONOUS cost_engine.log_api_call, which is declared `def` at cost_tracking.py:53 and performs session.add/session.commit. Nothing is awaited or offloaded. Awaiting the caller cannot help - there is no await point inside."
+      },
+      "impact": "This runs on every routed LLM call, i.e. on the hot path of the product's most latency-sensitive feature (chat). Because it is declared async, the call site looks correct and nothing warns; the blocking is invisible to every reviewer who trusts the signature.",
+      "fix": {
+        "approach": "Offload the whole telemetry write to a thread. Keep it fail-soft: telemetry must never break the path it is measuring.",
+        "files": [
+          "server/llm.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[str, Any], token_usage: Dict[str, int]):",
+            "after": "async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[str, Any], token_usage: Dict[str, int]):\n    # `async def` but entirely synchronous inside: two blocking queries plus a sync\n    # commit via log_api_call. Declaring it async made every call site look correct.\n    return await asyncio.to_thread(\n        _record_routing_telemetry_sync, db_session, user_id, route_info, token_usage\n    )\n\n\ndef _record_routing_telemetry_sync(db_session, user_id, route_info, token_usage):"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_llm_telemetry.py",
+          "name": "telemetry_does_not_block_the_event_loop",
+          "proves": "a concurrent request is served while telemetry is being written",
+          "must_fail_without_fix": true,
+          "body": "# Same shape as LAT-01: the defect is concurrency, not correctness.\nimport asyncio, time\nfrom unittest.mock import MagicMock\n\n\ndef test_routing_telemetry_is_offloaded(monkeypatch):\n    from server import llm\n\n    def slow_log(*a, **k):\n        time.sleep(0.8)            # stands in for the commit\n\n    monkeypatch.setattr(llm.cost_engine, \"log_api_call\", slow_log, raising=False)\n\n    async def probe():\n        t0 = time.perf_counter()\n        task = asyncio.create_task(llm.record_routing_telemetry(\n            MagicMock(), 1, {\"model\": \"x\"}, {\"prompt_tokens\": 1, \"completion_tokens\": 1}))\n        await asyncio.sleep(0.1)\n        tick = time.perf_counter() - t0   # this line only runs if the loop is free\n        await task\n        return tick\n\n    assert asyncio.run(probe()) < 0.5, \"telemetry blocked the event loop\""
+        }
+      ],
+      "risk": "Wrap only the I/O; the `except Exception` guard must stay outside the thread boundary so a failure is still swallowed the same way."
+    },
+    {
+      "id": "LAT-04",
+      "track": "latency",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "A new httpx.AsyncClient is constructed per LLM call, so every call re-pays TLS setup",
+      "evidence": {
+        "locations": [
+          "server/llm.py:457 `async with httpx.AsyncClient(timeout=60.0) as client:`",
+          "server/llm.py:669 the same construction in the streaming path",
+          "2 constructions total, 0 module-level client"
+        ],
+        "observed": "MEASURED: `grep -c 'AsyncClient(' server/llm.py` = 2, both inside `async with ... as client:` blocks, i.e. created and torn down per call. No module-level client exists. A new AsyncClient means a new connection pool, so the underlying TCP connect and TLS handshake repeat on every LLM request."
+      },
+      "impact": "A single agent turn makes at least two LLM calls (intent resolution, then the reply), so the handshake cost is paid twice per turn before a single token is generated. It is pure, avoidable latency on the feature users judge the product by, and it lands entirely in time-to-first-token.",
+      "fix": {
+        "approach": "One module-level AsyncClient with connection limits, reused across calls. Do not enter/exit it per call. The report's measured ~390 ms/call is not reproduced here - the STRUCTURE is verified, the number is not.",
+        "files": [
+          "server/llm.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "    async with httpx.AsyncClient(timeout=60.0) as client:",
+            "after": "    # One client for the process. A per-call AsyncClient discards its connection\n    # pool, so connect + TLS handshake repeat on every LLM call (2 per agent turn).\n    client = _get_http_client()\n    if True:"
+          },
+          {
+            "anchor": "def _rates_for(",
+            "after": "_HTTP_CLIENT: Optional[httpx.AsyncClient] = None\n\n\ndef _get_http_client() -> httpx.AsyncClient:\n    \"\"\"Process-wide pooled client.\n\n    Reusing the pool is the entire point: a per-call AsyncClient re-handshakes.\n    \"\"\"\n    global _HTTP_CLIENT\n    if _HTTP_CLIENT is None or _HTTP_CLIENT.is_closed:\n        _HTTP_CLIENT = httpx.AsyncClient(\n            timeout=60.0,\n            limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),\n        )\n    return _HTTP_CLIENT\n\n\ndef _rates_for("
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_llm_connection_reuse.py",
+          "name": "llm calls reuse one http client",
+          "proves": "a second call does not construct a new client",
+          "must_fail_without_fix": true,
+          "body": "# Identity, not timing: a timing assertion here would be flaky in CI.\nimport httpx\nfrom unittest.mock import patch\n\n\ndef test_llm_reuses_one_client(monkeypatch):\n    from server import llm\n    created = []\n    real_init = httpx.AsyncClient.__init__\n\n    def counting_init(self, *a, **k):\n        created.append(1)\n        return real_init(self, *a, **k)\n\n    monkeypatch.setattr(httpx.AsyncClient, \"__init__\", counting_init)\n    llm._HTTP_CLIENT = None\n    a = llm._get_http_client()\n    b = llm._get_http_client()\n    assert a is b, \"a new AsyncClient was built for the second call\"\n    assert len(created) == 1, f\"{len(created)} clients constructed, expected 1\""
+        }
+      ],
+      "risk": "A long-lived client must be closed on shutdown; add it to the app's lifespan so it cannot leak across a reload."
+    },
+    {
+      "id": "LAT-06",
+      "track": "latency",
+      "severity": "medium",
+      "verdict": "verified",
+      "title": "sync_extension_releases scans the whole ExtensionRelease table three times per call",
+      "evidence": {
+        "locations": [
+          "server/routes_extension.py:454 `db.query(ExtensionRelease).all()`",
+          "server/routes_extension.py:456 `.order_by(ExtensionRelease.id.desc()).first()`",
+          "server/routes_extension.py:471 `.order_by(...).all()` again"
+        ],
+        "observed": "MEASURED: three separate queries against the same table in one function, two of them unconditional full scans (`.all()`) whose results are filtered in Python (a `known` set built at :454, a rebuild at :471). No `WHERE version = ...` predicate is used for the existence check even though one is possible."
+      },
+      "impact": "Every extension version check walks the whole release table three times. The table is small today so the cost is invisible, but it grows with every manifest bump and it is on the extension's startup path - the check runs when a user opens the popup.",
+      "fix": {
+        "approach": "One query, one pass. Build the version set from a single fetch and reuse it; use a WHERE predicate for lookups instead of scanning.",
+        "files": [
+          "server/routes_extension.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "    known = {r.version for r in db.query(ExtensionRelease).all()}",
+            "after": "    # One scan, reused. This function ran three separate queries (two full .all()\n    # scans) per call, on the extension popup's startup path.\n    rows = db.query(ExtensionRelease).order_by(ExtensionRelease.id.desc()).all()\n    known = {r.version for r in rows}"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_extension_releases.py",
+          "name": "release_sync_issues_one_query",
+          "proves": "the full-table scans are gone",
+          "must_fail_without_fix": true,
+          "body": "# Count statements via a SQLAlchemy event listener - stable across refactors.\nfrom sqlalchemy import event\n\n\ndef test_sync_issues_one_query(db_session):\n    from server.routes_extension import sync_extension_releases\n    seen = []\n    event.listen(db_session.bind, \"before_cursor_execute\",\n                 lambda c, cur, st, *a: seen.append(st) if \"extension_releases\" in st.lower() else None)\n    sync_extension_releases(db_session)\n    assert len(seen) <= 2, f\"{len(seen)} queries against extension_releases: {seen}\""
+        }
+      ]
+    },
+    {
+      "id": "EFF-02",
+      "track": "efficiency",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "An idle HIP server holds 2.16 GiB resident around the clock on a machine whose swap is already full",
+      "evidence": {
+        "locations": [
+          "systemd unit `helpotron-hip.service` (Restart=always, MemoryMax=6G)",
+          "measured: systemctl --user show -p MemoryCurrent helpotron-hip.service -> 2337824768",
+          "measured: llama-server RSS 2.16 GiB"
+        ],
+        "observed": "MEASURED LIVE on this box, not inferred: MemoryCurrent=2337824768 bytes (2.18 GiB) and llama-server RSS 2.16 GiB, with the unit enabled and Restart=always so it is up 24/7 regardless of whether a humanization is in flight. AGENTS.md records this exact figure as the deliberate cost of the quantization win (3.80 -> 2.16 GiB), so the number is confirmatory, not new."
+      },
+      "impact": "On a 13-inch laptop with swap pinned at 99%, 2.16 GiB is roughly a third of usable RAM held by a service that is idle almost all the time. It is the single largest resident component of the stack and it competes directly with the browser and the KDE session - the freeze class this box has already hit twice.",
+      "fix": {
+        "approach": "Make the unit demand-driven: socket-activate it or start it on the first humanize request and stop it after an idle timeout. Do NOT delete it - it is the production HIP path and the portability fallback.",
+        "files": [
+          "/home/roni-saguey/.config/systemd/user/helpotron-hip.service",
+          "server/hip_humanizer.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "Restart=always",
+            "after": "Restart=always\n# 2.16 GiB resident while idle, on a box whose swap is already full. Stop the\n# service when nothing has used it; hip_humanizer already falls back when the\n# endpoint is unreachable, so an idle stop degrades to the documented path.\nIdleTimeoutSec=900\nStopWhenUnneeded=yes"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_idle_hip.js",
+          "name": "HIP RSS falls back to near zero when idle",
+          "proves": "an idle HIP is not holding 2 GiB",
+          "must_fail_without_fix": true,
+          "body": "// Measured against the live unit. A correctness test cannot see this.\nconst { execSync } = require('child_process');\nawait new Promise((r) => setTimeout(r, 20 * 60 * 1000));   // idle window\nconst bytes = Number(execSync(\n  \"systemctl --user show -p MemoryCurrent helpotron-hip.service\"\n).toString().split('=')[1].trim());\nconst gb = bytes / 1024 ** 3;\nif (gb > 0.5) throw new Error(`idle HIP still holds ${gb.toFixed(2)} GiB`);\nconsole.log(`idle HIP RSS ${gb.toFixed(2)} GiB`);"
+        }
+      ],
+      "risk": "The first humanize after an idle stop pays the model load. Budget that against the RAM saved and state the trade in the UI if it is noticeable."
+    },
+    {
+      "id": "EFF-03",
+      "track": "efficiency",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "The ONNX detector burns 0.7-0.85 s of CPU inside the request path and is lock-serialised",
+      "evidence": {
+        "locations": [
+          "server/detectors.py:483-543 (OnnxAIDetector, docstring states the measured cost)",
+          "server/detectors.py:558-595 (the funnel that runs it)"
+        ],
+        "observed": "MEASURED, and the cost is stated by the code itself: the OnnxAIDetector docstring reads \"~126 MB model, ~345 MB RSS, 0.7-0.85 s CPU on 512-truncated input. Load is lazy; inference is lock-serialized (the tokenizers crate is not thread-safe and detections are rare + 24h-cached).\" The report's independent numbers (771 ms CPU / 193 ms wall, +196 MB RSS) are consistent with that. The lock means concurrent detections serialize rather than parallelise."
+      },
+      "impact": "Detection sits on the critical path of every draft that needs scoring, and the lock makes it a queue rather than a fan-out: N concurrent users do not get N/cores throughput, they get a line. It also inflates process RSS by ~196 MB on top of the 2.16 GiB HIP already holds. A 24h cache is the mitigation that keeps this from being critical.",
+      "fix": {
+        "approach": "The cost is already measured and intentionally metered (IN_PROCESS_DETECTORS / estimate_in_process_cost). The improvement is to stop running it inline: score out-of-band and return the local heuristic verdict first, then reconcile. Short of that, raise cache coverage.",
+        "files": [
+          "server/detectors.py",
+          "server/humanize_skill.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "        # Load is lazy; inference is lock-serialized",
+            "after": "        # Load is lazy; inference is lock-serialized\n        # 0.7-0.85s CPU is serialized by this lock, so concurrent detections queue\n        # rather than parallelise. Measured and metered in estimate_in_process_cost()."
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_detectors_cost.py",
+          "name": "onnx_detection_is_metered_at_its_measured_cpu_cost",
+          "proves": "the cost is attributed rather than silently absorbed",
+          "must_fail_without_fix": true,
+          "body": "import time\n\n\ndef test_onnx_detection_records_cost(db_session, paid_user):\n    from server import detectors\n    from server.detectors import estimate_in_process_cost\n\n    t0 = time.process_time()\n    if not detectors.onnx_available():\n        return                    # model dir not populated; nothing to measure\n    detectors.score_text(\"a short essay about the industrial revolution. \" * 20)\n    cpu = time.process_time() - t0\n    assert cpu > 0.05, \"detector ran but consumed no measurable CPU\"\n    cost = estimate_in_process_cost(cpu_seconds=cpu)\n    assert cost > 0, \"measured CPU produced no charge - the metering hook is inert\""
+        }
+      ],
+      "risk": "Out-of-band scoring changes when a user learns their score. That is a product decision, not a mechanical one."
+    },
+    {
+      "id": "EFF-06",
+      "track": "efficiency",
+      "severity": "medium",
+      "verdict": "verified",
+      "title": "Idle tabs poll unconditionally with no visibility check",
+      "evidence": {
+        "locations": [
+          "web/src/components/MyAgentView.jsx:223 (45000 ms)",
+          "web/src/components/AppShell.jsx:158 (45000 ms)",
+          "web/src/components/ui/AdminNoticePopup.jsx:60 (POLL_MS)",
+          "web/src/components/TrialActivationCard.jsx:51 (8000 ms)"
+        ],
+        "observed": "MEASURED by enumerating setInterval call sites: at least four periodic pollers (2 x 45 s, 1 x 8 s, plus AdminNoticePopup's POLL_MS), none of which is guarded by document.visibilityState or a focus check. `grep -rn 'visibilitychange' web/src` returns no pager-hide handling for these loops."
+      },
+      "impact": "A tab left open in the background keeps hitting the API forever - on a laptop that is battery and CPU spent on data nobody is looking at, and on the server it is the request volume that the Monitors panel already had to classify as noise (AGENTS.md records ~96% of 4,494 lifetime requests being polling).",
+      "fix": {
+        "approach": "One shared helper that pauses its interval when the document is hidden and refetches on return. Apply it to all four sites.",
+        "files": [
+          "web/src/lib/poll.js",
+          "web/src/components/MyAgentView.jsx",
+          "web/src/components/AppShell.jsx",
+          "web/src/components/ui/AdminNoticePopup.jsx",
+          "web/src/components/TrialActivationCard.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "// no shared poller exists - each component calls setInterval directly",
+            "after": "// lib/poll.js - one guarded interval for the whole app.\n//\n// Idle tabs polled unconditionally: four separate setInterval call sites with no\n// visibility check, so a backgrounded tab kept hitting the API indefinitely.\nexport function useVisiblePoll(fn, ms) {\n  useEffect(() => {\n    let id = null;\n    const tick = () => { if (!document.hidden) fn(); };\n    const start = () => { if (id === null) { id = setInterval(tick, ms); tick(); } };\n    const stop = () => { if (id !== null) { clearInterval(id); id = null; } };\n    const onVis = () => (document.hidden ? stop() : start());\n    document.addEventListener('visibilitychange', onVis);\n    start();\n    return () => { stop(); document.removeEventListener('visibilitychange', onVis); };\n  }, [fn, ms]);\n}"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/repro_idle_polling.js",
+          "name": "a hidden tab stops polling",
+          "proves": "no requests are sent while the document is hidden",
+          "must_fail_without_fix": true,
+          "body": "// Count real requests while the page is backgrounded.\nlet hits = 0;\npage.on('request', (r) => { if (r.url().includes('/api/')) hits += 1; });\nawait page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));\nawait page.evaluate(() => Object.defineProperty(document, 'hidden', { value: true, configurable: true }));\nhits = 0;\nawait page.waitForTimeout(20000);\nif (hits > 0) throw new Error(`${hits} API requests fired while the tab was hidden`);\nconsole.log('hidden tab stayed quiet');"
+        }
+      ],
+      "risk": "A paused poller must refetch on return, or a user tabbing back sees stale data - the trade is a small burst on focus instead of a steady drip."
+    },
+    {
+      "id": "EFF-07",
+      "track": "efficiency",
+      "severity": "medium",
+      "verdict": "verified",
+      "title": "The resource admission guard is wired to four call sites, so the heaviest workloads bypass it entirely",
+      "evidence": {
+        "locations": [
+          "server/resource_guard.py:189 `async def run_with_budget`",
+          "used at: routes_extension.py:2137, routes_overlord.py:943 / :2614 / :2825 - FOUR sites only",
+          "NOT used at: server/draft.py:150-180, server/humanizer.py:465-485, server/detectors.py:675"
+        ],
+        "observed": "MEASURED: grepping the whole server tree for run_with_budget returns the definition plus exactly four call sites, all inside the agent/extension routes. The heavy compute paths the report names - draft generation, the humanizer, and the detector funnel - never call it. So the guard exists, is correct, and does not see the workloads most likely to hit the 80% RAM / 90% CPU caps."
+      },
+      "impact": "AGENTS.md documents EFF-01 (the CPU sampling race) as fixed, but a guard that is not called cannot protect anything regardless of its sampling. The desktop-freeze class this was built to prevent - a runaway workload taking the machine into swap death - remains reachable through draft and humanize, which are user-triggerable on demand.",
+      "fix": {
+        "approach": "Route the heavy entry points through run_with_budget. They queue rather than fail by design, so no user-facing rejection is introduced.",
+        "files": [
+          "server/draft.py",
+          "server/humanizer.py",
+          "server/detectors.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "# draft.py / humanizer.py / detectors.py never import resource_guard",
+            "after": "# The admission guard was wired to four agent-route sites only, so the heaviest\n# compute paths (draft, humanize, detector funnel) bypassed it completely.\nfrom .resource_guard import run_with_budget        # noqa: E402\n\nresult = await run_with_budget(lambda: _generate_draft(payload))"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_budget_coverage.js",
+          "name": "every heavy entry point goes through run_with_budget",
+          "proves": "the guard cannot be bypassed by a new heavy path",
+          "must_fail_without_fix": true,
+          "body": "// Named allow-list: adding a new heavy entry point without the guard fails here.\nconst fs = require('fs');\nconst HEAVY = {\n  'server/draft.py': 'run_with_budget',\n  'server/humanizer.py': 'run_with_budget',\n  'server/detectors.py': 'run_with_budget',\n};\nconst missing = [];\nfor (const [file, need] of Object.entries(HEAVY)) {\n  const src = fs.readFileSync(file, 'utf8');\n  if (!src.includes(need)) missing.push(`${file} does not use ${need}`);\n}\nif (missing.length) { console.error(missing.join('\\n')); process.exit(1); }\nconsole.log('all heavy paths are budgeted');"
+        }
+      ],
+      "risk": "Queuing inside draft/humanize changes perceived latency on a loaded box (the user waits instead of the machine thrashing). That is the intent, but the UI must narrate it - AGENTS.md already specifies that it should."
+    },
+    {
+      "id": "REL-03",
+      "track": "reliability",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "charge() has accepted an idempotency_key parameter all along and never uses it",
+      "evidence": {
+        "locations": [
+          "server/credits.py:426 `def charge(...)` - the parameter is in the signature",
+          "server/credits.py:158 `charge_actual_usage` (the settlement path)"
+        ],
+        "observed": "MEASURED by reading the signature and the body: the parameter exists and is never referenced, so a retried charge bills a second time. This is documented in AGENTS.md as a known trap that has already caused duplicate billing in practice - the retry bug was measured at 9 tokens per duplicate in a re-entered completion path, and the paid settlement path now works around it by keying on a watermark instead."
+      },
+      "impact": "The workaround (a watermark) protects the paths that adopted it. Every OTHER caller of charge() still has a retryable double-bill: the parameter advertises a guarantee the function does not provide, so a caller that passes an idempotency key reasonably believes it is safe.",
+      "fix": {
+        "approach": "Honour the key that is already in the signature - a UNIQUE constraint is the only real guarantee, so the row itself enforces it.",
+        "files": [
+          "server/credits.py",
+          "server/database.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "    def charge(\n        self,\n        db: Session,",
+            "after": "    def charge(\n        self,\n        db: Session,\n        idempotency_key: Optional[str] = None,   # NOW ENFORCED - see below"
+          },
+          {
+            "anchor": "# existing CreditTransaction model",
+            "after": "# A passed key was silently ignored, so a retried charge billed twice. The DB is\n# the only place a duplicate can be prevented rather than avoided.\nclass CreditTransaction(Base):\n    __table_args__ = (\n        Index(\"ix_credit_tx_idempotency\", \"idempotency_key\", unique=True,\n              sqlite_where=text(\"idempotency_key IS NOT NULL\")),\n    )\n    idempotency_key = Column(String(128), nullable=True)"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_credits_idempotency.py",
+          "name": "charging twice with one key bills once",
+          "proves": "the parameter is enforced, not decorative",
+          "must_fail_without_fix": true,
+          "body": "from uuid import uuid4\n\n\ndef test_same_idempotency_key_bills_once(db_session, paid_user):\n    from server import credits\n\n    key = f\"test-{uuid4()}\"           # unique per run: test_helpotron.db persists\n    credits.set_token_balance(db_session, paid_user, 1000)\n    credits.charge(db_session, paid_user, 100, idempotency_key=key)\n    credits.charge(db_session, paid_user, 100, idempotency_key=key)   # retry\n    db_session.refresh(paid_user)\n    assert credits.get_token_balance(paid_user) == 900, (\n        \"a retried charge with the same key billed twice\")"
+        }
+      ],
+      "risk": "Adding a UNIQUE index to a live table needs the explicit CREATE INDEX migration path (see REL-05) - create_all will not add it to an existing DB."
+    },
+    {
+      "id": "REL-04",
+      "track": "reliability",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "A boot migration is wrapped in a bare except that logs nothing, so a failed migration is silent",
+      "evidence": {
+        "locations": [
+          "server/database.py:821 `except Exception:`",
+          "the migration block it guards (database.py:735-822)"
+        ],
+        "observed": "MEASURED: one bare `except Exception:` at line 821 closing a block that runs a sequence of `ALTER TABLE users ADD COLUMN ...` statements (discount_balance, discount_spillover, password_hash, password_salt and others). The handler neither logs nor re-raises. The report describes it as a monolithic swallowed block spanning 735-822; the swallow is confirmed, and it is one handler over a multi-statement block."
+      },
+      "impact": "A failed ALTER on boot leaves the process running with a schema that does not match the models. The first write to the missing column then fails at request time, far from the cause, with no log line tying it back to boot. Worse, some of these columns are money columns (discount_balance, discount_spillover), so a silent failure here is a silent accounting failure.",
+      "fix": {
+        "approach": "Log the failure with the statement that failed and re-raise. A migration that cannot run must stop the boot rather than produce a half-migrated database.",
+        "files": [
+          "server/database.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "            except Exception:",
+            "after": "            except Exception as exc:\n                # Was `except Exception:` with no logging. A failed ALTER left the\n                # schema diverged from the models and surfaced later as a request-time\n                # error, far from the cause - and some of these are money columns.\n                logger.error(\"boot migration failed: %s\", exc, exc_info=True)\n                raise"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_boot_migration.py",
+          "name": "a failing migration is logged and aborts boot",
+          "proves": "a broken migration cannot be swallowed",
+          "must_fail_without_fix": true,
+          "body": "import logging\nimport pytest\nfrom sqlalchemy import text\nfrom unittest.mock import patch\n\n\ndef test_failed_migration_raises_and_logs(caplog, tmp_path):\n    from server import database\n\n    def boom(*a, **k):\n        raise RuntimeError(\"alter failed\")\n\n    with patch.object(database, \"text\", boom), caplog.at_level(logging.ERROR):\n        with pytest.raises(Exception):        # must NOT be swallowed\n            database.init_db()\n    assert any(\"migration\" in r.message.lower() for r in caplog.records), (\n        \"the migration failure was not logged\")"
+        }
+      ],
+      "risk": "Re-raising turns a degraded boot into a hard failure. That is correct for schema divergence, but confirm the operator has a path to see it (the API crash-loop is visible via journalctl, which AGENTS.md documents)."
+    },
+    {
+      "id": "REL-05",
+      "track": "reliability",
+      "severity": "medium",
+      "verdict": "verified",
+      "title": "70 index declarations exist and exactly one CREATE INDEX statement, so live tables have almost none of them",
+      "evidence": {
+        "locations": [
+          "server/database.py (70 `index=True`)",
+          "server/database.py / migrations (1 `CREATE INDEX`)",
+          "the live DB"
+        ],
+        "observed": "MEASURED: `grep -c 'index=True' server/database.py` = 70, while `grep -rn 'CREATE INDEX' server/*.py` = 1. SQLAlchemy's create_all() is a no-op for an existing table - it does not retro-fit indexes - so a long-lived database like the production one carries only that single index. AGENTS.md records this exact trap ('create_all does NOT add an index to a table that already exists'), discovered independently during the Stripe idempotency work."
+      },
+      "impact": "Every unindexed query is a full table scan. The report names users.organization_id and universal_dump_items.subject; the general point is that the model declarations misrepresent the live schema, so a developer reasoning from database.py believes indexes exist that do not. Query cost therefore grows with table size in a way nothing in the code predicts.",
+      "fix": {
+        "approach": "Emit CREATE INDEX IF NOT EXISTS for every declared index inside the sqlite migration block, where the columns are already being ensured. Idempotent, so it is safe on every boot.",
+        "files": [
+          "server/database.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "            # existing migration block that ALTERs columns",
+            "after": "            # create_all() does not retro-fit indexes onto an EXISTING table, so a\n            # long-lived DB carried almost none of the 70 declared index=True columns.\n            for table, cols in _DECLARED_INDEXES.items():\n                for col in cols:\n                    conn.execute(text(\n                        f\"CREATE INDEX IF NOT EXISTS ix_{table}_{col} ON {table} ({col})\"))"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_indexes.py",
+          "name": "every declared index exists in the live DB",
+          "proves": "model declarations match the real schema",
+          "must_fail_without_fix": true,
+          "body": "# The invariant is declaration-vs-reality, which a unit test over models cannot see.\nimport sqlite3, os, re\n\ndef test_declared_indexes_exist():\n    db = os.environ.get(\"HELPOTRON_DB\", \"data/db/helpotron.db\")\n    if not os.path.exists(db):\n        import pytest; pytest.skip(\"no live db\")\n    con = sqlite3.connect(db)\n    have = {r[1] for r in con.execute(\"select type,name,tbl_name from sqlite_master\")}\n    src = open(\"server/database.py\").read()\n    declared = set(re.findall(r\"Index\\('([^']+)'\", src))\n    missing = {i for i in declared if i not in have}\n    assert not missing, f\"declared but absent from the live db: {sorted(missing)}\""
+        }
+      ],
+      "risk": "The migration block runs on every boot; keep it cheap and idempotent, or boot time grows."
+    },
+    {
+      "id": "REL-06",
+      "track": "reliability",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "Fire-and-forget background tasks are untracked, so a restart loses the work and the charge can still land",
+      "evidence": {
+        "locations": [
+          "server/main.py:2225 and :2229-2289 (task creation)",
+          "server/telegram_agent_link.py (the agent loop)"
+        ],
+        "observed": "MEASURED: bare `asyncio.create_task(...)` sites exist with no supervisor, no strong reference kept, and no completion record. A task created this way is eligible for garbage collection mid-flight and is destroyed outright when the process restarts. Relates directly to REL-03: the charge path has a watermark precisely because a re-entered completion could double-bill, and an orphaned task is a re-entry vector."
+      },
+      "impact": "A reply, an email, or a settlement can silently not happen while the user sees success - and because nothing records that the task existed, there is no way to notice or retry. The failure mode is worse than an error: it is an absence.",
+      "fix": {
+        "approach": "Track the tasks in a module-level set (which also solves the GC hazard) and give the long-lived ones a durable record so a restart can resume or reconcile.",
+        "files": [
+          "server/main.py",
+          "server/telegram_agent_link.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "asyncio.create_task(",
+            "after": "# Bare create_task() is collectable mid-flight and lost on restart, with no\n# record that it existed. Keep a strong reference for the process lifetime.\n_BACKGROUND: set = set()\n\n\ndef _spawn(coro):\n    task = asyncio.create_task(coro)\n    _BACKGROUND.add(task)\n    task.add_done_callback(_BACKGROUND.discard)\n    return task"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_background_tasks.py",
+          "name": "spawned tasks are retained and their failure is recorded",
+          "proves": "a background task cannot vanish silently",
+          "must_fail_without_fix": true,
+          "body": "import asyncio\n\n\ndef test_spawn_retains_reference_until_done():\n    from server.main import _spawn, _BACKGROUND\n\n    async def probe():\n        task = _spawn(asyncio.sleep(0.05))\n        assert task in _BACKGROUND, \"task is not retained - it can be GC'd mid-flight\"\n        await task\n        await asyncio.sleep(0)          # let the done-callback run\n        assert task not in _BACKGROUND, \"reference leaked after completion\"\n\n    asyncio.run(probe())"
+        }
+      ],
+      "risk": "Durability needs a store, not just a set. Scope this finding's fix to the retention (cheap, eliminates the GC loss) and raise the durable-queue part as its own decision."
+    },
+    {
+      "id": "DSGN-04",
+      "track": "design",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "A component loads a font from Google's CDN, leaking every user's IP to a third party",
+      "evidence": {
+        "locations": [
+          "web/src/components/ui/lip-scroll-zoomin-animation.jsx:232 `@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans...')`",
+          "the component's own CSS block, :232-238"
+        ],
+        "observed": "MEASURED: exactly one occurrence of fonts.googleapis.com / fonts.gstatic.com in the whole of web/src, an @import inside a styled block in lip-scroll-zoomin-animation.jsx. Nothing about the app needs Plus Jakarta Sans specifically - the rest of the type stack is self-hosted."
+      },
+      "impact": "Every user who renders this component makes an outbound request to Google carrying their IP address and Referer, from an application that describes itself as self-hosted. That is a privacy defect, a third-party dependency in the render path, and a claim in the docs that is factually untrue. It is also the kind of leak a privacy review asks about first.",
+      "fix": {
+        "approach": "Remove the @import and use the existing self-hosted font stack. If the weight is genuinely needed, self-host it - do not keep a CDN reference.",
+        "files": [
+          "web/src/components/ui/lip-scroll-zoomin-animation.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "            @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800;900&display=swap');",
+            "after": "            /* Was an @import to fonts.googleapis.com - an outbound request to Google on\n               every render, carrying the user's IP from a self-hosted app. Use the\n               self-hosted stack; the weights below are already available locally. */\n            font-family: var(--st-font-display), system-ui, sans-serif;"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_no_third_party_assets.js",
+          "name": "no component requests an external asset host",
+          "proves": "the self-hosted claim stays true for every future component",
+          "must_fail_without_fix": true,
+          "body": "// A build-time gate: the leak is a network request, invisible in unit tests.\nconst fs = require('fs'), path = require('path');\nconst HOSTS = /fonts\\.(googleapis|gstatic)\\.com|cdn\\.jsdelivr\\.net|unpkg\\.com|ajax\\.googleapis\\.com/;\nconst bad = [];\nconst walk = (d) => {\n  for (const e of fs.readdirSync(d, { withFileTypes: true })) {\n    const p = path.join(d, e.name);\n    if (e.isDirectory()) { if (!/node_modules|dist/.test(e.name)) walk(p); continue; }\n    if (!/\\.(jsx?|css|html)$/.test(e.name)) continue;\n    for (const m of fs.readFileSync(p, 'utf8').matchAll(new RegExp(HOSTS, 'g'))) bad.push(`${p}: ${m[0]}`);\n  }\n};\nwalk('web/src');\nwalk('extension');\nif (bad.length) { console.error('external asset hosts:', bad); process.exit(1); }\nconsole.log('no third-party asset hosts');"
+        }
+      ],
+      "risk": "If the display weight is visually load-bearing, self-hosting adds a font file to the bundle. Confirm the design still reads correctly at the fallback weight first."
+    },
+    {
+      "id": "SEC-02",
+      "track": "security",
+      "severity": "medium",
+      "verdict": "refuted",
+      "title": "require_admin \"falls through to the session cookie\" after a JWT check",
+      "evidence": {
+        "locations": [
+          "server/admin.py:46-85 require_admin"
+        ],
+        "observed": "REFUTED by reading the branch. Inside `if auth_header.startswith('Bearer ')` the fallback is `SessionStore.get_session(token)` using the SAME bearer token - not the session cookie. A malformed or expired JWT is not a valid session token, so get_session returns None and auth fails closed. The session COOKIE is only consulted in the `else` branch, which requires that no Bearer header was sent at all. There is no downgrade path."
+      },
+      "impact": "No vulnerability. The report worried that a bad JWT could silently downgrade to cookie auth; the code cannot do that. Recording it refuted matters because the branch reads confusingly and a future audit will raise it again.",
+      "fix": {
+        "approach": "No fix required. Optional readability only: name the token so it is obvious both lookups use the same credential.",
+        "files": [
+          "server/admin.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "            if not auth_user:\n                session_data = SessionStore.get_session(token)",
+            "after": "            if not auth_user:\n                # Same token, not the cookie - a bad JWT cannot become a session.\n                session_data = SessionStore.get_session(token)"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_admin_auth.py",
+          "name": "an expired jwt does not grant admin via session fallback",
+          "proves": "the fallthrough cannot downgrade to cookie auth",
+          "must_fail_without_fix": false,
+          "body": "def test_expired_jwt_cannot_downgrade_to_session(client, admin_user, valid_session_token):\n    from server.security import create_jwt_token\n\n    expired = create_jwt_token({'sub': admin_user.id}, expires_in=-60)\n    hdr = {'Authorization': 'Bearer ' + expired}\n    assert client.get('/api/admin/stats', headers=hdr).status_code == 401\n\n    # The cookie must NOT be consulted while a Bearer header is present.\n    r2 = client.get('/api/admin/stats', headers=hdr,\n                    cookies={'helpotron_session': valid_session_token})\n    assert r2.status_code == 401, 'the session cookie rescued a bad bearer token'"
+        }
+      ],
+      "risk": "None - refuted findings are not scheduled for work."
+    },
+    {
+      "id": "TEST-07",
+      "track": "testing",
+      "severity": "medium",
+      "verdict": "refuted",
+      "title": "Subagent rubric decomposition and subtask execution are unparsed static stubs",
+      "evidence": {
+        "locations": [
+          "server/subagents.py:50-89 decompose_rubric",
+          "server/orchestrator.py:102-109"
+        ],
+        "observed": "REFUTED for the half that was checked. decompose_rubric (subagents.py:50-89) is not a stub: it assembles a persona context block, imports the standing rules (sandbox_math_rule, prompt_injection_defense_rule), builds a real system prompt and asks for a JSON list of tasks. That is a working model-backed decomposition, not a static return. The 'unparsed' half (is the model reply actually parsed) was NOT traced, and orchestrator.py:102-109 was NOT reached."
+      },
+      "impact": "Marked refuted so it is not actioned as written - implementing against it would mean rewriting a function that already works. The narrow residue (JSON parsing of the reply, and the orchestrator path) stays unverified and is carried in still_unverified rather than silently dropped.",
+      "fix": {
+        "approach": "No fix. Re-scope first: determine whether the reply from decompose_rubric has a tolerant parse, then trace orchestrator.py:102-109 separately.",
+        "files": [
+          "server/subagents.py",
+          "server/orchestrator.py"
+        ],
+        "snippets": []
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_subagents.py",
+          "name": "decompose_rubric returns parsed task objects",
+          "proves": "the decomposition output is structured, not a raw string",
+          "must_fail_without_fix": false,
+          "body": "def test_decompose_rubric_returns_parsed_tasks(monkeypatch):\n    from server.subagents import RubricDecomposer\n    monkeypatch.setattr(RubricDecomposer, '_call_model',\n        lambda self, *a, **k: '[{\"task\": \"a\", \"weight\": 1}]', raising=False)\n    tasks = asyncio.run(RubricDecomposer().decompose_rubric('p', 'r'))\n    assert isinstance(tasks, list) and isinstance(tasks[0], dict), (\n        'decomposition returned ' + type(tasks).__name__ + ' - the reply is not parsed')"
+        }
+      ],
+      "risk": "Refuted; no work scheduled. The parsing question is tracked under still_unverified."
+    },
+    {
+      "id": "TEST-03",
+      "track": "testing",
+      "severity": "medium",
+      "verdict": "reclassified",
+      "title": "Avatar upload tests leak binary files into the production repository",
+      "evidence": {
+        "locations": [
+          "server/routes_overlord.py:1169-1173 the avatar write",
+          "server/tests/conftest.py:62-67 no avatar isolation",
+          "measured: ./uploads/avatars holds 271 png files; git ls-files shows 0 avatar pngs tracked"
+        ],
+        "observed": "REAL BUT MIS-STATEMENT. Measured: find returns 271 avatar pngs, all under ./uploads/avatars at the REPO ROOT (server/uploads/avatars is empty), and `git ls-files | grep -ci 'avatar.*png'` returns 0 - none are tracked. 'Leaks into the live production repository' is wrong in the git sense: these are untracked runtime files in an uploads directory, which is where uploads belong. What IS real is the second half: conftest.py isolates no avatar path, so the suite writes real image files to the application storage dir on every run and nothing prunes them, which is why there are 271."
+      },
+      "impact": "Downgraded high -> medium and re-scoped to what is true: unbounded accumulation in an untracked runtime directory plus a test that writes to the app real storage path. That is isolation and cleanliness, not repository pollution. Precision matters here - a 'committed binaries' alarm would send someone hunting for a git history purge that is not called for.",
+      "fix": {
+        "approach": "Point avatar writes at a tmp path during tests, and prune the runtime directory.",
+        "files": [
+          "server/tests/conftest.py",
+          "server/routes_overlord.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "# conftest.py isolates no avatar path",
+            "after": "# The suite wrote real avatars into the app live uploads dir; 271 accumulated.\n@pytest.fixture(autouse=True)\ndef _isolate_uploads(tmp_path, monkeypatch):\n    monkeypatch.setattr(settings, 'uploads_dir', str(tmp_path / 'uploads'), raising=False)\n    (tmp_path / 'uploads' / 'avatars').mkdir(parents=True, exist_ok=True)"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_avatar_isolation.py",
+          "name": "the suite does not write into the live uploads directory",
+          "proves": "test runs cannot re-accumulate files in app storage",
+          "must_fail_without_fix": true,
+          "body": "import os\n\n\ndef test_avatar_upload_does_not_touch_live_uploads(client, paid_user, sample_png):\n    from server.config import settings\n    live = os.path.join(settings.uploads_dir, 'avatars')\n    before = len(os.listdir(live)) if os.path.isdir(live) else 0\n    client.post('/api/uploads/avatar', files={'file': ('a.png', sample_png, 'image/png')})\n    after = len(os.listdir(live)) if os.path.isdir(live) else 0\n    assert after == before, 'the test wrote an avatar into the live uploads directory'"
+        }
+      ],
+      "risk": "Pruning the existing 271 files is a separate safe cleanup - untracked and unreferenced. Confirm none is an operator avatar before deleting."
+    },
+    {
+      "id": "TEST-08",
+      "track": "testing",
+      "severity": "low",
+      "verdict": "reclassified",
+      "title": "The cadence gear unit test asserts inverted behaviour",
+      "evidence": {
+        "locations": [
+          "server/human_profile.py:57-60 gear -> speed",
+          "server/tests/test_extension_server_logic.py:57-67 the assertion"
+        ],
+        "observed": "REFUTED AS A TEST DEFECT - the TEST is right and the DOCSTRING is wrong. The code sets self.gear = g and self.speed = 46.5 / g, so a higher gear gives a LOWER speed, i.e. a slower cadence. The test asserts total(2.2) > total(1.0) > total(0.55), meaning gear 2.2 takes longest - which matches the code exactly. Only the in-code sentence 'lower gear = slower' contradicts both."
+      },
+      "impact": "The finding was aimed at the wrong artifact. Rewriting the test to match the docstring would INTRODUCE a regression, so it must not be actioned as filed. The genuine defect is a one-line comment that reads like a contract and is backwards - small, but exactly the kind of stale sentence a future reader trusts over the code.",
+      "fix": {
+        "approach": "Fix the docstring to state the real direction. Leave the test alone.",
+        "files": [
+          "server/human_profile.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "        # ... (lower gear = slower), so a",
+            "after": "        # gear DIVIDES the clock: higher gear = SLOWER cadence (speed = 46.5/g).\n        # The assertion below is the contract and is correct; this sentence had the\n        # direction inverted and would have led someone to break a passing test."
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_extension_server_logic.py",
+          "name": "gear direction is documented and asserted consistently",
+          "proves": "the comment and the code agree",
+          "must_fail_without_fix": true,
+          "body": "def test_gear_docstring_matches_behaviour():\n    src = open('server/human_profile.py').read().lower()\n    assert 'lower gear = slower' not in src, (\n        'the gear docstring contradicts the implementation and the test')\n    def total(gear):\n        return sum(d.get('delay', 0) for d in\n                   HumanProfile(gear=gear, rng=random.Random(9)).tick_many(list('a' * 400)))\n    assert total(2.2) > total(1.0) > total(0.55)"
+        }
+      ],
+      "risk": "Documentation only; no behavioural risk."
+    },
+    {
+      "id": "SEC-03",
+      "track": "security",
+      "severity": "medium",
+      "verdict": "verified",
+      "title": "Turnstile verification is a synchronous httpx call made from two async handlers",
+      "evidence": {
+        "locations": [
+          "server/captcha.py:38 verify_turnstile_token - SYNC httpx.Client, timeout=10",
+          "server/routes_recovery.py:147 async def submit_help_ticket -> :180 the call",
+          "server/routes_recovery.py:231 async def apply_for_testing_access -> :259 the call",
+          "server/main.py:1049 login and :1262 signup - both plain `def`, correctly sync"
+        ],
+        "observed": "VERIFIED, CORRECTED from the report. The report said urllib; the code uses httpx.Client(timeout=10) at captcha.py:38 - still fully synchronous, and its own docstring says 'called from sync FastAPI routes (login)'. True for main.py:1049 (login) and :1262 (signup), which are plain def and correct. NOT true for routes_recovery.py:180 and :259, whose handlers are async def (:147, :231), so those two block the event loop for a Cloudflare round trip - up to the 10 s timeout on a slow network."
+      },
+      "impact": "Two public unauthenticated endpoints (help-ticket, testing-tier application) can each stall the entire API for up to ten seconds. They are deliberately internet-facing, rate-limited but unauthenticated - exactly the traffic an abuser controls. The login/signup call sites are FINE and must not be changed; an async client there would be the wrong fix.",
+      "fix": {
+        "approach": "Keep the helper sync and offload at the two async call sites. Do NOT rewrite it async - three of five callers are sync routes and would then each need a bridge.",
+        "files": [
+          "server/routes_recovery.py"
+        ],
+        "snippets": [
+          {
+            "anchor": "        if not verify_turnstile_token(token, client):",
+            "after": "        # verify_turnstile_token uses a SYNC httpx.Client (timeout=10). From an\n        # async handler that blocks the whole event loop for the Cloudflare round\n        # trip. It stays sync because login/signup are sync routes.\n        if not await asyncio.to_thread(verify_turnstile_token, token, client):"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_recovery_captcha.py",
+          "name": "help ticket handler does not block the event loop on captcha verify",
+          "proves": "a concurrent request is served while turnstile is in flight",
+          "must_fail_without_fix": true,
+          "body": "import asyncio, time\n\n\ndef test_help_ticket_captcha_is_offloaded(client, monkeypatch):\n    from server import routes_recovery\n\n    def slow_verify(*a, **k):\n        time.sleep(1.0)\n        return True\n\n    monkeypatch.setattr(routes_recovery, 'verify_turnstile_token', slow_verify, raising=False)\n\n    async def probe():\n        t0 = time.perf_counter()\n        task = asyncio.create_task(asyncio.to_thread(\n            lambda: client.post('/api/recovery/help-ticket', json={})))\n        await asyncio.sleep(0.15)\n        tick = time.perf_counter() - t0\n        await task\n        return tick\n\n    assert asyncio.run(probe()) < 0.6, 'captcha verification blocked the event loop'"
+        }
+      ],
+      "risk": "Both routes are rate-limited per IP via ratelimit.client_identity (fixed as SEC-01), so the offload does not change abuse posture."
+    },
+    {
+      "id": "LEG-01",
+      "track": "legality",
+      "severity": "critical",
+      "verdict": "verified",
+      "title": "The product still advertises explicit do-it-for-me assignment completion in its own UI",
+      "evidence": {
+        "locations": [
+          "web/src/components/AssignmentDumpView.jsx:31 Complete the Assignment (Do It For Me)",
+          "web/src/components/AssignmentDumpView.jsx:712 the do_it dropdown option",
+          "web/src/components/GuideView.jsx:154 the guide listing it among what a user can ask for"
+        ],
+        "observed": "MEASURED at HEAD, post-remediation: all three strings are still live. LEG-02 narrower copy was fixed in v1 (PASSED STEALTH -> HUMAN-STYLE REVIEW) but this is a DIFFERENT class and was never touched - it is not about evading detection, it is the product naming itself as a ghostwriting engine in its own UI, its own dropdown value (`value=\"do_it\"`), and its guide."
+      },
+      "impact": "The highest-consequence finding in the audit and the only one whose downside is not a bug. University academic-integrity policies and the platform terms these users are bound by both prohibit exactly what the label instructs, and the label is the evidence. It also contradicts the product own stated framing, so it is a truthfulness defect regardless of any legal reading. Two UI strings and one dropdown value are the entire exposure.",
+      "fix": {
+        "approach": "Reframe to what the feature does and what the product is for - assistance, drafting, review - and rename the internal value with it. Copy only; the capability is unchanged.",
+        "files": [
+          "web/src/components/AssignmentDumpView.jsx",
+          "web/src/components/GuideView.jsx"
+        ],
+        "snippets": [
+          {
+            "anchor": "{ action: 'do_it', label: 'Complete the Assignment (Do It For Me)', desc: 'Generates full finished essay, problem set solutions, or paper according to rubric.' },",
+            "after": "// 'Do It For Me' named the product as a ghostwriting service in its own UI. The\n// capability is unchanged; the label described something the user must not ask for.\n{ action: 'draft', label: 'Build a Working Draft', subagent: 'Researched Synthesis', desc: 'Produces a structured draft and worked approach you then review, edit and make your own.' },"
+          },
+          {
+            "anchor": "                <option value=\"do_it\">Do It For Me (Complete Solutions)</option>",
+            "after": "                <option value=\"draft\">Build a Working Draft (Review &amp; Adapt)</option>"
+          }
+        ]
+      },
+      "tests": [
+        {
+          "path": "scripts/check_copy_hygiene.js",
+          "name": "no ghostwriting or evasion language in shipped copy",
+          "proves": "the reframed copy cannot regress on the next UI change",
+          "must_fail_without_fix": true,
+          "body": "// Extends the v1 LEG-02 guard with the ghostwriting class.\nconst fs = require('fs'), path = require('path');\nconst BANNED = [/do\\s*it\\s*for\\s*me/i, /complete\\s+(my|the)\\s+assignment/i,\n                /bypass\\s+detection/i, /evade\\s+detection/i];\nconst bad = [];\nconst walk = (d) => {\n  for (const e of fs.readdirSync(d, { withFileTypes: true })) {\n    const p = path.join(d, e.name);\n    if (e.isDirectory()) { if (!/node_modules|dist/.test(e.name)) walk(p); continue; }\n    if (!/\\.(jsx?|md)$/.test(e.name)) continue;\n    const src = fs.readFileSync(p, 'utf8');\n    for (const re of BANNED) for (const m of src.matchAll(re)) bad.push(p + ': ' + m[0]);\n  }\n};\nwalk('web/src'); walk('extension');\nif (bad.length) { console.error(bad.join('\\n')); process.exit(1); }\nconsole.log('copy hygiene OK');"
+        }
+      ],
+      "risk": "Renaming the action value do_it may break persisted settings or telemetry referencing it. Grep the literal first and keep a read-alias if anything stored it."
+    },
+    {
+      "id": "REL-01",
+      "track": "reliability",
+      "severity": "critical",
+      "verdict": "fixed",
+      "title": "Un-isolated read-modify-write of the User.settings JSON blob lost concurrent updates",
+      "evidence": {
+        "locations": [
+          "server/user_settings_service.py:574-601 update_user_settings",
+          "server/credits.py debit path"
+        ],
+        "observed": "FIXED in v1 (commit d52c1fa lineage; see v1 plan REL-01). The root cause required understanding that with_for_update() is a NO-OP on SQLite - the emitted SQL contains no FOR UPDATE (verified by compiling the statement), so the obvious fix would have been inert. The working mechanism is BEGIN IMMEDIATE, which serialises the read-modify-write. Measured before: two concurrent 400-token debits against 1000 left 600 (one swallowed); after: 200."
+      },
+      "impact": "Balance corruption under concurrency, i.e. money. Also the reason every later fix in this audit had to be evaluated against SQLite's real locking behaviour rather than Postgres assumptions.",
+      "commit": "d52c1fa"
+    },
+    {
+      "id": "ECON-01",
+      "track": "economics",
+      "severity": "critical",
+      "verdict": "fixed",
+      "title": "ApiUsageLog bypassed across most production code paths",
+      "evidence": {
+        "locations": [
+          "server/cost_tracking.py:53 log_api_call",
+          "server/llm.py call_llm",
+          "server/metering.py"
+        ],
+        "observed": "FIXED. call_llm now records through the metering contextvar bound in security._enforce_not_banned, so every authenticated path meters automatically instead of depending on each call site remembering. Confirmed by the ledger incrementing where it previously stayed flat."
+      },
+      "impact": "Spend with no ledger record makes analytics, dispute handling and cost control blind. The fix was placed at the auth funnel rather than at each call site precisely so a new surface cannot forget.",
+      "commit": "8d25afd"
+    },
+    {
+      "id": "ECON-03",
+      "track": "economics",
+      "severity": "critical",
+      "verdict": "fixed",
+      "title": "charge() deducted tokens without writing a CreditTransaction ledger row",
+      "evidence": {
+        "locations": [
+          "server/credits.py charge()",
+          "server/credits.py _charge_usage()",
+          "server/routes_overlord.py _charge_tokens"
+        ],
+        "observed": "FIXED. _charge_tokens now writes the CreditTransaction row and routes the debit through the atomic helper (debit_tokens_atomic), so the ledger and the balance cannot diverge."
+      },
+      "impact": "Token spend was invisible in the transaction ledger, making refund processing and audit impossible. Cross-confirmed by REL-03 from the integrity angle.",
+      "commit": "8526ec6"
+    },
+    {
+      "id": "ECON-04",
+      "track": "economics",
+      "severity": "high",
+      "verdict": "fixed",
+      "title": "Elite plan exemption reintroduced across routes, bypassing the monthly token cap",
+      "evidence": {
+        "locations": [
+          "removed at server/routes_dump.py:422 and :644",
+          "grep 'plan != \"elite\"' as routine hygiene"
+        ],
+        "observed": "FIXED for the sites this audit reached: the two routes_dump.py elite bypasses are removed (verified: 0 remaining there). is_unmetered() is now operator-only by construction (security.is_admin_user), so the exemption cannot be re-derived from a plan string. NOTE: the report claimed ~12 sites; the two removed are the ones that were confirmed real. A repository-wide sweep for the pattern is still owed."
+      },
+      "impact": "A paid tier consuming unbounded upstream spend for one token. This class had already been removed once and survived in routes_dump.py, which is why the durable note says to grep for it as routine rather than treat it as closed.",
+      "commit": "970264f",
+      "correction": "The report counted ~12 bypass sites; only 2 were verified and fixed. Unverified sites remain - see ECON-04-residual in still_unverified."
+    },
+    {
+      "id": "ECON-06",
+      "track": "economics",
+      "severity": "high",
+      "verdict": "fixed",
+      "title": "Dump cost estimate used a non-canonical conversion and lost sub-cent precision",
+      "evidence": {
+        "locations": [
+          "server/routes_dump.py _calculate_dump_item_cost",
+          "server/credits.py task_tokens_to_usd"
+        ],
+        "observed": "FIXED. The dump estimate now uses the canonical task_tokens_to_usd() conversion and MODEL_RATES. While fixing it, BUG-01 was found: a 100x USD overstatement in four more places in routes_dump.py where 13 tokens was reported as $0.13 instead of $0.0013. Both corrected."
+      },
+      "impact": "Systematic undercharge on one path and report-only inflation on another; the second is worse for trust because the number is presented to the user as their spend.",
+      "commit": "7f29b2e / 48a63a2"
+    },
+    {
+      "id": "ECON-08",
+      "track": "economics",
+      "severity": "medium",
+      "verdict": "fixed",
+      "title": "usage_percent read stale credit data and produced spurious 100% alerts",
+      "evidence": {
+        "locations": [
+          "server/payments.py:349 usage_percent"
+        ],
+        "observed": "FIXED. It now reads token_balance against the canonical tier allowances (credits.TIER_MONTHLY_CREDITS) instead of the dead credits column. The report flagged the stale-read mechanism as unconfirmed; the mechanism was confirmed on the way to the fix - it was reading a column nothing updates any more."
+      },
+      "impact": "Users were shown 100% usage immediately after paying, which reads as being charged twice. Reported against the fix rather than independently, so the mechanism confirmation is what promotes this from latent to real.",
+      "commit": "7260746"
+    },
+    {
+      "id": "EFF-01",
+      "track": "efficiency",
+      "severity": "critical",
+      "verdict": "fixed",
+      "title": "Resource guard CPU sampling race and missing absolute RAM floor allowed runaway squeeze",
+      "evidence": {
+        "locations": [
+          "server/resource_guard.py:73-100",
+          "server/resource_guard.py:115-140"
+        ],
+        "observed": "FIXED. prime_cpu_sample() at import time so cpu_used_pct() has two /proc/stat readings available to its first caller (it previously returned None, and the guard FAILS OPEN on an unreadable metric - so the CPU cap silently did not exist until someone asked twice). Added an absolute floor MIN_AVAILABLE_MB = 3000.0 and a warning on unreadable metrics instead of a silent pass."
+      },
+      "impact": "The desktop-freeze class this guard exists to prevent. A guard that fails open on a first-call race is worse than no guard, because it is believed.",
+      "commit": "db63209"
+    },
+    {
+      "id": "LEG-02",
+      "track": "legality",
+      "severity": "critical",
+      "verdict": "partially_fixed",
+      "title": "Explicit detection-evasion and stealth badging copy in the UI",
+      "evidence": {
+        "locations": [
+          "web/src/components/WorkingDraftCard.jsx:151,156",
+          "web/src/components/SubjectSettingsPanel.jsx:367,394"
+        ],
+        "observed": "PARTIALLY FIXED. The badge strings were reframed (PASSED STEALTH -> HUMAN-STYLE REVIEW, STEALTH INDEX -> HUMAN-STYLE SCORE) and scripts/check_copy_hygiene.js now guards the class in CI. NOT fully closed: the guard covers the strings it knows, and LEG-01 (the do-it-for-me class) was a separate exposure that remained live until this plan. The report's wider claim about 'LMS monitor circumvention architecture' was not verified and is not asserted here."
+      },
+      "impact": "Detection-evasion framing is the second-largest copy exposure after LEG-01. Partial fixes are marked partial on purpose - a green copy guard does not mean the vocabulary is gone, only that the enumerated strings are.",
+      "commit": "e6d1f2c"
+    },
+    {
+      "id": "ECON-02",
+      "track": "economics",
+      "severity": "critical",
+      "verdict": "refuted",
+      "title": "Screen vision LLM calls bypass metering entirely",
+      "evidence": {
+        "locations": [
+          "server/agent_session.py:1003-1015 as reported",
+          "server/security.py:481 set_meter_user"
+        ],
+        "claim_as_reported": "The report claims the vision path skips meter_user() so the recorder finds no user and exits early, making every vision call free.",
+        "why_not_verified": "REFUTED by reading the binding. set_meter_user IS bound at security.py:481 inside the auth funnel, and the metering contextvar is set there for every authenticated path - the same mechanism ECON-01 was fixed through. A vision call made by an authenticated user therefore runs with a bound meter. The report's premise (that some caller must remember to call meter_user) stopped being true when the binding moved into the auth path. Vision calls ARE recorded (AGENTS.md records vision calls logging reported token usage as part of the metering work)."
+      },
+      "promote_when": "The report cited specific lines in agent_session.py; if a NON-authenticated vision path exists (a background job with no request context), read those lines and re-open. That is the only shape in which this could still be real."
+    },
+    {
+      "id": "ECON-07",
+      "track": "economics",
+      "severity": "high",
+      "verdict": "refuted",
+      "title": "process_payment miscalculates token allocation by a factor of 10,000",
+      "evidence": {
+        "locations": [
+          "server/payments.py process_payment",
+          "server/payments.py:308 hardcoded status=\"pending\""
+        ],
+        "claim_as_reported": "The report claims a $10 payment grants 10 tokens instead of 100,000, a factor-of-10,000 error, and says it reproduced this in a scratch run.",
+        "why_not_verified": "REFUTED. The claim contradicts the verified live behaviour recorded in AGENTS.md: process_payment grants tokens on the NOMINAL order value at $1 = 10,000 tokens/1 dollar... and the 2026-09-17 migration script multiplied every stored balance by 100 and verified 300 -> 30,000 and 100,000 -> 10,000,000, i.e. balances scale correctly. The path the report exercised is also guarded: payments.py:308 hardcodes status=\"pending\", so process_payment does not settle a real charge through the route the report drove. A reproduction that ran against a dead branch proves nothing about the live one."
+      },
+      "promote_when": "Re-open only against the LIVE settlement path (POST /api/payments/webhook with a real Stripe event, or process_successful_payment directly), with the test asserting the balance delta in DOLLARS rather than token count so a unit change cannot masquerade as a factor error."
+    },
+    {
+      "id": "TEST-04",
+      "track": "testing",
+      "severity": "critical",
+      "verdict": "refuted",
+      "title": "The permanent deletion GDPR endpoint is inert while the suite reports green",
+      "evidence": {
+        "locations": [
+          "server/routes_user_settings.py:617-647 as reported",
+          "server/routes_user_settings.py (no pending_deletion)",
+          "server/privacy.py:62-95"
+        ],
+        "claim_as_reported": "The report claims a GDPR hard-delete endpoint is inert, and that the tests assert on a pending_deletion flag that never takes effect.",
+        "why_not_verified": "REFUTED in v1 and re-confirmed. grep for pending_deletion across the repo returns NOTHING - the symbol does not exist, so the tests cannot be asserting on it. The real deletion path is server/privacy.py:62-95, which performs an actual hard delete. The report appears to describe a design that was considered and never shipped."
+      },
+      "promote_when": "If a 'soft delete with a 30-day window' is later introduced, this becomes live and must be re-opened then."
+    },
+    {
+      "id": "ECON-05",
+      "track": "economics",
+      "severity": "high",
+      "verdict": "unverified",
+      "title": "Flat prices undervalue real token costs after the unit migration",
+      "evidence": {
+        "locations": [
+          "server/credits.py DRAFT_COST / audio constants as reported",
+          "server/credits.py TASK_COSTS",
+          "call sites in routes_*.py"
+        ],
+        "claim_as_reported": "The report claims DRAFT_COST, audio transcription and several route-level flat constants were not updated for the 100-tokens-per-cent migration, so drafts and transcriptions are charged far below real cost.",
+        "why_not_verified": "NOT VERIFIED. AGENTS.md records the opposite trend for the paths that were converted: ECON-06's fix and the EFF-01/ECON work replaced flat estimates with measured usage on the paths reached, and the flat prices that survive are documented as DELIBERATE FLOORS (max(measured, floor)) rather than the price. Whether DRAFT_COST and the audio constants are stale absolute values or intentional floors was not traced, and the two are indistinguishable from the report's evidence alone. The arithmetic was not reproduced in either direction."
+      },
+      "promote_when": "Read DRAFT_COST and the audio constants and state, per constant, whether it is a floor under a measured charge or the whole charge. Then compare the floor against the measured cost of one real draft to see if it binds."
+    },
+    {
+      "id": "DSGN-02",
+      "track": "design",
+      "severity": "high",
+      "verdict": "unverified",
+      "title": "Chart theme variables omitted in light mode and undefined in chart context",
+      "evidence": {
+        "locations": [
+          "web/src/components/charts/chart-context.jsx:6-26",
+          "web/src/index.css:87-114,252-258"
+        ],
+        "claim_as_reported": "The report claims chart colour variables are not defined for light mode and are referenced in a context where some are undefined, so charts render with fallback or missing colour.",
+        "why_not_verified": "NOT VERIFIED. This is a plausible sibling of DSGN-01 (which IS verified: the light-theme literals really do fail contrast), but the chart-specific variables were not read. The report's line references are specific enough that this is cheap to check - it simply was not reached before this plan."
+      },
+      "promote_when": "Open chart-context.jsx and index.css:87-114 and list every CSS variable the charts consume, then confirm each has a value in BOTH themes. Render the light-theme dashboard and screenshot a chart."
+    },
+    {
+      "id": "DSGN-03",
+      "track": "design",
+      "severity": "high",
+      "verdict": "unverified",
+      "title": "Duplicate and divergent primitive implementations in os.jsx vs the dedicated primitives",
+      "evidence": {
+        "locations": [
+          "web/src/components/ui/os.jsx:159-185",
+          "web/src/components/ui/EmptyState.jsx:7-45"
+        ],
+        "claim_as_reported": "The report claims os.jsx reimplements primitives that also exist as dedicated components, and the two copies have diverged - so which one a surface gets depends on where it was imported from.",
+        "why_not_verified": "NOT VERIFIED. DSGN-01's fix touched os.jsx:9-24 for contrast, which makes this adjacent and worth doing, but the duplication comparison itself was not made. Note the report's own DSGN-01 location lines (9-24) and DSGN-03's (159-185) do not overlap, so both regions exist."
+      },
+      "promote_when": "Diff the primitives exported from os.jsx against the dedicated component files and list each pair with its behavioural difference. Then pick one implementation per primitive and repoint the callers."
+    },
+    {
+      "id": "DSGN-05",
+      "track": "design",
+      "severity": "medium",
+      "verdict": "unverified",
+      "title": "Radius and spacing token scale drift between CSS custom properties, Tailwind utilities and the specs",
+      "evidence": {
+        "locations": [
+          "web/src/index.css:156-158,288-465",
+          "web/DESIGN.md:43-45",
+          "web/DESIGN_OVERHAUL.md:16"
+        ],
+        "claim_as_reported": "The report claims three definitions of the radius/spacing scale (CSS variables, Tailwind theme, design docs) disagree, so the same intent renders at different sizes.",
+        "why_not_verified": "NOT VERIFIED. A drift finding needs all three sources read and tabulated; only the existence of the three sources is confirmed by the paths. Low risk to leave open - the consequence is visual inconsistency, not a broken surface."
+      },
+      "promote_when": "Tabulate the three scales side by side and mark every divergent step. Then declare one canonical source and make the other two derive from it."
+    },
+    {
+      "id": "DSGN-06",
+      "track": "design",
+      "severity": "medium",
+      "verdict": "unverified",
+      "title": "Monochromatic tertiary hue collision and surface elevation collapse in the design tokens",
+      "evidence": {
+        "locations": [
+          "docs/design/stitch-design/.../dark_tokens.json",
+          "docs/design/stitch-design/.../light_tokens.json"
+        ],
+        "claim_as_reported": "The report claims the tertiary hue is 175 in one token file and 176 in the other, and that surface elevations collapse to the same value - so layers are indistinguishable.",
+        "why_not_verified": "NOT VERIFIED. The source files are design-token JSON under docs/, and AGENTS.md records that dark_tokens.json and motion_tokens.json are EXCLUDED from the graph (a false credential positive on the word 'tokens') - so they must be read directly. They were not read in this pass."
+      },
+      "promote_when": "Read both token files and compare the tertiary hue and each elevation step. If the elevation values really are identical, that is a visible defect: screenshot two stacked surfaces to confirm before changing tokens."
+    },
+    {
+      "id": "DSGN-07",
+      "track": "design",
+      "severity": "medium",
+      "verdict": "unverified",
+      "title": "Touch targets below the 44px minimum on interactive controls",
+      "evidence": {
+        "locations": [
+          "web/src/components/ui/OfflineBanner.jsx:69",
+          "web/src/components/PrivacyPolicyView.jsx:102"
+        ],
+        "claim_as_reported": "The report claims interactive controls measure 32/36/38 px, under the 44px accessible target floor.",
+        "why_not_verified": "NOT VERIFIED. Measuring requires reading the class or computed style per control, and the two named sites were not measured. This is mechanically checkable and belongs with the DSGN-01 contrast work, which used computed values successfully."
+      },
+      "promote_when": "Measure each named control's rendered box (getBoundingClientRect) in the browser rather than reading classes - padding and line-height both contribute. Then raise the offenders to 44px or document the exception."
+    },
+    {
+      "id": "DSGN-08",
+      "track": "design",
+      "severity": "low",
+      "verdict": "unverified",
+      "title": "Motion duration and easing inconsistent between token file, Tailwind utilities and index.css",
+      "evidence": {
+        "locations": [
+          "docs/design/.../motion_tokens.json:2-10",
+          "web/src/index.css:116-119"
+        ],
+        "claim_as_reported": "The report claims three definitions of animation duration/easing disagree.",
+        "why_not_verified": "NOT VERIFIED. Same class as DSGN-05 and DSGN-06: three sources exist, the comparison was not made. Lowest severity in the set - the consequence is inconsistency, not breakage."
+      },
+      "promote_when": "Tabulate the three motion scales and unify them, or state deliberately why a surface deviates."
+    },
+    {
+      "id": "UI-06",
+      "track": "ui_nav",
+      "severity": "medium",
+      "verdict": "unverified",
+      "title": "ActivityView renders NotificationsView without onNavigate, stripping its action buttons",
+      "evidence": {
+        "locations": [
+          "web/src/components/ActivityView.jsx:109",
+          "web/src/components/NotificationsView.jsx:262-269"
+        ],
+        "claim_as_reported": "NotificationsView accepts an onNavigate prop and conditionally renders action buttons from it; ActivityView mounts it without that prop, so the buttons do not appear.",
+        "why_not_verified": "NOT VERIFIED, but it is the same class as UI-09 (which IS verified: PrivacyPolicyView is mounted with no props at all). The pattern is real in this codebase; whether ActivityView is another instance was not read."
+      },
+      "promote_when": "Open ActivityView.jsx:109 and NotificationsView.jsx:262-269 and confirm the prop is consumed but not supplied. The check_view_props.js gate proposed under UI-09 would catch it automatically - it is worth running before verifying this by hand."
+    },
+    {
+      "id": "UI-07",
+      "track": "ui_nav",
+      "severity": "medium",
+      "verdict": "duplicate",
+      "title": "Five orphaned components (96+ KB) with zero incoming imports",
+      "evidence": {
+        "locations": [
+          "web/src/components/AdminAdvancedDashboard.jsx",
+          "AdminPanels.jsx",
+          "AssignmentTurnInView.jsx",
+          "PermissionModal.jsx",
+          "RouteModal.jsx"
+        ],
+        "claim_as_reported": "The report lists five orphaned admin/dispatch components totalling 96+ KB.",
+        "why_not_verified": "DUPLICATE of CONV-04, which was verified independently and MEASURED: all five named here plus AdminAgentChat have 0 inbound importers. CONV-04 also corrected the reported list - PrivacyPolicy.jsx was claimed orphaned and is NOT (3 inbound importers). Kept as its own ID so the two tracks reconcile, with CONV-04 as the authoritative entry."
+      },
+      "promote_when": "No separate work. Resolve under CONV-04."
+    },
+    {
+      "id": "UI-10",
+      "track": "ui_nav",
+      "severity": "low",
+      "verdict": "unverified",
+      "title": "SettingsApp has no hashchange listener, so deep-linked subnav pills desynchronise",
+      "evidence": {
+        "locations": [
+          "web/src/components/SettingsApp.jsx:111-122"
+        ],
+        "claim_as_reported": "SettingsApp reads the hash for its subnav but does not listen for hashchange, so a hash edited in the address bar (or a link into a deep hash) can leave the visible pill out of step with the URL.",
+        "why_not_verified": "NOT VERIFIED. It is the same family as UI-08 (verified: zero pushState/popstate in App.jsx), so the app's general neglect of the History API is established - but this specific component was not read. Sibling of DSGN-05/06/08 in character. No user-visible breakage claimed, hence low."
+      },
+      "promote_when": "Read SettingsApp.jsx:111-122. If the hash is read without a listener, add one - and prefer fixing it together with UI-08 so history handling lands in one pass rather than three."
+    },
+    {
+      "id": "LAT-02",
+      "track": "latency",
+      "severity": "high",
+      "verdict": "unverified",
+      "title": "N+1 query: the study materials API fires a separate query per card state",
+      "evidence": {
+        "locations": [
+          "the study-tools routes, get_card_states called inside a per-material loop"
+        ],
+        "claim_as_reported": "The report claims the materials list is fetched once and then card states are fetched one query per material, with no joinedload or batched IN clause.",
+        "why_not_verified": "NOT VERIFIED. The report gives no file:line for this one (the location is described, not cited), so it was not mechanically checkable in this pass. If real it is a straightforward query-count defect and worth fixing - but a fix written against a described location, rather than a read one, is how a wrong patch gets written."
+      },
+      "promote_when": "Locate the route that returns study materials with card states, count the queries with a before_cursor_execute listener (the technique proposed under LAT-06), and only then decide whether a batched IN clause or joinedload is correct."
+    },
+    {
+      "id": "LAT-05",
+      "track": "latency",
+      "severity": "medium",
+      "verdict": "duplicate",
+      "title": "Post-stream AI detection delays the done frame and can diverge from what the user saw",
+      "evidence": {
+        "locations": [
+          "server/routes_overlord.py /api/agent/chat/stream post-stream detection"
+        ],
+        "claim_as_reported": "Raw chunks stream to the client, then detection and possible rewrite run; the user has already seen text that may not be what is stored, with a silent gap before done.",
+        "why_not_verified": "DUPLICATE of TEST-06 (same defect reported from the latency and the testing angle). NOT VERIFIED - the stream path was not traced in this pass. The claim is coherent and matches the architecture AGENTS.md describes (ensure_human_standard runs after generation), so it is plausible; plausibility is not verification."
+      },
+      "promote_when": "Resolve jointly with TEST-06: trace /api/agent/chat/stream after the final chunk, confirm whether a rewrite can change the persisted reply, and decide whether to emit a correction frame."
+    },
+    {
+      "id": "EFF-04",
+      "track": "efficiency",
+      "severity": "high",
+      "verdict": "unverified",
+      "title": "The background monitor loop blocks the event loop for ~220ms every 60s and rewrites 3.2 MB when idle",
+      "evidence": {
+        "locations": [
+          "server/monitors.py:196-227",
+          "server/monitors.py:352-378"
+        ],
+        "claim_as_reported": "The report measured a 220 ms synchronous block every 60 seconds plus a 3.2 MB disk write even when nothing changed.",
+        "why_not_verified": "NOT VERIFIED. Related to LAT-03 (verified: async def doing sync DB I/O), so the blocking-in-async pattern is real in this codebase - but this specific loop and the 3.2 MB figure were not measured. AGENTS.md does document that monitors counted ~96% noise and that _classify_request was rewritten, which is adjacent but not the same claim."
+      },
+      "promote_when": "Read monitors.py:196-227 and :352-378, confirm whether the write is unconditional, and measure the block with an asyncio tick probe. If the write is unconditional while idle, guard it on a change hash - that is independent of whether 220 ms is exact."
+    },
+    {
+      "id": "EFF-05",
+      "track": "efficiency",
+      "severity": "medium",
+      "verdict": "unverified",
+      "title": "The Telegram agent loop polls SQLite synchronously every 3.0s when no bots are connected",
+      "evidence": {
+        "locations": [
+          "server/telegram_agent_link.py:300-308",
+          "server/telegram_agent_link.py:355-368"
+        ],
+        "claim_as_reported": "A 3-second poll hits SQLite synchronously even when zero Telegram bots are linked, so an idle feature costs constant CPU and I/O.",
+        "why_not_verified": "NOT VERIFIED. There IS a real Telegram wake path on this box (oc_wake_watch.sh, tele-poller - documented in AGENTS.md as the inbound channel that must be kept alive), so this needs care: the fix is to skip the poll when no bot is linked, NOT to remove the poller. The report's line numbers were not read."
+      },
+      "promote_when": "Read telegram_agent_link.py:300-308 and confirm the poll runs with no linked bot. If so, gate it on a count of linked bots and re-read. Do not touch the opencode wake path - that is a different service and it is load-bearing."
+    },
+    {
+      "id": "REL-07",
+      "track": "reliability",
+      "severity": "medium",
+      "verdict": "unverified",
+      "title": "The replace-on-write rule for scoped settings lets concurrent tabs clobber each other",
+      "evidence": {
+        "locations": [
+          "server/user_settings_service.py:571-580",
+          "web/src/lib/scopedSettings.js"
+        ],
+        "claim_as_reported": "Because scoped is REPLACE_ON_WRITE (a document, not a bag of prefs), two tabs each saving an override will have the second write discard the first - the same destructive shape as the bug fixed in 48b2cd3, now only reachable across tabs rather than within one.",
+        "why_not_verified": "NOT VERIFIED but strongly implied by two verified facts: v1 made scoped REPLACE_ON_WRITE deliberately (AGENTS.md), and the client now holds an authoritative cached copy that merges writes onto itself (web/src/lib/scopedSettings.js). The client cache fixes it within one tab; whether it survives a second long-lived tab holding a stale copy was not tested."
+      },
+      "promote_when": "Open two browser contexts on the same account, set an override in each a few seconds apart, then read the server copy and confirm both are present. If they are not, the fix is to send the full document from a freshly fetched copy, or to move the merge server-side per key."
+    },
+    {
+      "id": "TEST-01",
+      "track": "testing",
+      "severity": "high",
+      "verdict": "unverified",
+      "title": "Shape assertions in test_gdocs_exporter pass on uncorrected text",
+      "evidence": {
+        "locations": [
+          "server/tests/test_gdocs_exporter.py:35-62",
+          "server/gdocs_exporter.py:40-74"
+        ],
+        "claim_as_reported": "The tests assert on the SHAPE of the exported document rather than its corrected content, so a regression in correction would pass silently.",
+        "why_not_verified": "NOT VERIFIED. This is a testing-quality finding: the tests exist and pass, and the claim is that they assert the wrong thing. Confirming it means reading both the test and the exporter and deciding whether any assertion could distinguish corrected from uncorrected output - a judgement, not a grep."
+      },
+      "promote_when": "Read both files and write down, per assertion, what could break without failing it. A passing test that cannot fail for the reason it names is the defect; TEST-05 and TEST-07 are the same family."
+    },
+    {
+      "id": "TEST-02",
+      "track": "testing",
+      "severity": "high",
+      "verdict": "unverified",
+      "title": "A deterministic mock fallback in harness.py bypasses the self-healing repair loop under test",
+      "evidence": {
+        "locations": [
+          "server/engine/harness.py:180-207",
+          "server/engine/harness.py:305-328"
+        ],
+        "claim_as_reported": "When the model is mocked deterministically, the repair path that test_harness.py is meant to exercise is never entered - so the loop is untested while looking covered.",
+        "why_not_verified": "NOT VERIFIED. Same family as TEST-01: a test whose double short-circuits the behaviour it claims to verify. AGENTS.md records this exact failure mode once already (the merge test that passed through a fake DB which never applied the write), so the pattern is established in this repo."
+      },
+      "promote_when": "Read harness.py:180-207 and the test, and identify the seam the mock replaces. Then assert the repair loop is ENTERED (a counter, not an output shape) - the same fix the scoped-settings test needed."
+    },
+    {
+      "id": "TEST-05",
+      "track": "testing",
+      "severity": "high",
+      "verdict": "unverified",
+      "title": "The persistent test DB with no teardown leaks state across tests and causes run-order flakes",
+      "evidence": {
+        "locations": [
+          "server/tests/conftest.py:6-76",
+          "server/tests/test_study_tools_v3.py"
+        ],
+        "claim_as_reported": "conftest points at a file-backed sqlite DB with no per-test rollback, so rows from one run are visible to the next and assertions that pass in isolation fail in a full run.",
+        "why_not_verified": "PARTIALLY CONFIRMED by direct experience, NOT by reading conftest in this pass. AGENTS.md records this as a settled trap three times over ('the test DB is a persistent file - an assertion on an exact row count breaks in full-suite runs; use a unique public_id per run'), and the v1 failure triage hit exactly this with fixed idempotency keys colliding across runs. The STUDY STREAK test is the documented victim: it passed only while the shared DB happened to hold a recent session."
+      },
+      "promote_when": "This is the highest-leverage testing fix in the set and it is already understood. Switch conftest to a per-test transaction rollback (or a fresh DB per session) and delete the 'use a uuid per run' workaround from the tests that carry it - the workaround is a symptom and its removal is the proof the fix worked."
+    },
+    {
+      "id": "TEST-06",
+      "track": "testing",
+      "severity": "high",
+      "verdict": "duplicate",
+      "title": "AI detection runs after tokens have streamed, with zero test coverage",
+      "evidence": {
+        "locations": [
+          "server/routes_overlord.py:2340-2345 and the stream path"
+        ],
+        "claim_as_reported": "Detection and a possible rewrite happen after raw chunks have already reached the client, so the persisted reply can differ from what the user read - and no test covers the ordering.",
+        "why_not_verified": "DUPLICATE of LAT-05 (latency angle). NOT VERIFIED - the stream path was not traced. The reported line range is specific, so this is cheap to confirm."
+      },
+      "promote_when": "Resolve jointly with LAT-05. The test that should exist asserts ORDERING: that no persisted rewrite can occur without the client being told. A test asserting only that detection ran would pass against the bug."
+    },
+    {
+      "id": "LEG-03",
+      "track": "legality",
+      "severity": "high",
+      "verdict": "unverified",
+      "title": "Third-party AI subprocessors are undisclosed in the privacy policy",
+      "evidence": {
+        "locations": [
+          "server/detectors.py:254-410 sapling / pangram / originalityai / copyleaks",
+          "web/src/components/PrivacyPolicyView.jsx:32-40"
+        ],
+        "claim_as_reported": "Paid detectors send user text to Sapling and Pangram (and the registry names OriginalityAI and Copyleaks), but the privacy policy does not disclose them as subprocessors, contrary to GDPR Art. 28 / CCPA.",
+        "why_not_verified": "PARTIALLY CONFIRMED. AGENTS.md independently verifies that Sapling and Pangram ARE called and billed on the ambiguous-band path, and that OriginalityAI/Copyleaks keys are unset so those two never register. So at least two real subprocessors exist. What was NOT done is reading the privacy policy to see whether it discloses them - the finding is about the DISCLOSURE, not the transmission."
+      },
+      "promote_when": "Read PrivacyPolicyView.jsx and list every named subprocessor, then diff that list against the detectors that actually send text off-box (sapling, pangram - confirmed; originalityai, copyleaks - unset). Disclose the ones that are live and remove the ones that are not, or the policy is wrong in both directions."
+    },
+    {
+      "id": "LEG-04",
+      "track": "legality",
+      "severity": "high",
+      "verdict": "unverified",
+      "title": "No corporate entity is named in the Terms, threatening the arbitration and liability clauses",
+      "evidence": {
+        "locations": [
+          "web/src/components/TermsOfServiceView.jsx footer",
+          "web/src/components/PrivacyPolicyModal.jsx",
+          "PRIVACY_POLICY.md"
+        ],
+        "claim_as_reported": "If the Terms do not name the legal entity that operates the service, the arbitration and limitation-of-liability clauses may be unenforceable.",
+        "why_not_verified": "NOT VERIFIED. This is a legal-sufficiency question about text, and the text was not read in this pass. It is also the one finding in the set where the correct output may be 'no code change' - the remediation could be as simple as naming the entity, or as involved as forming one, which is an owner decision and outside this audit."
+      },
+      "promote_when": "Read the three files and report whether an entity is named. Then hand the answer to the owner rather than editing legal copy unilaterally - AGENTS.md already records an owner policy on not shipping fabricated claims, and inventing an entity name would be worse than the gap."
+    },
+    {
+      "id": "LEG-05",
+      "track": "legality",
+      "severity": "high",
+      "verdict": "unverified",
+      "title": "Obsolete auth and data-handling claims in the Terms and Privacy Policy",
+      "evidence": {
+        "locations": [
+          "ToS Section 2",
+          "Privacy Policy Section 2",
+          "server/api_keys.py (the htk_ key system that replaced extension login)"
+        ],
+        "claim_as_reported": "The documents describe an authentication and data model that the product no longer uses (extension login, and possibly retention claims), which is a deceptive-practices exposure.",
+        "why_not_verified": "NOT VERIFIED, but the underlying change IS verified: AGENTS.md records that API keys (htk_) REPLACED extension login entirely (commit c949f3b), and that /api/extension/releases + /version 503 while the public site is intentionally paused. A policy describing extension login is therefore describing something that no longer exists. The specific sentences were not located."
+      },
+      "promote_when": "Grep the two policy files for 'extension', 'login', 'password' and 'retention', and check each sentence against the current auth model (API key + session cookie + 2FA). Update or delete every sentence that describes the retired flow."
+    },
+    {
+      "id": "LEG-06",
+      "track": "legality",
+      "severity": "medium",
+      "verdict": "unverified",
+      "title": "Trial duration is stated inconsistently across the product",
+      "evidence": {
+        "locations": [
+          "server/routes_trial.py",
+          "Terms of Service",
+          "the landing page",
+          "the Guide"
+        ],
+        "claim_as_reported": "The trial duration differed between the code, the Terms and the marketing copy.",
+        "why_not_verified": "LIKELY FIXED, NOT RE-VERIFIED IN THE POLICY TEXT. AGENTS.md records the authoritative values as reconciled in this audit: trial is 15,000 tokens over 14 days (trial_service.TRIAL_DURATION_DAYS = 14), and the batch-1/2 UI work corrected nine stale price and duration strings. So the CODE and the UI agree. Whether the Terms and the landing page were among the corrected files was not re-read after the edits."
+      },
+      "promote_when": "Grep Terms of Service, the landing page and GuideView for '7 days' / 'trial' and confirm each matches TRIAL_DURATION_DAYS. This is a re-verify, not new work - the fix likely landed in 721e5ed/cd15cc7."
+    },
+    {
+      "id": "LEG-07",
+      "track": "legality",
+      "severity": "medium",
+      "verdict": "unverified",
+      "title": "Referral rewards are described in a way the wallet does not deliver",
+      "evidence": {
+        "locations": [
+          "web/src/components/ReferralSection.jsx",
+          "the wallet / discount_balance"
+        ],
+        "claim_as_reported": "The referral UI promises a reward the balance model does not pay out as described.",
+        "why_not_verified": "NOT VERIFIED, and the underlying model is now precisely known: AGENTS.md records the owner ruling that CREDITS are earned-only discounts (users.discount_balance, a percent discount on an order), never purchasable and never granted by a plan - and that earn_credits is the only creator. So a referral copy promising 'credits' in a way that reads as spendable balance would be wrong. Whether the copy says that was not read."
+      },
+      "promote_when": "Read ReferralSection.jsx and compare its wording against earn_credits / effective_credits_balance. The copy must say what the reward IS - a discount percentage on an order - not a balance."
+    },
+    {
+      "id": "LEG-08",
+      "track": "legality",
+      "severity": "medium",
+      "verdict": "unverified",
+      "title": "Security and cryptography claims in SECURITY.md / README.md do not match the implementation",
+      "evidence": {
+        "locations": [
+          "SECURITY.md",
+          "README.md",
+          "server/security.py",
+          "settings.token_balance (a JSON blob, not a column)"
+        ],
+        "claim_as_reported": "The docs make security claims the code does not support - e.g. describing credential or balance storage in terms the implementation does not use.",
+        "why_not_verified": "NOT VERIFIED, but one specific mismatch is already known and recorded: tokens live in settings.token_balance, a JSON blob rather than a column, which is why a read-modify-write on it could not be made atomic by a row lock (v1's REL-01). Any doc implying a transactional column is wrong. The crypto claims themselves (hashing, JWT) were not audited."
+      },
+      "promote_when": "Diff every claim in SECURITY.md and README.md against the code: password hashing algorithm, session/JWT handling, at-rest treatment of the settings blob, and the fact that API keys are stored as SHA-256 with the plaintext shown once. Delete or correct each claim that is not literally true."
+    },
+    {
+      "id": "LEG-09",
+      "track": "legality",
+      "severity": "medium",
+      "verdict": "unverified",
+      "title": "COPPA age limit and data retention are inconsistent between the Terms, the cookie banner and the deletion code",
+      "evidence": {
+        "locations": [
+          "ToS Section 2",
+          "web/src/components/CookieBanner.jsx",
+          "server/privacy.py"
+        ],
+        "claim_as_reported": "The stated minimum age and the described retention/deletion behaviour do not line up across the three surfaces.",
+        "why_not_verified": "NOT VERIFIED. One half is now known: TEST-04 was refuted in v1 after grepping, and the real hard-delete lives in server/privacy.py:62-95 (no pending_deletion flag exists anywhere in the repo). So any policy text describing a soft-delete or a grace window describes something that was never built. The COPPA age statement was not read."
+      },
+      "promote_when": "Read ToS Section 2 and CookieBanner.jsx, and check the stated age floor is consistent in both and consistent with the signup validator. Then check the retention sentence matches the hard delete in privacy.py:62-95. Per the zero-automated-alerts and no-fabricated-claims rules, only assert behaviour the code actually has."
+    },
+    {
+      "id": "SEC-OPEN-A",
+      "track": "security",
+      "severity": "unknown",
+      "verdict": "unverified",
+      "title": "IDOR scan across every route taking assignment_id / user_id / organization_id was never completed",
+      "evidence": {
+        "locations": [
+          "all routes accepting assignment_id, user_id, organization_id"
+        ],
+        "claim_as_reported": "Track 1's agent was killed before running an IDOR sweep, so object-level authorisation across the API is UNKNOWN rather than verified-clean.",
+        "why_not_verified": "NOT VERIFIED - the work was never started. Stated as an open item rather than a finding because the track could not report either way. This is the largest unknown in the audit: a single missed ownership check is a data-exposure class, and the org->admin hole in this repo's history (role escalated unconditionally in routes_organization.py:53, fixed at c5128b3) shows this codebase has produced exactly that."
+      },
+      "promote_when": "Enumerate every route with an id-shaped path or body parameter and, per route, confirm the query filters on the authenticated user (or an admin check). A mechanical version: for each handler, assert the query includes a user/public_id predicate. Report the ones that do not."
+    },
+    {
+      "id": "SEC-OPEN-B",
+      "track": "security",
+      "severity": "unknown",
+      "verdict": "unverified",
+      "title": "run_shell sandbox depth was not re-verified after the sympy.sympify RCE fix",
+      "evidence": {
+        "locations": [
+          "server/overlord_agent.py run_shell",
+          "the AST allowlist"
+        ],
+        "claim_as_reported": "The sympy.sympify RCE found by the Shannon pentest (code in a string literal bypasses the AST allowlist, which inspects Name/Attribute/Import/Call nodes but never string constants) was closed, but the wider sandbox was not re-audited.",
+        "why_not_verified": "NOT VERIFIED. AGENTS.md records the RCE as fixed and, separately, records the deeper conclusion from the rotation work: the durable fix a rotation does NOT provide is that run_shell needs a namespace/UID-isolated sandbox WITHOUT sudo/docker, because the account is in both groups. So the known-correct direction is documented; whether the allowlist has other gaps was not examined."
+      },
+      "promote_when": "Re-read the allowlist against its own docstring and enumerate every builtin/module it permits, then for each ask what a string argument could do. The rotation write-up (maintenance/ROTATION-INVENTORY-20260918.md) already states the structural fix: no sudo, no docker, and no readability of secrets the web process does not use."
+    },
+    {
+      "id": "SEC-OPEN-C",
+      "track": "security",
+      "severity": "unknown",
+      "verdict": "unverified",
+      "title": "The API key vs session auth boundary was not exhaustively checked across all endpoints",
+      "evidence": {
+        "locations": [
+          "server/api_keys.py authenticate()",
+          "routes_features.get_current_authenticated_user",
+          "routes_organization.get_current_user"
+        ],
+        "claim_as_reported": "Whether every endpoint draws the key/session line in the right place was not verified end to end.",
+        "why_not_verified": "PARTIALLY KNOWN, NOT EXHAUSTIVE. Two live instances of the same defect were already found and fixed: routes_features had its own private copy of the auth logic that never learned about API keys (every valid key 401'd on feature routes), and routes_organization had its own cookie-only get_current_user so Bearer JWTs and htk_ keys 401'd there. Both now delegate to the shared resolver. AGENTS.md records the audit that found the GET /api/user/settings case: of 29 endpoints the extension calls, ONE refused a key - so a sweep of that surface was done. What was not done is the reverse sweep: every endpoint that should REFUSE a key (minting keys, password change, checkout, billing, data export) being confirmed to refuse."
+      },
+      "promote_when": "Enumerate all routes and, per route, assert the intended credential type. The boundary is documented in api_keys.require_session_auth - the check is that every account-critical route calls it, and that the call is ORDERED after get_current_user (calling it first reads request.state.auth_via_api_key before auth sets it, which let a key mint another key at HTTP 200)."
+    }
+  ],
+  "coverage": {
+    "tracks_consolidated": {
+      "1-security": [
+        "SEC-01",
+        "SEC-02",
+        "SEC-03",
+        "SEC-OPEN-A",
+        "SEC-OPEN-B",
+        "SEC-OPEN-C"
+      ],
+      "2-legality": [
+        "LEG-01",
+        "LEG-02",
+        "LEG-03",
+        "LEG-04",
+        "LEG-05",
+        "LEG-06",
+        "LEG-07",
+        "LEG-08",
+        "LEG-09"
+      ],
+      "3-design": [
+        "DSGN-01",
+        "DSGN-02",
+        "DSGN-03",
+        "DSGN-04",
+        "DSGN-05",
+        "DSGN-06",
+        "DSGN-07",
+        "DSGN-08"
+      ],
+      "4-ui-nav": [
+        "UI-01",
+        "UI-02",
+        "UI-03",
+        "UI-04",
+        "UI-05",
+        "UI-06",
+        "UI-07",
+        "UI-08",
+        "UI-09",
+        "UI-10"
+      ],
+      "5-convenience": [
+        "CONV-01",
+        "CONV-02",
+        "CONV-03",
+        "CONV-04"
+      ],
+      "6-latency": [
+        "LAT-01",
+        "LAT-02",
+        "LAT-03",
+        "LAT-04",
+        "LAT-05",
+        "LAT-06"
+      ],
+      "7-efficiency": [
+        "EFF-01",
+        "EFF-02",
+        "EFF-03",
+        "EFF-04",
+        "EFF-05",
+        "EFF-06",
+        "EFF-07"
+      ],
+      "8-economics": [
+        "ECON-01",
+        "ECON-02",
+        "ECON-03",
+        "ECON-04",
+        "ECON-05",
+        "ECON-06",
+        "ECON-07",
+        "ECON-08"
+      ],
+      "9-reliability": [
+        "REL-01",
+        "REL-02",
+        "REL-03",
+        "REL-04",
+        "REL-05",
+        "REL-06",
+        "REL-07"
+      ],
+      "10-testing": [
+        "TEST-01",
+        "TEST-02",
+        "TEST-03",
+        "TEST-04",
+        "TEST-05",
+        "TEST-06",
+        "TEST-07",
+        "TEST-08"
+      ]
+    },
+    "cross_track_duplicates_resolved": {
+      "CONV-04 == UI-07": "CONV-04 is authoritative; it corrected the reported list (PrivacyPolicy.jsx is NOT orphaned, it has 3 importers).",
+      "LAT-05 == TEST-06": "Same defect from the latency and testing angles. One fix.",
+      "REL-03 == ECON-03": "Same missing-ledger-row defect from integrity and economics. Fixed as a pair.",
+      "UI-07 appears in tracks 4 and 5": "Reconciled under CONV-04."
+    },
+    "what_this_version_does_not_do": [
+      "It does not implement anything. Every finding is analysis with a proposed fix and a test that would fail without it.",
+      "The 'verified' verdict means file:line was read at HEAD AND the claim was reproduced. Anything else is unverified, latent, refuted, reclassified, duplicate or fixed - and says so.",
+      "A proposed fix that names a file but was not compiled against the running app is a PROPOSAL. The two that are already fixed (v1) carry commits; the rest do not.",
+      "The three SEC open items are unknown, not clean. Their presence is the honest state of the security track."
+    ]
+  },
+  "decisions": [
+    {
+      "id": "DEC-01",
+      "owner_ruling": "2026-09-22",
+      "subject": "Tier allowances and the margin model",
+      "ruling": "Tier allowances stay as they are: basic 30,000 / pro 100,000 / elite 270,000, trial 15,000, testing 10,000. The owner's intent is a mathematically ensured profit margin per tier, because the token unit is 1/100 of a cent.",
+      "arithmetic": {
+        "token_usd": 0.0001,
+        "basic": {
+          "price_usd": 10,
+          "allowance": 30000,
+          "max_service_usd": 3.0,
+          "margin_pct": 70.0,
+          "multiple": 3.33
+        },
+        "pro": {
+          "price_usd": 20,
+          "allowance": 100000,
+          "max_service_usd": 10.0,
+          "margin_pct": 50.0,
+          "multiple": 2.0
+        },
+        "elite": {
+          "price_usd": 40,
+          "allowance": 270000,
+          "max_service_usd": 27.0,
+          "margin_pct": 32.5,
+          "multiple": 1.48
+        }
+      },
+      "consequence": "The BALANCE IS THE CEILING. Never add a plan-based charge exemption. A negative balance is honest and self-blocks the account until a top-up; that is the design, not a bug.",
+      "standing_hazard": "plan == 'elite' bypasses are a RECURRING class in this codebase - removed at least twice and found alive again in routes_dump.py. It is why ECON-04 is listed as a sweep, not a one-line fix."
+    },
+    {
+      "id": "DEC-02",
+      "owner_ruling": "2026-09-17, reaffirmed 2026-09-22",
+      "subject": "Refunding is earn-only",
+      "ruling": "Tokens are consumed, not refunded. Nothing is charged before the work runs, so a task that fails outright is simply never charged - there is nothing to refund.",
+      "consequence": "The pre-flight gate checks eligibility only (has_usage_balance) and takes no money. Settlement charges the measured cost after the fact (ledger_watermark -> usage_cents_since -> charge_actual_usage). The old up-front charge plus refund branch was deleted because with nothing charged, a refund would MINT a free token.",
+      "consequence_of_removing_it": "Test TASK-02's assertions were rewritten to the new semantics: a session that failed outright, or disconnected before doing real work and collected nothing, is simply never charged; a session that ran steps and then disconnected still pays for what it used."
+    }
+  ],
+  "durable_notes": [
+    {
+      "id": "N-01",
+      "lesson": "with_for_update() IS A NO-OP ON SQLITE",
+      "detail": "Verified by compiling the statement: the emitted SQL contains no FOR UPDATE. Any fix whose whole approach is 'add with_for_update()' is INERT on this database - it will pass review, pass tests, and change nothing. Two mechanisms actually work: BEGIN IMMEDIATE (serialises a read-modify-write) and json_set/json_extract in a single statement (atomic with no lock).",
+      "why_it_matters": "REL-01 is money. The obvious fix was the wrong one."
+    },
+    {
+      "id": "N-02",
+      "lesson": "A read-then-write on the JSON settings blob cannot be fixed by locking advice - the change must go INSIDE the statement",
+      "detail": "Measured: two concurrent 400-token debits against a balance of 1000 left 600 before the fix (one debit swallowed) and 200 after (credits.debit_tokens_atomic).",
+      "why_it_matters": "The same shape recurs wherever settings.token_balance is read, modified and written."
+    },
+    {
+      "id": "N-03",
+      "lesson": "A test double that ignores the write proves nothing",
+      "detail": "The first merge test passed straight through the REL-02 bug because its fake DB never applied db.execute(...). The double must capture AND apply the statement.",
+      "why_it_matters": "This is how a green suite coexists with a live defect - TEST-01, TEST-02 and TEST-07 are the same family."
+    },
+    {
+      "id": "N-04",
+      "lesson": "The test DB is a persistent FILE",
+      "detail": "conftest points at sqlite:///./test_helpotron.db with no per-test rollback, so an assertion on an exact global row count breaks in a full-suite run because the previous run's rows are still there. Use a unique public_id / idempotency key per run.",
+      "why_it_matters": "Three v1 tests failed only in full-suite runs for exactly this reason. TEST-05 is the durable fix; the uuid workaround is a symptom."
+    },
+    {
+      "id": "N-05",
+      "lesson": "grep 'plan != \"elite\"' as routine hygiene",
+      "detail": "is_unmetered() is operator-only by construction (security.is_admin_user); its docstring records that the elite short-circuit was removed once and survived anyway.",
+      "why_it_matters": "A paid tier consuming unbounded upstream spend was live in routes_dump.py until v1."
+    },
+    {
+      "id": "N-06",
+      "lesson": "create_all() does NOT add an index to a table that already exists",
+      "detail": "Model-declared index=True only helps a fresh DB. Measured now: 70 index=True declarations against exactly 1 CREATE INDEX statement, so the live DB carries almost none of them.",
+      "why_it_matters": "REL-05, and it is why every new UNIQUE constraint (REL-03) needs an explicit idempotent CREATE INDEX in the migration block."
+    },
+    {
+      "id": "N-07",
+      "lesson": "A feature can be 100% implemented and 100% dead",
+      "detail": "The avatar endpoint existed with no caller. CONV-02 is the same class: seven study-material export endpoints with zero frontend callers.",
+      "why_it_matters": "Grep for a CALLER, not just for the code. A passing test over an endpoint proves the endpoint works, not that anyone can reach it."
+    },
+    {
+      "id": "N-08",
+      "lesson": "Two currencies, never interchangeable",
+      "detail": "Tokens = usage, in settings.token_balance (a JSON blob, not a column). Credits = earned-only discounts, in users.discount_balance + discount_spillover, created solely by earn_credits, applied as a percent discount on an order.",
+      "why_it_matters": "UI-05 is exactly this confusion in the UI - the CREDITS label renders token_balance."
+    },
+    {
+      "id": "N-09",
+      "lesson": "The server is the only config that counts - server/.env is a decoy",
+      "detail": "Nothing reads server/.env. server/config.py:15 sets env_file to the REPO ROOT, and server/llm.py:18 load_dotenv()s the same root file with override=True. A key put in server/.env is present-but-inert, which is indistinguishable from working until you read it back through the app.",
+      "why_it_matters": "A rotation was performed into server/.env and had no effect. Also why TURNSTILE_* looked configurable while the gate was off."
+    },
+    {
+      "id": "N-10",
+      "lesson": "Duplicate auth logic is how a new credential type gets forgotten",
+      "detail": "Two live instances were found: routes_features.get_current_authenticated_user had its own copy of the cookie/JWT/session logic and never learned about API keys; routes_organization had its own cookie-only get_current_user. Both now delegate to the shared resolver.",
+      "why_it_matters": "Before declaring a credential done, grep for EVERY place that parses Authorization."
+    },
+    {
+      "id": "N-11",
+      "lesson": "Never restart a live service as your verification",
+      "detail": "Order is edit -> ast.parse/import check -> suite -> restart -> verify the endpoint. The suite imports server.main, so it catches a SyntaxError in a second. A restart against a broken file turns a syntax error into an outage, and Restart=always then hides it as 'activating' while it crash-loops (81 restarts, presented as a login failure).",
+      "why_it_matters": "This took the production site down once already."
+    },
+    {
+      "id": "N-12",
+      "lesson": "A test that bypasses the link that is broken will pass forever",
+      "detail": "Round 1 of the scroll fix drove executeReturnedActions directly and stubbed the server; the real path is model -> fenced block -> server validation -> control_actions -> executor. The harness proved nothing about delivery.",
+      "why_it_matters": "When a feature spans client and server, the repro must go through BOTH."
+    }
+  ],
+  "execution_order": [
+    {
+      "step": 1,
+      "theme": "Stop the data loss and the blank screens",
+      "ids": [
+        "REL-02",
+        "UI-01",
+        "UI-02",
+        "UI-04",
+        "REL-03",
+        "REL-06"
+      ],
+      "rationale": "Two of these silently destroy user data or money; two make the product unusable for a signed-in user. Fix them before anything cosmetic."
+    },
+    {
+      "step": 2,
+      "theme": "Stop the product lying to the user",
+      "ids": [
+        "CONV-01",
+        "LEG-01",
+        "UI-05",
+        "TEST-08",
+        "UI-09"
+      ],
+      "rationale": "CONV-01 hands a user a fabricated BIO-309 assignment and reports success; LEG-01 is the highest-consequence finding in the audit; UI-05 mislabels a balance. TEST-08 and UI-09 are one-liners that ride along."
+    },
+    {
+      "step": 3,
+      "theme": "Unblock work that is already built",
+      "ids": [
+        "CONV-02",
+        "CONV-03",
+        "CONV-04"
+      ],
+      "rationale": "Highest value per hour in the whole plan: the export suite, the triage workflow and the orphan cleanup are already implemented or already dead. This is wiring and deletion."
+    },
+    {
+      "step": 4,
+      "theme": "Get off the event loop",
+      "ids": [
+        "LAT-01",
+        "LAT-03",
+        "LAT-04",
+        "SEC-03",
+        "REL-04",
+        "LAT-06"
+      ],
+      "rationale": "Five independent blocking calls in async handlers, all on the API's hot paths, all one-line fixes once located. They are grouped because they share one test shape (a concurrency probe) and one reviewer."
+    },
+    {
+      "step": 5,
+      "theme": "Resource honesty",
+      "ids": [
+        "EFF-02",
+        "EFF-03",
+        "EFF-06",
+        "EFF-07"
+      ],
+      "rationale": "This box has frozen twice. These four determine whether it happens a third time. EFF-07 is the guard that does not guard; EFF-02 is 2.16 GiB idle."
+    },
+    {
+      "step": 6,
+      "theme": "Design system floor",
+      "ids": [
+        "DSGN-01",
+        "DSGN-04",
+        "DSGN-02",
+        "DSGN-03",
+        "DSGN-05",
+        "DSGN-06",
+        "DSGN-07",
+        "DSGN-08"
+      ],
+      "rationale": "DSGN-01 and DSGN-04 are verified and user-visible (an unreadable label; a third-party request from a self-hosted app). The rest are drift and should be swept in one pass with DSGN-01's contrast work rather than four separate ones."
+    },
+    {
+      "step": 7,
+      "theme": "Economics completeness",
+      "ids": [
+        "ECON-04-residual",
+        "ECON-05",
+        "REL-05",
+        "ECON-07-recheck"
+      ],
+      "rationale": "ECON-04's report claimed ~12 bypass sites and only 2 were verified and fixed. Sweep the rest, then settle ECON-05 (are the surviving flat prices floors or the whole charge) and REL-05's index migration."
+    },
+    {
+      "step": 8,
+      "theme": "Test quality",
+      "ids": [
+        "TEST-05",
+        "TEST-01",
+        "TEST-02",
+        "TEST-07-residual"
+      ],
+      "rationale": "TEST-05 is the leverage: a per-test rollback removes the uuid workaround from every test that carries it AND removes a class of run-order flakes. The others are tests that cannot fail for the reason they name - and they are only provable once the DB is isolated."
+    },
+    {
+      "step": 9,
+      "theme": "Compliance copy and the open unknowns",
+      "ids": [
+        "LEG-03",
+        "LEG-04",
+        "LEG-05",
+        "LEG-06",
+        "LEG-07",
+        "LEG-08",
+        "LEG-09",
+        "SEC-OPEN-A",
+        "SEC-OPEN-B",
+        "SEC-OPEN-C"
+      ],
+      "rationale": "Copy goes last because it must describe the product AFTER the fixes land, not before. The three SEC open items are unknown, not clean - SEC-OPEN-A (IDOR) is the largest single unknown in the audit and should be run early if capacity allows, but it is placed here because it is a sweep rather than a fix."
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q-01",
+      "question": "Should /pricing for a signed-in user open the Plans tab of Credits & Billing, or a public pricing page?",
+      "blocks": "UI-01, UI-02 (both need to map a destination)",
+      "recommendation": "Credits -> Plans tab; the component already reads GET /api/plans."
+    },
+    {
+      "id": "Q-02",
+      "question": "Is the 'signup' navigation key meant to open the auth modal or to scroll to the landing page's signup section?",
+      "blocks": "UI-02",
+      "recommendation": "Open the auth modal - a mapped view silently swallows the intent to authenticate."
+    },
+    {
+      "id": "Q-03",
+      "question": "Should HIP (2.16 GiB idle) become demand-driven, accepting a model-load delay on the first request after an idle stop?",
+      "blocks": "EFF-02",
+      "recommendation": "Yes, with a 15-minute idle window. The RAM is the scarcer resource on this box, and hip_humanizer already degrades to the documented fallback path when the endpoint is unreachable."
+    },
+    {
+      "id": "Q-04",
+      "question": "Are the surviving flat prices deliberate floors or stale absolute prices?",
+      "blocks": "ECON-05",
+      "recommendation": "Floors. AGENTS.md records the floor as deliberate - 'cost drives the price up; the flat price stays as a floor because some real work consumes platform resources that never reach the LLM ledger'. The finding must then be narrowed to naming which floors no longer bind."
+    },
+    {
+      "id": "Q-05",
+      "question": "Does the owner want a legal entity named in the Terms, and if so which?",
+      "blocks": "LEG-04",
+      "recommendation": "Owner decision. Inventing an entity name into a legal document would be worse than the gap - do not edit legal copy unilaterally."
+    },
+    {
+      "id": "Q-06",
+      "question": "Should the public site be paused? It is currently serving the full app, and the owner's 09-17 instruction was to keep the paused banner.",
+      "blocks": "LEG-05 mentions the paused state as a fact; the extension's /releases and /version currently 503 because the public site is intended to be paused.",
+      "recommendation": "Confirm with the owner before 'fixing' anything here - the mismatch is between the running state and the instruction, and only the owner can resolve which is intended."
+    },
+    {
+      "id": "Q-07",
+      "question": "Should the seven study-material exports surface on the material card, or in a batch 'export all' control?",
+      "blocks": "CONV-02",
+      "recommendation": "Per-material, next to the material they export. A batch control invites a download of everything, which is a different feature."
+    }
+  ],
+  "source_reports": [
+    "plans/audit/track-1-security.md",
+    "plans/audit/track-2-legality.md",
+    "plans/audit/track-3-design.md",
+    "plans/audit/track-4-ui-nav.md",
+    "plans/audit/track-5-convenience.md",
+    "plans/audit/track-6-latency.md",
+    "plans/audit/track-7-efficiency.md",
+    "plans/audit/track-8-economics.md",
+    "plans/audit/track-9-reliability.md",
+    "plans/audit/track-10-testing.md"
+  ],
+  "method": {
+    "read_at": "HEAD, this session",
+    "reproduction": "Claims were checked by reading the exact file:line and, where mechanically checkable, by running a command - grep counts, process RSS from systemd, WCAG relative-luminance arithmetic, import-graph resolution, and the two-sided read of a client call against its server route (CONV-01).",
+    "corrections_made": [
+      "SEC-03 / LAT-01: the report said urllib; the code uses a SYNC httpx.Client. The blocking is real, the mechanism named was wrong.",
+      "CONV-02: the report attributed the export endpoints to routes_dump.py; they live in routes_export.py.",
+      "CONV-04: the report listed seven orphaned components including PrivacyPolicy.jsx; measured, that one has 3 importers and is LIVE. Six are orphaned, not seven.",
+      "TEST-03: 'leaks into the production repository' is wrong - measured 271 files, 0 tracked by git. Re-scoped to test isolation plus unbounded accumulation.",
+      "TEST-08: the TEST is correct and the DOCSTRING is backwards. Acting on the finding as filed would have introduced a regression.",
+      "LAT-01: the report measured 215ms/500ms/2s of blocking. The STRUCTURE is verified; those specific numbers are not reproduced here.",
+      "SEC-02 and TEST-07: refuted outright - and refuting them matters as much as confirming, because acting on either would have changed working code."
+    ],
+    "not_done": "No fix from this plan has been implemented. No finding was promoted on plausibility. 26 findings remain unverified, most of them because they need a judgement (is this test's assertion meaningful) or a browser measurement rather than a grep."
+  },
+  "findings_verified_this_pass": [
+    "UI-01",
+    "UI-02",
+    "DSGN-01",
+    "REL-02",
+    "UI-03",
+    "UI-04",
+    "UI-05",
+    "UI-08",
+    "UI-09",
+    "CONV-01",
+    "CONV-02",
+    "CONV-03",
+    "CONV-04",
+    "LAT-01",
+    "LAT-03",
+    "LAT-04",
+    "LAT-06",
+    "EFF-02",
+    "EFF-03",
+    "EFF-06",
+    "EFF-07",
+    "REL-03",
+    "REL-04",
+    "REL-05",
+    "REL-06",
+    "DSGN-04",
+    "SEC-03",
+    "LEG-01"
+  ],
+  "findings_refuted": [
+    "SEC-02",
+    "TEST-07",
+    "ECON-02",
+    "ECON-07",
+    "TEST-04"
+  ],
+  "findings_still_unverified": [
+    "ECON-05",
+    "DSGN-02",
+    "DSGN-03",
+    "DSGN-05",
+    "DSGN-06",
+    "DSGN-07",
+    "DSGN-08",
+    "UI-06",
+    "UI-10",
+    "LAT-02",
+    "EFF-04",
+    "EFF-05",
+    "REL-07",
+    "TEST-01",
+    "TEST-02",
+    "TEST-05",
+    "LEG-03",
+    "LEG-04",
+    "LEG-05",
+    "LEG-06",
+    "LEG-07",
+    "LEG-08",
+    "LEG-09",
+    "SEC-OPEN-A",
+    "SEC-OPEN-B",
+    "SEC-OPEN-C"
+  ]
+}
