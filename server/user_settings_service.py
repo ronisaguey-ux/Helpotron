@@ -621,7 +621,17 @@ class UserSettingsService:
 
         current = UserSettingsService.get_user_settings(user)
         for k, v in updates.items():
-            if k in UserSettingsService.REPLACE_ON_WRITE:
+            if k == "scoped" and isinstance(v, dict):
+                # REL-07: Merge scoped settings per-path to avoid clobbering other tab overrides,
+                # while allowing an explicit empty dict to clear all overrides.
+                if not v:
+                    current["scoped"] = {}
+                else:
+                    if not isinstance(current.get("scoped"), dict):
+                        current["scoped"] = {}
+                    for path, path_val in v.items():
+                        current["scoped"][path] = copy.deepcopy(path_val)
+            elif k in UserSettingsService.REPLACE_ON_WRITE:
                 # Still copy, so the caller's object cannot alias the stored JSON.
                 current[k] = copy.deepcopy(v)
             elif isinstance(v, dict) and isinstance(current.get(k), dict):
