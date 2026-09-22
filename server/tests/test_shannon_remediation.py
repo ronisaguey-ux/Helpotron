@@ -997,7 +997,7 @@ def test_misc_09_team_orchestrator_token_metering():
             assert "Insufficient tokens" in str(e)
 
         # 2. Account with tokens is debited DRAFT_COST
-        set_token_balance(user, 5.0)
+        set_token_balance(user, 500.0)
         db.commit()
 
         async def mock_gen_draft(*args, **kwargs):
@@ -1007,7 +1007,7 @@ def test_misc_09_team_orchestrator_token_metering():
             res, model = asyncio.run(generate_draft_for_task(user_id, 1, "source", "prompt", "style"))
             assert res == "Generated draft text"
             db.refresh(user)
-            assert get_token_balance(user) == 5.0 - DRAFT_COST
+            assert get_token_balance(user) == 500.0 - DRAFT_COST
     finally:
         db.close()
 
