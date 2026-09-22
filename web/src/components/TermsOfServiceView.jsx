@@ -154,8 +154,8 @@ export default function TermsOfServiceView({ onBack = null, publicMode = false, 
               <li>Paid plans are <strong className="text-on-surface">subscriptions that renew automatically</strong> each billing period until canceled. Monthly credit allowances are added on each successful renewal charge.</li>
               <li>Cards are processed through Stripe. Manual payment providers remain pending until verified.</li>
               <li>Purchases require mandatory two-factor authentication before checkout.</li>
-              <li><strong className="text-on-surface">Credits have no cash value</strong>. They cannot be cashed out, sold, transferred, or converted to currency. If a task fails after charge, credits are automatically refunded to your balance.</li>
-              <li>There is no automated self-service cash refund (credits are returned automatically on failed tasks). Where consumer law requires a refund, statutory rules govern.</li>
+              <li><strong className="text-on-surface">Tokens are earn-only and non-refundable</strong>. Purchased tokens are consumed on the deterministic compute work they pay for and cannot be refunded or converted back to cash. Tasks that fail outright are not charged.</li>
+              <li><strong className="text-on-surface">Credits have no cash value</strong>. They cannot be cashed out, sold, transferred, or converted to currency. Where consumer law requires a refund, statutory rules govern.</li>
               <li>If you cancel, subscription renewal stops at the end of the period. Existing credits remain available.</li>
               <li>If you delete your account or your account is terminated, your remaining credit balance is forfeited.</li>
             </ul>

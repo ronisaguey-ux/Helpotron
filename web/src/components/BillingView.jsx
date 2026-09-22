@@ -406,7 +406,7 @@ export default function BillingView({ userId = '' }) {
             Open Beta Prototype Notice
           </span>
           <p className="font-body-sm text-xs leading-relaxed">
-            Payment processing is currently running in test sandbox mode during platform evaluation. No real credit card charges will occur. Token balances and subscription states settle upon official release.
+            Payment processing is currently running in test sandbox mode during platform evaluation. No real credit card charges will occur. Token balances and subscription states settle upon official release. Tokens are earn-only and non-refundable: purchased tokens are consumed on the compute work they power, and tasks that fail outright are not charged.
           </p>
         </div>
       </div>
@@ -503,6 +503,10 @@ export default function BillingView({ userId = '' }) {
                 </span>
               </div>
             </div>
+
+            <p className="text-[11px] text-on-surface-variant leading-relaxed">
+              Tokens are earn-only and non-refundable: purchased tokens are consumed directly on the compute tasks you run. Tasks that fail outright are not charged.
+            </p>
 
             {/* Inline Error */}
             {authError && (

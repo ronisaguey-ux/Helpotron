@@ -248,6 +248,7 @@ const SECTIONS = [
     ],
     tips: [
       'Tokens never expire while your account remains active.',
+      'Tokens are earn-only and non-refundable: purchased tokens are consumed on the compute work they pay for. Tasks that fail outright are not charged.',
       'Run out during an urgent deadline? Use Message Admin to request an emergency compute grant.',
     ],
   },
@@ -346,7 +347,7 @@ const SECTIONS = [
       { q: 'My essay got flagged by AI detection. What can I do?', a: 'The pipeline\'s Step 3 humanizes the draft, and the workspace records the human score it passed at ("Passed: X% Human Score"). If it falls short of your Minimum human score in Dashboard → Subject Settings, tighten the Humanizer Skill, the "Write Like a Sample" standard, and the 9-dimension realism settings on the typing side. Reports vary by detector — treat scores as guidance.' },
       { q: 'Where did my flashcards and quiz go?', a: 'Library (Dashboard → Study OS & Library) holds generated materials under their assignment; each assignment additionally lists its own under "Saved Materials" in the workspace.' },
       { q: 'Does the extension store my school password?', a: 'No. It runs locally in your browser, never accesses or transmits your university credentials, and powers only scraping, lecture recording, and assistive typing.' },
-      { q: 'What is the difference between credits and tokens?', a: 'Tokens are usage — each task spends an amount sized to the work. Credits are discount money — $1.00 off each at checkout — earned via payments, referrals, and micro-credit redemption.' },
+      { q: 'What is the difference between credits and tokens?', a: 'Tokens are usage — each task spends an amount sized to the work. Tokens are consumed on work and are non-refundable (tasks that fail outright are not charged). Credits are discount money — $1.00 off each at checkout — earned via payments, referrals, and micro-credit redemption.' },
       { q: 'The agent is doing something I did not want. How do I stop it?', a: 'Manual mode and the permission popups ask first by default. In the workspace, Stop Execution halts the run immediately. Finished actions can be undone from the recent-actions ledger in My Agent.' },
       { q: 'Something is broken or not answered here.', a: 'Message Admin — it is the supported channel for bugs, token requests, and anything not covered. Serious issues surface as an admin popup notice; the agent can also steer you to the right place.' },
     ],
