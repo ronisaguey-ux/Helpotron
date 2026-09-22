@@ -2,7 +2,25 @@
 const fs = require('fs');
 const path = require('path');
 
-const banned = /passed stealth|stealth index/i;
+// Banned copy patterns representing evasion/stealth marketing claims.
+// Note on TermsOfServiceView.jsx:
+// - Line ~71: "...are not guaranteed to be undetectable..." (legitimate legal disclaimer)
+// - Line ~181: "...attempt to evade rate limits..." (prohibiting abuse)
+// - Line ~252: "...or undetectable, or that the Service..." (legitimate warranty disclaimer)
+// We disallow affirmative marketing claims while permitting negative disclaimers
+// (e.g. using negative lookbehind /(?<!not\s+)guaranteed\s+undetectable/i).
+const bannedPatterns = [
+  /passed stealth/i,
+  /stealth index/i,
+  /beats?\s+(the\s+)?ai\s+detectors?/i,
+  /fool(s|ed)?\s+the\s+detector/i,
+  /bypass(es|ed)?\s+detection/i,
+  /(?<!not\s+)guaranteed\s+undetectable/i,
+];
+
+function containsBannedCopy(text) {
+  return bannedPatterns.some((re) => re.test(text));
+}
 
 // 1. Check web/src components (source check)
 const srcDir = path.join(__dirname, '..', 'web', 'src');
@@ -16,7 +34,7 @@ function walk(d) {
   return files;
 }
 
-const srcHits = walk(srcDir).filter(f => banned.test(fs.readFileSync(f, 'utf8')));
+const srcHits = walk(srcDir).filter(f => containsBannedCopy(fs.readFileSync(f, 'utf8')));
 if (srcHits.length) {
   console.error('evasion copy in source files:', srcHits);
   process.exit(1);
@@ -27,7 +45,7 @@ const distDir = path.join(__dirname, '..', 'web', 'dist', 'assets');
 if (fs.existsSync(distDir)) {
   const distHits = fs.readdirSync(distDir)
     .filter((f) => f.endsWith('.js'))
-    .filter((f) => banned.test(fs.readFileSync(path.join(distDir, f), 'utf8')));
+    .filter((f) => containsBannedCopy(fs.readFileSync(path.join(distDir, f), 'utf8')));
   if (distHits.length) {
     console.error('evasion copy in bundle:', distHits);
     process.exit(1);
