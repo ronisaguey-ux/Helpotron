@@ -394,11 +394,15 @@ async def manual_route_dump_item(
 
 def _calculate_dump_item_cost(item: UniversalDumpItem) -> tuple[int, int, int, float]:
     """Returns (est_input_tokens, est_output_tokens, est_cost_tokens, est_cost_usd)."""
+    from .credits import calculate_task_token_cost
+    from .cost_tracking import _rates_for
+
     source_text = (item.extracted_text or "").strip()
     est_input_tokens = max(100, int(len(source_text) / 4))
     est_output_tokens = max(250, min(4000, int(est_input_tokens * 0.6)))
-    est_cost_tokens = max(1, int(math.ceil((est_input_tokens + est_output_tokens * 1.5) / 1000.0)))
-    est_cost_usd = round(est_cost_tokens * 0.01, 2)
+    rates = _rates_for("deepseek/deepseek-v4.1-flash")
+    est_cost_usd = (est_input_tokens / 1000.0) * rates["input"] + (est_output_tokens / 1000.0) * rates["output"]
+    est_cost_tokens = max(1, calculate_task_token_cost(est_cost_usd))
     return est_input_tokens, est_output_tokens, est_cost_tokens, est_cost_usd
 
 
