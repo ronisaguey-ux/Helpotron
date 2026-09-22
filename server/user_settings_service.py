@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 try:
     from .database import Assignment, StudyMaterial, Transcript, User, get_db
@@ -572,7 +573,39 @@ class UserSettingsService:
 
     @staticmethod
     def update_user_settings(db: Session, user: User, updates: Dict[str, Any]) -> Dict[str, Any]:
-        """Merges updates into user settings and commits."""
+        """Merges updates into user settings and commits.
+
+        THE READ-MODIFY-WRITE MUST BE SERIALISED, and on this database the obvious
+        mechanism does not work. `settings` is a JSON blob, so no single UPDATE can
+        express the merge; and `with_for_update()` is a **NO-OP on SQLite** — verified
+        by compiling the statement, the emitted SQL contains no `FOR UPDATE`, because
+        SQLite has no row locks to take. Shipping it would have looked like a fix and
+        protected nothing.
+
+        `BEGIN IMMEDIATE` is the mechanism that does work: it takes the database WRITE
+        lock before the read, so a concurrent writer blocks here (busy_timeout is 30s
+        and the journal is WAL) and its subsequent read sees this writer's commit
+        instead of a stale snapshot.
+
+        The failure it prevents is silent and financial. Reproduced before the fix: two
+        sessions both read the same dict, the first commits `key_A`, the second commits
+        `key_B` from its stale copy, and `key_A` is gone with both calls reporting
+        success. For token balances that is two concurrent charges each debiting the
+        same balance — the account is overdrawn and nothing raises.
+        """
+        # Take the write lock up front so the read below cannot be a stale snapshot.
+        # If a transaction is already open we are inside the caller's unit of work and
+        # its lock is already held, so the error is expected and safe to ignore.
+        try:
+            db.execute(text("BEGIN IMMEDIATE"))
+        except Exception:
+            pass
+
+        # Drop any cached copy (the identity map may hold an object read BEFORE another
+        # writer committed) so the read below goes back to the database.
+        if hasattr(db, "expire_all"):
+            db.expire_all()
+
         current = UserSettingsService.get_user_settings(user)
         for k, v in updates.items():
             if k in UserSettingsService.REPLACE_ON_WRITE:
