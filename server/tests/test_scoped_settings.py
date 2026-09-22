@@ -229,13 +229,15 @@ class TestClearingOverrides:
             "be removed"
         )
 
-    def test_a_partial_map_replaces_rather_than_merges(self):
+    def test_a_partial_map_merges_by_path(self):
+        """REL-07: partial maps merge per-path so concurrent tabs do not clobber."""
         from server.user_settings_service import UserSettingsService as S
 
         user = self._user()
         user.settings = {"scoped": {"ai.humanizer": [_variant("subject", "Chemistry", "off")]}}
         S.update_user_settings(self._db(user), user, {"scoped": {"ai.detection.enabled": []}})
-        assert list(user.settings["scoped"]) == ["ai.detection.enabled"]
+        assert "ai.humanizer" in user.settings["scoped"]
+        assert user.settings["scoped"]["ai.detection.enabled"] == []
 
     def test_other_nested_settings_still_merge(self):
         """The replace rule must be narrow — it exists for `scoped` alone."""
