@@ -509,10 +509,10 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                   onChange={(e) => setBulkPlan(e.target.value)}
                 >
                   <option value="">— No Plan Change —</option>
-                  <option value="trial">Trial (100 Tokens)</option>
-                  <option value="basic">Basic (300 Tokens)</option>
-                  <option value="pro">Pro (1,000 Tokens)</option>
-                  <option value="elite">Elite (2,700 Tokens)</option>
+                  <option value="trial">Trial (15,000 Tokens)</option>
+                  <option value="basic">Basic (30,000 Tokens)</option>
+                  <option value="pro">Pro (100,000 Tokens)</option>
+                  <option value="elite">Elite (270,000 Tokens)</option>
                 </select>
               </div>
 

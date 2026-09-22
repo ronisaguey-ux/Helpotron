@@ -72,7 +72,7 @@ export default function AdminCostView() {
 
   const maxTrendCost = Math.max(...trends.map((t) => Number(t.cost_usd) || 1), 1);
 
-  // Plan economics — mirrors server/plans.py (trial 150, $10/300, $20/1000, $40/2700)
+  // Plan economics — mirrors server/credits.py (trial 15,000, $10/30,000, $20/100,000, $40/270,000)
   const plans = [
     {
       name: "Free Trial",

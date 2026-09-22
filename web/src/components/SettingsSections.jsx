@@ -62,11 +62,11 @@ export function SettingsSections({
 
   /* The live tier catalogue.
    *
-   * These were a hardcoded array — Trial "$0 / 7 days · 150 task tokens", Basic
-   * 300, Pro 1,000, Elite 2,700 — left behind by the 100x token-unit change
-   * (100 tokens = 1 cent) and by the trial moving to 14 days. The settings page
-   * was therefore advertising allowances a payment does not deposit, which is
-   * worse than showing nothing: it is a price list that is simply wrong.
+   * These were previously a hardcoded array with pre-migration token numbers
+   * left behind by the 100x token-unit change (100 tokens = 1 cent) and by the
+   * trial moving to 14 days. The settings page was therefore advertising
+   * allowances a payment does not deposit, which is worse than showing nothing:
+   * it is a price list that is simply wrong.
    *
    * GET /api/plans is the single source of truth (server/plans.py), so this reads
    * it instead of keeping a second copy. Any tier number in a component is a bug
