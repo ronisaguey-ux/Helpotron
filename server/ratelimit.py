@@ -59,13 +59,31 @@ limiter = RateLimiter()
 
 # ─── FastAPI dependency factory ───────────────────────────────────────────
 
+# The tunnel is the only ingress, so the socket peer is always 127.0.0.1 and a
+# per-socket key collapses every user onto one bucket. Trust the forwarding header
+# ONLY from that hop — honoured unconditionally it is attacker-controlled, and a
+# spoofed value would give every request its own bucket and no limit at all.
+TRUSTED_PROXY_HOSTS = {"127.0.0.1", "::1"}
+
+
+def client_identity(request: Request) -> str:
+    peer = request.client.host if request.client else "unknown"
+    if peer in TRUSTED_PROXY_HOSTS:
+        headers = getattr(request, "headers", {})
+        fwd = headers.get("cf-connecting-ip") or headers.get("x-forwarded-for", "")
+        first = fwd.split(",")[0].strip()
+        if first:
+            return first
+    return peer
+
+
 RATE_LIMITS: dict[str, list[float]] = defaultdict(list)
 
 
 def rate_limit(max_requests: int = 10, window_seconds: int = 60):
     """FastAPI dependency factory for route-level rate limiting."""
     def dependency(request: Request):
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = client_identity(request)
         now = time.time()
         key = f"{client_ip}:{request.url.path}"
 
