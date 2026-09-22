@@ -347,18 +347,23 @@ def refund_unused(db: Session, user: User, amount_cents: int) -> dict:
 
 
 def usage_percent(user: User) -> float:
-    """Calculate percentage of credits or quota used."""
-    plan_limits = {
-        "free": 100.0,
-        "basic": 2000.0,
-        "starter": 500.0,
-        "pro": 2000.0,
-        "elite": 10000.0,
-    }
-    limit = plan_limits.get(getattr(user, "plan", "free"), 100.0)
-    current_credits = getattr(user, "credits", 0.0) or 0.0
-    used = max(0.0, limit - current_credits)
-    return min(100.0, (used / max(1.0, limit)) * 100.0)
+    """Percentage of the plan's monthly TOKEN allowance consumed.
+
+    This read `user.credits` — the earn-only discount column, 0.0 for every normal
+    user — so `used = limit - 0` and it returned 100.0 for everybody, permanently,
+    while the real balance sat unread in settings['token_balance']. The alert that
+    consumes it (telegram_bot.py:182) therefore warned every user they were
+    exhausted and could never detect an actual exhaustion.
+    """
+    from .credits import get_token_balance, TIER_MONTHLY_CREDITS
+
+    plan = getattr(user, "plan", None) or "trial"
+    limit = float(TIER_MONTHLY_CREDITS.get(plan, 0) or 0)
+    if limit <= 0:
+        return 0.0
+    remaining = float(get_token_balance(user) or 0.0)
+    used = max(0.0, limit - remaining)
+    return min(100.0, (used / limit) * 100.0)
 
 
 def verify_stripe_signature(payload: bytes, sig_header: str) -> bool:
