@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import SettingOverrides from './SettingOverrides.jsx';
 import {
   SlidersHorizontal,
   ChevronDown,
@@ -38,6 +39,8 @@ export default function AssignmentConfigPanel({
   assignment,
   fullData = null,
   materials = [],
+  settings = null,
+  onSettingsChanged = () => {},
   className = '',
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -47,6 +50,21 @@ export default function AssignmentConfigPanel({
   );
 
   const subjectTitle = assignment?.subject || 'Subject Module';
+  // The exact context the server will resolve against for this assignment's chat
+  // thread: `Assignment.title` + `progress["subject"]` (`_build_agent_chat_prompt`).
+  // If either drifts from what the server builds, the override saves and never applies.
+  //
+  // The TITLE has to be read from every place it can live: `fullData` is the fetched
+  // row (DB column `title`), while the card object passed as `assignment` may carry
+  // only `name` — `normalizeCards` derives `name` FROM `title`, and the detail view's
+  // own header prefers `name`. Reading just `assignment.title` came back empty and
+  // silently degraded every assignment override to a SUBJECT one.
+  const assignmentRef =
+    fullData?.title || assignment?.title || fullData?.name || assignment?.name || '';
+  const overrideCtx = {
+    ...(assignmentRef ? { assignment: assignmentRef } : {}),
+    ...(assignment?.subject ? { subject: assignment.subject } : {}),
+  };
   const promptText = assignment?.prompt || fullData?.prompt || 'No explicit prompt instructions provided.';
   const rubricText = assignment?.rubric || fullData?.rubric || null;
   const attachedFiles = fullData?.attached_files || assignment?.attached_files || [];
@@ -249,14 +267,69 @@ export default function AssignmentConfigPanel({
                 </div>
               )}
             </div>
-          </div>
+              {/* ── Overrides for this assignment ───────────────────────────────
+                  Owner (2026-09-21): the main Settings page is global, and each
+                  area carries subsettings that override the global default.
 
-          {/* Footer Note */}
-          <div className="text-right pt-2 border-t border-outline-variant/15">
-            <span className="font-code-sm text-xs text-on-surface-variant">
-              Editing here overrides {subjectTitle} for this assignment only.
-            </span>
-          </div>
+                  Scoped to BOTH assignment and subject, so an assignment override
+                  wins over a subject one and the subject remains the fallback.
+
+                  `ref` is the TITLE — the server builds its context from
+                  `Assignment.title` and `progress["subject"]` (routes_overlord
+                  `_build_agent_chat_prompt`), so an id here would never match. */}
+              <div className="p-4 rounded-2xl bg-surface-container-low/50 border border-outline-variant/20 flex flex-col gap-unit-3">
+                <div className="flex flex-col gap-1">
+                  <span className="font-label-caps text-xs text-on-surface-variant uppercase font-semibold flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Overrides for this assignment</span>
+                  </span>
+                  <p className="font-code-sm text-xs text-on-surface-variant">
+                    Applies to this assignment only, and beats anything set for{' '}
+                    {subjectTitle}. Left alone, it follows the global default.
+                  </p>
+                </div>
+
+                <SettingOverrides
+                  path="ai.humanizer"
+                  label="Humanizer"
+                  description="Rewrite replies for this assignment only."
+                  globalLabel="from Settings"
+                  ctx={overrideCtx}
+                  settings={settings}
+                  onSaved={onSettingsChanged}
+                />
+                <SettingOverrides
+                  path="ai.detection.enabled"
+                  label="AI detection standard"
+                  description="Check replies against the detection standard for this assignment."
+                  globalLabel="from Settings"
+                  ctx={overrideCtx}
+                  settings={settings}
+                  onSaved={onSettingsChanged}
+                />
+                <SettingOverrides
+                  path="ai.effortScore"
+                  label="Effort level"
+                  description="Pin a different model budget for this assignment."
+                  globalLabel="from Settings"
+                  valueType="level"
+                  min={1}
+                  max={10}
+                  ctx={overrideCtx}
+                  settings={settings}
+                  onSaved={onSettingsChanged}
+                />
+              </div>
+            </div>
+
+            {/* Footer Note */}
+            <div className="text-right pt-2 border-t border-outline-variant/15">
+              <span className="font-code-sm text-xs text-on-surface-variant">
+                Overrides apply to this assignment only. The rest of{' '}
+                {subjectTitle} is unchanged.
+              </span>
+            </div>
+
         </div>
       )}
     </div>

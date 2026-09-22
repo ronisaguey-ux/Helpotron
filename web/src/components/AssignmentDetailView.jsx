@@ -21,6 +21,7 @@ import DirectionPicker from './DirectionPicker.jsx';
 import AgentTimeline from './AgentTimeline.jsx';
 import WorkingDraftCard from './WorkingDraftCard.jsx';
 import AssignmentConfigPanel from './AssignmentConfigPanel.jsx';
+import { loadSettings } from '../lib/settings.js';
 import ChatBubble from './ChatBubble.jsx';
 import ThinkingBubble from './ThinkingBubble.jsx';
 import { getAssignmentBucket } from '../lib/assignmentBuckets.js';
@@ -490,11 +491,12 @@ export function AssignmentDetailView({
           </section>
 
           {/* §3.5.6 & §3.5.7 Level 2 Assignment Settings & Context Cards */}
-          <AssignmentConfigPanel
-            assignment={assignment}
-            fullData={full}
-            materials={materials}
-          />
+            <AssignmentConfigPanel
+              assignment={assignment}
+              fullData={full}
+              materials={materials}
+              settings={loadSettings()}
+            />
         </div>
 
         {/* RIGHT COLUMN: Agent Timeline + Working Draft Bento (5 Cols) */}

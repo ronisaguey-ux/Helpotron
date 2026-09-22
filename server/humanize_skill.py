@@ -277,12 +277,17 @@ def humanizer_block(settings: Optional[Dict[str, Any]], node: str = "my_agent",
 #   settings["ai"]["detection"]["min_human"]      int 0-100      (scoped-able)
 #   settings["ai"]["detection"]["detectors"]      {name: bool}   (global)
 #       names are detector-registry keys: "sapling", "winston_ai", "pangram".
-# The two free heuristic scorers (perplexity cadence, burstiness) always run;
-# 09-06 (owner): the free self-hosted tier (ZipPy, RoBERTa-ONNX — in-process,
-# no API key) is displayable/votable too. When its local verdict is CLEAR,
-# score_text()'s funnel skips the paid detectors entirely, so the fallback
-# vote below pools the healthy local tier instead — the standard still
-# enforces, at zero paid cost.
+# The two heuristic scorers (perplexity cadence, burstiness) always run.
+# The in-process tier (ZipPy, RoBERTa-ONNX — no API key needed) is
+# displayable/votable too. When that tier's verdict is CLEAR, score_text()'s
+# funnel skips the paid detectors entirely, so the fallback vote below pools
+# the healthy in-process tier instead — the standard still enforces without
+# buying a paid scan.
+#
+# These are NOT free to run, and the copy no longer says so (owner 2026-09-21:
+# "dont make them free, still charge task tokens"). They spend the operator's CPU,
+# so they are metered at the measured CPU cost — see IN_PROCESS_DETECTORS and
+# estimate_in_process_cost() in detectors.py.
 
 # Names only. The tier suffix ("(local)") is gone from every user-facing
 # surface: the computation happens on the operator's infrastructure, not on

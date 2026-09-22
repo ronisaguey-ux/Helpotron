@@ -10,6 +10,7 @@ import {
   PenTool, HelpCircle, GraduationCap, FileCode, Shield, CheckCircle2
 } from 'lucide-react';
 import { PRESET_PERSONAS, DEFAULT_IDENTITIES, DEFAULT_SKILLS } from '../lib/agentPresets.js';
+import SettingOverrides from './SettingOverrides.jsx';
 import { timeAgo } from './ui/os.jsx';
 
 export { DEFAULT_IDENTITIES, DEFAULT_SKILLS };
@@ -29,6 +30,11 @@ function getPersonaIcon(type, className = 'w-5 h-5') {
 
 export default function AgentConfigsSidebar({
   ai = {},
+  // The full settings blob, so the per-area overrides below can show the CURRENT
+  // global value they would be overriding. Without it the control can render a
+  // toggle but cannot say what it is deviating from.
+  settings = null,
+  onSettingsChanged = () => {},
   identities = [],
   activeIdentityId = 'none',
   onSelectIdentity = () => {},
@@ -662,12 +668,64 @@ export default function AgentConfigsSidebar({
               </span>
             </button>
 
-            <p className="font-code-sm text-[11px] text-outline">
-              This is sent with every agent request, so it applies to the site chat and the
-              browser extension alike.
-            </p>
-          </div>
-        )}
+              <p className="font-code-sm text-[11px] text-outline">
+                This is sent with every agent request, so it applies to the site chat and the
+                browser extension alike.
+              </p>
+
+              {/* ── Overrides for this surface ──────────────────────────────────
+                  Owner (2026-09-21): the main Settings page is global, and each
+                  area carries subsettings that override the global default.
+
+                  Scoped to `place: my_agent` — the same value the server puts in
+                  its resolution context for this surface (`routes_overlord.py`
+                  sets `agent_node = "my_agent"` when no assignment is in play).
+                  Get that string wrong and the override saves but never matches. */}
+              <div className="flex flex-col gap-unit-3 pt-unit-4 border-t border-outline-variant/20">
+                <div className="flex flex-col gap-1">
+                  <span className="font-label-caps text-label-caps text-on-surface uppercase tracking-wider">
+                    Overrides for My Agent
+                  </span>
+                  <p className="font-body-sm text-body-sm text-on-surface-variant">
+                    These apply only in this chat, and only where you set them. Subjects and
+                    assignments can override them again.
+                  </p>
+                </div>
+
+                <SettingOverrides
+                  path="ai.humanizer"
+                  label="Humanizer"
+                  description="Rewrite replies for this chat only, leaving the global default alone elsewhere."
+                  globalLabel="from Settings"
+                  ctx={{ place: 'my_agent' }}
+                  settings={settings}
+                  onSaved={onSettingsChanged}
+                />
+                <SettingOverrides
+                  path="ai.detection.enabled"
+                  label="AI detection standard"
+                  description="Check replies against the detection standard in this chat."
+                  globalLabel="from Settings"
+                  ctx={{ place: 'my_agent' }}
+                  settings={settings}
+                  onSaved={onSettingsChanged}
+                />
+                <SettingOverrides
+                  path="ai.effortScore"
+                  label="Effort level"
+                  description="Pin a different model budget for this chat without moving the global slider."
+                  globalLabel="from Settings"
+                  valueType="level"
+                  min={1}
+                  max={10}
+                  ctx={{ place: 'my_agent' }}
+                  settings={settings}
+                  onSaved={onSettingsChanged}
+                />
+              </div>
+            </div>
+          )}
+
       </div>
 
       {/* Modal: Create Identity */}
