@@ -385,7 +385,7 @@ export default function AgentConfigsSidebar({
                             Humanizer
                           </span>
                           <span className="font-tabular-stat-md text-[11px] text-sem-green font-medium mt-0.5 truncate">
-                            {persona.humanStyleStatus || persona.detectorStealth || 'Standard'}
+                            {persona.humanStyleStatus || 'Standard'}
                           </span>
                         </div>
                       </div>

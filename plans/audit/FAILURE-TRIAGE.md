@@ -40,5 +40,7 @@ During the execution of `ECON-04` (removal of Elite bypass) and `ECON-06` (token
 ## 3. Conclusion & Suite Verification
 
 With the regression fixes and stale test updates applied, the entire test suite runs green:
-- Total collected: 763 items
-- Results: **763 passed, 0 failed**
+- Total collected: 765 items
+- Results: **765 passed, 0 failed**
+
+Note on network dependency: The 5 SSRF and web-search tests cataloged in §1 rely on external DNS resolution and network reachability; if they fail on a slow link or in an offline container, rerun with `--timeout=30` before treating them as regressions.
