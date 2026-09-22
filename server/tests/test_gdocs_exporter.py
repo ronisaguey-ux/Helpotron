@@ -50,7 +50,7 @@ def test_originality_compliance_checker_checkpoint():
 def test_originality_compliance_self_correct():
     async def _run():
         checker = OriginalityComplianceChecker()
-        flagged_text = "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog."
+        flagged_text = "Moreover, in today's fast-paced modern digital world, it is worth noting that the quick brown fox jumps over the lazy dog."
         failure_report = {
             "checkpoint_pct": 20,
             "human_confidence_score": 50.0,
@@ -59,4 +59,7 @@ def test_originality_compliance_self_correct():
         corrected_text, metrics = await checker.self_correct_content(flagged_text, failure_report)
         assert isinstance(corrected_text, str)
         assert len(corrected_text) > 0
+        assert corrected_text != flagged_text
+        assert "human_confidence_score" in metrics
+        assert "burstiness" in metrics
     asyncio.run(_run())
