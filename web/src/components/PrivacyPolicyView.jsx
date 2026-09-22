@@ -475,7 +475,7 @@ export default function PrivacyPolicyView({ publicMode = false, onBack = null, o
                   <FileText className="w-5 h-5" /> School Records &amp; Privacy (FERPA)
                 </h2>
                 <p className="text-xs text-on-surface-variant leading-relaxed">
-                  We process only coursework you intentionally import: assignment descriptions, rubric criteria, and lecture recordings. The extension reads LMS pages strictly upon user initiation, never in the background, utilizing your personal credentials to retrieve course documents.
+                  Helpotron operates as a student-directed, student-initiated study platform. We process only coursework you intentionally import: assignment descriptions, rubric criteria, and lecture recordings. The extension reads LMS pages strictly upon user initiation, never in the background, utilizing your personal credentials to retrieve course documents. We enforce a strict zero-sale and zero-model-training posture over private student coursework.
                 </p>
               </div>
             </div>

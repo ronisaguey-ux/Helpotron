@@ -48,7 +48,7 @@ If you discover a security vulnerability or potential threat in Helpotron Automa
 
 - **Zero Plaintext Password Storage:** Passwords hashed with PBKDF2-HMAC-SHA256 (100,000 iterations) using per-user cryptographic salts; authentication sessions use secure session tokens.
 - **Local-First Canvas Token Isolation:** Canvas LMS API tokens and scraping sessions remain in the student's browser storage; tokens are never persisted in plain database records.
-- **FERPA & COPPA Compliance:** Educational assignment records and traffic are encrypted in transit (TLS 1.3), with POSIX file access protections on server storage. Students have self-service one-click account and data erasure rights.
+- **FERPA & Student Privacy Posture:** Helpotron operates as a student-directed, student-initiated study platform. Educational records and traffic are encrypted in transit (TLS 1.3), with POSIX file access protections on server storage. We enforce a strict zero-sale and zero-model-training posture. Students retain self-service one-click account and data erasure rights.
 - **Deterministic Math Execution:** Math equations are computed through deterministic Python subprocess sandboxes to prevent LLM hallucinations.
 - **Sandboxed Agent Execution:** Browser automation agents operate with restricted permissions and no arbitrary root access.
 
