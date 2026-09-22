@@ -176,3 +176,15 @@ def test_queue_status_shape():
         assert key in st, f"queue_status() must keep reporting {key}"
     assert st["ram_cap"] == rg.RAM_CAP_PCT
     assert st["cpu_cap"] == rg.CPU_CAP_PCT
+
+
+def test_guard_refuses_below_the_absolute_memory_floor(monkeypatch):
+    """The floor engages even when the percentage is inside the cap."""
+    # 40% used — inside the 80% cap — but only 1.5 GB available.
+    monkeypatch.setattr(rg, "budget_status", lambda: {
+        "ram_pct": 40.0, "cpu_pct": 10.0, "over_budget": False,
+        "mem_available_mb": 1500,
+    })
+    assert rg._within_budget() is False, (
+        "a swap-pinned box passed admission because only the percentage was checked"
+    )
