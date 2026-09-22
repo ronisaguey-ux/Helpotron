@@ -237,3 +237,21 @@ def _ensure_user_with_session(client, public_id: str, password: str = "TestPass1
 def auth_headers(client, unique_user):
     """Returns Bearer authorization headers for an authenticated unique_user."""
     return _get_auth_headers_for_user(unique_user)
+
+
+@pytest.fixture
+def db_session():
+    """Isolated in-memory SQLite database session for unit tests (TEST-05)."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from server.database import Base
+
+    test_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(bind=test_engine)
+    Session = sessionmaker(bind=test_engine)
+    session = Session()
+    try:
+        yield session
+    finally:
+        session.close()
+        test_engine.dispose()
