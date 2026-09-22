@@ -116,6 +116,17 @@ export default function SettingsApp({
         return 'all';
       }
     });
+
+    useEffect(() => {
+      const handleHashChange = () => {
+        try {
+          const h = (window.location.hash || '').replace(/^#/, '').trim();
+          if (h) setActiveSection(h);
+        } catch (e) {}
+      };
+      window.addEventListener('hashchange', handleHashChange);
+      return () => window.removeEventListener('hashchange', handleHashChange);
+    }, []);
   const [settings, setSettings] = useState(() => loadSettings());
   const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'dirty'
   const saveTimeoutRef = useRef(null);
