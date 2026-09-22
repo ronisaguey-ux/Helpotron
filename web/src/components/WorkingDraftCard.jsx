@@ -153,7 +153,7 @@ export default function WorkingDraftCard({
             ) : (
               <span className="font-chip-status text-[10px] text-sem-green bg-sem-green/10 border border-sem-green/30 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-sem-green" />
-                <span>PASSED STEALTH</span>
+                <span>HUMAN-STYLE REVIEW</span>
               </span>
             )}
           </div>
