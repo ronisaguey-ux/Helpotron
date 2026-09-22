@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, Optional
@@ -36,6 +38,7 @@ logger = logging.getLogger("helpotron.resources")
 
 RAM_CAP_PCT = 80.0          # owner's number
 CPU_CAP_PCT = 90.0          # owner's number
+MIN_AVAILABLE_MB = 3000.0   # absolute floor catches swap-pinned boxes
 POLL_SECONDS = 0.5          # how often a queued task re-checks the budget
 BUSY_AFTER_SECONDS = 180    # 3 minutes: when the CLIENT should say "server is busy"
 
@@ -116,11 +119,15 @@ def budget_status() -> Dict[str, Any]:
     """Current utilisation against the caps. Watermarks report as over."""
     ram = ram_used_pct()
     cpu = cpu_used_pct()
+    info = read_meminfo()
+    avail_bytes = info.get("MemAvailable")
+    avail_mb = round(avail_bytes / (1024 * 1024), 1) if avail_bytes is not None else None
     ram_over = ram is not None and ram >= RAM_CAP_PCT
     cpu_over = cpu is not None and cpu >= CPU_CAP_PCT
     return {
         "ram_pct": round(ram, 1) if ram is not None else None,
         "cpu_pct": round(cpu, 1) if cpu is not None else None,
+        "mem_available_mb": avail_mb,
         "ram_cap": RAM_CAP_PCT,
         "cpu_cap": CPU_CAP_PCT,
         "ram_over": ram_over,
@@ -135,7 +142,19 @@ def _within_budget() -> bool:
     # usable on a platform where /proc looks different, and the caps are a
     # protection, not a correctness requirement.
     if st["ram_pct"] is None and st["cpu_pct"] is None:
+        if sys.platform.startswith("linux"):
+            logger.warning(
+                "resource guard: metrics unreadable on Linux — admission control is "
+                "INACTIVE for this call"
+            )
         return True
+
+    # An absolute floor catches a swap-pinned box that the percentage alone reads as
+    # tolerable. MemAvailable is the honest figure, not free's 'free' column.
+    floor = float(os.environ.get("RESOURCE_GUARD_MIN_AVAILABLE_MB", MIN_AVAILABLE_MB))
+    if st.get("mem_available_mb") is not None and st["mem_available_mb"] < floor:
+        return False
+
     return not st["over_budget"]
 
 
