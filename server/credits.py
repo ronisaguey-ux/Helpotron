@@ -80,6 +80,14 @@ def calculate_task_token_cost(cost_usd: float) -> int:
     return max(1, int(math.ceil(cost_usd * TOKENS_PER_USD)))
 
 
+def task_tokens_to_usd(tokens: int | float, ndigits: int = 6) -> float:
+    """Convert a task token count into USD, keeping sub-cent precision (default 6dp).
+
+    Inverse of calculate_task_token_cost: 1 token = 1/100 cent = $0.0001 (10,000 tokens / $1).
+    """
+    return round(float(tokens) / TOKENS_PER_USD, ndigits)
+
+
 # ── Usage metering: charge for what a task ACTUALLY cost (owner 2026-09-17) ──
 # `calculate_task_token_cost` is the owner's rule — 1 token per cent of service —
 # and for a long time it had ZERO call sites: charging used the flat TASK_COSTS

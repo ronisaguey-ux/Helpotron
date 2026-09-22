@@ -14,7 +14,7 @@ from .assignment_dump import assignment_dump_manager, classify_assignment_meta
 from .database import Assignment, Draft, StudyMaterial, Transcript, UniversalDumpItem, User, get_db, utcnow
 from .routes_features import get_current_authenticated_user
 from .security import is_admin_user
-from .credits import debit_tokens_atomic, is_unmetered
+from .credits import debit_tokens_atomic, is_unmetered, task_tokens_to_usd, TOKENS_PER_USD
 
 router = APIRouter(prefix="/api/dump", tags=["assignment_dump"])
 
@@ -403,7 +403,7 @@ def _calculate_dump_item_cost(item: UniversalDumpItem) -> tuple[int, int, int, f
     rates = _rates_for("deepseek/deepseek-v4.1-flash")
     est_cost_usd = (est_input_tokens / 1000.0) * rates["input"] + (est_output_tokens / 1000.0) * rates["output"]
     est_cost_tokens = max(1, calculate_task_token_cost(est_cost_usd))
-    return est_input_tokens, est_output_tokens, est_cost_tokens, est_cost_usd
+    return est_input_tokens, est_output_tokens, est_cost_tokens, round(est_cost_usd, 6)
 
 
 async def _execute_finalize(
@@ -643,10 +643,16 @@ async def _execute_finalize(
 
     response_status = "success" if generated or action == "do_it" else "finalized_no_content"
 
-    # Charge tokens strictly based on actual content consumed and produced (owner A3/A14 rule: 1 token = 1 cent)
+    # Charge tokens strictly based on actual content consumed and produced (owner A3/A14 rule: 1 token = 1/100 cent)
+    from .cost_tracking import _rates_for
+    from .credits import calculate_task_token_cost
+
     actual_input_tokens = max(1, int(len(source_text) / 4))
     actual_output_tokens = max(1, int(len(content or "") / 4)) if content else est_output_tokens
-    actual_token_cost = max(1, int(math.ceil((actual_input_tokens + actual_output_tokens * 1.5) / 1000.0)))
+    rates = _rates_for("deepseek/deepseek-v4.1-flash")
+    actual_cost_usd = (actual_input_tokens / 1000.0) * rates["input"] + (actual_output_tokens / 1000.0) * rates["output"]
+    actual_token_cost = max(1, calculate_task_token_cost(actual_cost_usd))
+    reported_cost_usd = task_tokens_to_usd(actual_token_cost)
 
     if not is_unmetered(current_user):
         new_bal = debit_tokens_atomic(db, current_user.id, actual_token_cost, allow_negative=True)
@@ -658,7 +664,7 @@ async def _execute_finalize(
     assignment.progress = {
         **(assignment.progress or {}),
         "tokens_charged": actual_token_cost,
-        "cost_usd": round(actual_token_cost * 0.01, 2),
+        "cost_usd": reported_cost_usd,
         "input_tokens": actual_input_tokens,
         "output_tokens": actual_output_tokens,
     }
@@ -671,7 +677,7 @@ async def _execute_finalize(
         "material_id": material_id,
         "generated": generated,
         "tokens_charged": actual_token_cost,
-        "cost_usd": round(actual_token_cost * 0.01, 2),
+        "cost_usd": reported_cost_usd,
         "work": (content[:400_000] if generated and content else None),
     }
 
@@ -709,13 +715,13 @@ async def batch_estimate_dump_items(
             "matched_assignment_id": item.matched_assignment_id,
             "status": item.status,
             "est_tokens": tokens,
-            "est_cost": cost,
+            "est_cost": round(cost, 6),
         })
 
     return {
         "status": "success",
         "count": len(item_summaries),
-        "total_cost": round(total_cost, 2),
+        "total_cost": round(total_cost, 6),
         "total_tokens": total_tokens,
         "items": item_summaries,
     }
@@ -778,7 +784,7 @@ async def batch_finalize_dump_items(
         "succeeded": succeeded,
         "failed": failed,
         "total_charged_tokens": total_charged_tokens,
-        "total_charged_usd": round(total_charged_tokens * 0.01, 2),
+        "total_charged_usd": task_tokens_to_usd(total_charged_tokens),
         "results": results,
     }
 
