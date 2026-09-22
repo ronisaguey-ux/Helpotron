@@ -38,6 +38,7 @@ TOKEN_RE = re.compile(r"^\d+:[A-Za-z0-9_-]{35,}$")
 
 MAX_INSTRUCTION_CHARS = 3000  # TG text cap is 4096; agent takes up to 5000 anyway
 POLL_INTERVAL = 3.0  # seconds between per-bot cycles
+IDLE_POLL_INTERVAL = 30.0  # seconds between passes when zero bots are configured
 LONG_POLL_TIMEOUT = 50  # getUpdates long-poll per call
 _BACKOFF: Dict[str, float] = {}  # token -> ts until which to skip polling
 
@@ -356,12 +357,15 @@ async def telegram_agent_loop() -> None:
     """Background loop: long-polls every connected user's bot sequentially."""
     logger.info("telegram-agent link loop started")
     while True:
+        connected = []
         try:
-            for public_id, state in _connected_users():
+            connected = _connected_users()
+            for public_id, state in connected:
                 try:
                     await _poll_one(public_id, state)
                 except Exception:
                     logger.exception("telegram-agent poll failed for %s", public_id)
         except Exception:
             logger.exception("telegram-agent loop cycle failed")
-        await asyncio.sleep(POLL_INTERVAL)
+        sleep_interval = POLL_INTERVAL if connected else IDLE_POLL_INTERVAL
+        await asyncio.sleep(sleep_interval)
