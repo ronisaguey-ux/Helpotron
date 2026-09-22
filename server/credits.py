@@ -258,10 +258,54 @@ def set_token_balance(user: User, value: float) -> None:
     The settings column is JSON, so the containing dict must be REPLACED (a
     mutated-in-place dict is the same object and SQLAlchemy skips the flush —
     the same trap documented in user_settings_service).
+
+    ⚠️ This sets an ABSOLUTE value, so it is only safe when the caller is the sole
+    writer. A read-then-set sequence across two concurrent requests loses one debit:
+    both read 1000, both write 600, and 800 of spend is applied as 400. For anything
+    that debits an existing balance use `debit_tokens_atomic`, which applies the
+    change in the database in one statement.
     """
     settings = dict(getattr(user, "settings", None) or {})
     settings["token_balance"] = max(0.0, float(value))
     user.settings = settings
+
+
+def debit_tokens_atomic(db: Session, user_id: int, amount: float, allow_negative: bool = True) -> float:
+    """Apply a token delta as ONE statement, and return the new balance.
+
+    `settings` is a JSON blob, so there is no way to make a separate read-then-write
+    atomic — and `with_for_update()` does not help here, because it is a NO-OP on
+    SQLite (verified: compiling it emits no `FOR UPDATE`, SQLite has no row locks).
+    A read-modify-write therefore needs the change expressed INSIDE the statement, which
+    is what `json_set` with `json_extract` does: the read and the write happen together
+    in the database, so two concurrent debits both land.
+
+    Measured before this existed: two concurrent 400-token debits against a 1000-token
+    balance left 600, not 200 — one debit was silently swallowed and both callers were
+    told they had succeeded.
+
+    `allow_negative` mirrors the documented post-hoc settlement rule: work that has
+    already run cost what it cost, so the balance is allowed to go below zero and the
+    account self-blocks until a top-up. Clamping to zero would move the shortfall onto
+    the platform. Pass False for the pre-flight paths, where a debit is a purchase.
+    """
+    amount = float(amount)
+    if amount <= 0:
+        return 0.0
+    expr = (
+        "json_set(settings, '$.token_balance', "
+        "CAST(COALESCE(json_extract(settings, '$.token_balance'), 0) AS REAL) - :amt)"
+    )
+    if not allow_negative:
+        expr = f"CASE WHEN COALESCE(json_extract(settings, '$.token_balance'), 0) - :amt < 0 "\
+               f"THEN settings ELSE {expr} END"
+    result = db.execute(
+        text(f"UPDATE users SET settings = {expr} WHERE id = :uid"),
+        {"amt": amount, "uid": user_id},
+    )
+    db.commit()
+    row = db.query(User).filter(User.id == user_id).first()
+    return get_token_balance(row) if row is not None else 0.0
 
 
 def is_unmetered(user: User) -> bool:
