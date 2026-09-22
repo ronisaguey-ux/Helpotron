@@ -498,6 +498,32 @@ async def call_llm(
                     # through to the next candidate / lane.
                     raise ValueError("empty content (blank 200)")
                 usage = data.get("usage", {})
+                from .metering import current_meter_user
+                meter_pid = current_meter_user()
+                if meter_pid and usage:
+                    try:
+                        from .cost_tracking import cost_engine
+                        from .database import SessionLocal
+
+                        def _record_call(session):
+                            cost_engine.log_api_call(
+                                db=session,
+                                public_id=meter_pid,
+                                tool_or_model=cand_id,
+                                input_tokens=int(usage.get("prompt_tokens") or 0),
+                                output_tokens=int(usage.get("completion_tokens") or 0),
+                                exact_cost_usd=usage.get("cost"),
+                            )
+
+                        if db:
+                            _record_call(db)
+                        else:
+                            with SessionLocal() as session:
+                                _record_call(session)
+                    except Exception as e:
+                        # An unmetered call is recoverable; a phantom zero-cost row is a lie.
+                        logger.warning("llm metering failed for %s: %s", cand_id, e)
+
                 if db and user_id:
                     await record_routing_telemetry(db, user_id, {**route, "model": cand_id}, usage)
                 return content

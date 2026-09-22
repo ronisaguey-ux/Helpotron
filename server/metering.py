@@ -53,6 +53,9 @@ def current_meter_user() -> Optional[str]:
     return _current_public_id.get()
 
 
+current_public_id = current_meter_user
+
+
 class meter_user:
     """Context manager form:
 
@@ -63,8 +66,12 @@ class meter_user:
     untouched because each set/reset pairs through a token.
     """
 
-    def __init__(self, public_id: Optional[str]):
-        self._public_id = public_id
+    def __init__(self, public_id: Any, db: Any = None):
+        if hasattr(public_id, "public_id"):
+            self._public_id = getattr(public_id, "public_id")
+        else:
+            self._public_id = public_id
+        self._db = db
         self._token = None
 
     def __enter__(self):
