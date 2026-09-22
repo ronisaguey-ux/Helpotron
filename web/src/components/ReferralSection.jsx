@@ -18,11 +18,11 @@ import {
   Trash2,
 } from 'lucide-react';
 
-// Referrer rewards per plan purchased: Basic 2, Pro 5, Elite 10
+// Referrer rewards per plan purchased: Basic $2, Pro $5, Elite $10 bill discount credits
 const PLAN_REWARDS = [
-  { plan: 'Basic ($10)', credits: 2, usd: '$2.00', tokens: '30,000 tokens' },
-  { plan: 'Pro ($20)', credits: 5, usd: '$5.00', tokens: '100,000 tokens' },
-  { plan: 'Elite ($40)', credits: 10, usd: '$10.00', tokens: '270,000 tokens' },
+  { plan: 'Basic ($10)', credits: 2, usd: '$2.00', reward: '$2.00 billing discount' },
+  { plan: 'Pro ($20)', credits: 5, usd: '$5.00', reward: '$5.00 billing discount' },
+  { plan: 'Elite ($40)', credits: 10, usd: '$10.00', reward: '$10.00 billing discount' },
 ];
 
 export default function ReferralSection({ userId = '' }) {
@@ -266,10 +266,10 @@ export default function ReferralSection({ userId = '' }) {
             <div key={idx} className="p-4 rounded-2xl bg-surface-container-low/70 border border-outline-variant/10 space-y-1">
               <span className="font-body-sm text-xs text-on-surface-variant font-medium block">{r.plan}</span>
               <div className="flex items-baseline gap-1">
-                <span className="font-tabular-stat text-xl text-primary font-bold">+{r.credits} Credits</span>
-                <span className="font-code-sm text-[11px] text-on-surface-variant">({r.usd})</span>
+                <span className="font-tabular-stat text-xl text-primary font-bold">+{r.usd} Credit</span>
+                <span className="font-code-sm text-[11px] text-on-surface-variant">billing credits</span>
               </div>
-              <span className="font-code-sm text-[10px] text-sem-green block">{r.tokens} added to wallet</span>
+              <span className="font-code-sm text-[10px] text-sem-green block">{r.reward} applied to next invoice</span>
             </div>
           ))}
         </div>
