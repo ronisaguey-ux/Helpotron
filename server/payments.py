@@ -278,11 +278,6 @@ def process_payment(db: Session, user: User, provider: str, amount_cents: int) -
     # you can buy and not a balance you top up. A payment buys TASK TOKENS; the
     # discount only reduces what the order costs.
     discount_pct = compute_applicable_discount(user)
-    # Tokens are granted on the NOMINAL value of the order: a discount reduces
-    # the CHARGE, not the value delivered ("30% off the order, not 30% fewer
-    # credits" — the documented operator ruling). $1 = 1 task token.
-    tokens_added = max(1, int(round(amount_cents / 100.0))) if amount_cents > 0 else 0
-
     # Both discounts reduce the CHARGE: the one-time referral entitlement, and
     # the earned credit balance (spent as a percent off). Tokens are still
     # granted on the nominal order value, so a discount never shrinks what the
@@ -332,9 +327,9 @@ def process_payment(db: Session, user: User, provider: str, amount_cents: int) -
     return {
         "id": payment.id,
         "status": payment.status,
-        "tokens_added": tokens_added if status == "captured" else 0,
-        # Legacy key kept for any existing caller; it now reports tokens.
-        "credits_added": tokens_added if status == "captured" else 0,
+        # No grant lives here: tokens are granted only via handle_stripe_webhook or operator confirmation.
+        "tokens_added": 0,
+        "credits_added": 0,
         "amount_charged_cents": charged_cents,
         "discount_pct_applied": discount_pct,
         "referral_discount_pct": referral_pct,
