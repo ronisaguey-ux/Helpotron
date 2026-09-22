@@ -36,6 +36,8 @@ const THIRD_PARTIES = [
   { name: 'Twilio', role: 'SMS dispatch for two-factor authentication and phone recovery', data: 'Destination phone number and one-time verification code.', location: 'United States' },
   { name: 'Google', role: 'Gemini multimodal models (served via OpenRouter) and user Google Docs via Launch to Doc', data: 'Transcribed audio via OpenRouter gateway. For Launch to Doc: text is typed directly into your document locally by the extension under your Google account.', location: 'United States' },
   { name: 'Telegram', role: 'Optional user bot notification channel', data: 'Outbound notifications and conversational turns if you explicitly connect a bot token.', location: 'Telegram servers' },
+  { name: 'Pangram Labs', role: 'AI detection analysis and writing authenticity verification', data: 'Generated draft passages and writing samples submitted to verify human-score benchmarks; zero student account identity sent.', location: 'United States' },
+  { name: 'Sapling AI', role: 'AI content detection and grammatical originality analysis', data: 'Draft text snippets submitted for detection probability checks and quality scoring.', location: 'United States' },
   { name: 'Your School LMS', role: 'Canvas, Blackboard, D2L, Moodle, Schoology (via browser extension)', data: 'Scraped assignment rubrics and prompts using your own authenticated session in the browser. Zero background crawling.', location: 'Your institution server' },
 ];
 
