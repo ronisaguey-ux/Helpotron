@@ -84,6 +84,20 @@ async def list_study_decks(
         .all()
     )
 
+    material_ids = [m.id for m in materials]
+    card_states_by_material: dict[int, list] = {m_id: [] for m_id in material_ids}
+    if material_ids:
+        all_states = (
+            db.query(StudyCardState)
+            .filter(
+                StudyCardState.user_id == user.id,
+                StudyCardState.material_id.in_(material_ids),
+            )
+            .all()
+        )
+        for cs in all_states:
+            card_states_by_material.setdefault(cs.material_id, []).append(cs)
+
     decks = []
     for m in materials:
         parsed = []
@@ -94,15 +108,7 @@ async def list_study_decks(
 
         total_cards = len(parsed) if isinstance(parsed, list) else 0
 
-        # Query card states for this user and material
-        card_states = (
-            db.query(StudyCardState)
-            .filter(
-                StudyCardState.user_id == user.id,
-                StudyCardState.material_id == m.id,
-            )
-            .all()
-        )
+        card_states = card_states_by_material.get(m.id, [])
         mastered_count = sum(1 for cs in card_states if cs.state in ("mastered", "known", "review"))
         mastery_pct = round((mastered_count / total_cards) * 100, 1) if total_cards > 0 else 0.0
 
