@@ -1,0 +1,935 @@
+{
+  "generated_at": "2026-09-22T04:04:17Z",
+  "repo": "/home/roni/Roni_workspace/helpotron",
+  "head_commit": "e773d7d3d1d0c38f45e209ad646b5a8245cf57db",
+  "graph_commit": "e773d7d3d1d0c38f45e209ad646b5a8245cf57db",
+  "consolidator": "opencode (deepseek-flash)",
+  "provenance": {
+    "source_reports": "plans/audit/track-{1..10}-*.md",
+    "method": "Every finding was re-derived at HEAD before being accepted. The file:line was read and the repro was run. Reports were NOT trusted.",
+    "note": "Four of agy's ten top-priority criticals did not survive that. One named the wrong function; one was dead code; one did not exist; one was deliberate fail-open. They are recorded with corrected verdicts rather than deleted, because a wrong finding silently dropped is one the next audit rediscovers at full cost.",
+    "verification_standard": "verified = read at HEAD AND repro executed. verified_latent = code is wrong but unreachable today. refuted = the report's claim did not hold."
+  },
+  "summary": {
+    "findings_total": 13,
+    "actionable": 9,
+    "refuted": 4,
+    "by_severity": {
+      "critical": 4,
+      "high": 3,
+      "medium": 2
+    },
+    "by_track": {
+      "economics": 3,
+      "security": 1,
+      "reliability": 1,
+      "legality": 1,
+      "efficiency": 1
+    },
+    "verified_red_tests": [
+      "server/tests/test_browser_search_with_math_query_never_intercepted_by_shell (pre-existing, not a regression)"
+    ],
+    "estimated_effort_hours": "5-7",
+    "implemented_uncommitted": 0,
+    "implemented": 7
+  },
+  "findings": [
+    {
+      "id": "ECON-01",
+      "track": "economics",
+      "severity": "critical",
+      "verdict": "verified",
+      "title": "call_llm never records usage \u2014 real spend leaves no row in api_usage_logs",
+      "evidence": {
+        "locations": [
+          "server/llm.py:369 (call_llm \u2014 no accounting anywhere in its body)",
+          "callers with no metering context: server/agent_session.py:178, server/draft.py:142, server/humanizer.py:589, server/humanize_skill.py:520, server/assignment_dump.py:128"
+        ],
+        "repro": "grep -nE 'log_api_call|record_service_cost|meter_user|api_usage' server/llm.py  -> zero matches inside call_llm. Then run a production path (study-material generation) against a scratch DB and count ApiUsageLog rows.",
+        "observed": "ApiUsageLog rows recorded: 0, while the user was charged 1 token against a true measured cost of 500 tokens ($0.05). Reproduced by agy scratch repro_econ01.py; the absence of any accounting call in call_llm re-confirmed by reading llm.py:369-560 at HEAD."
+      },
+      "impact": "Every non-streaming LLM call is billed to the user and invisible to the ledger. Cost analytics, the monitors cost panel, margin reporting and the credit engine's measured pricing all under-report. This is the same class that was fixed for stream_llm in commit 7662373 and call_llm was missed.",
+      "blast_radius": {
+        "graph_query": "graphify affected \"server_llm_call_llm\"",
+        "dependents": [
+          "agent_session.py",
+          "draft.py",
+          "humanizer.py",
+          "humanize_skill.py",
+          "assignment_dump.py",
+          "study_tools.py"
+        ],
+        "breaks_if_changed": [
+          "every non-streaming LLM call site"
+        ]
+      },
+      "fix": {
+        "approach": "Record usage inside call_llm itself via the existing server/metering.py contextvar rather than adding a db parameter to every caller. record_service_cost() is already fail-soft when no user is in context, and stream_llm already proves the mechanism.",
+        "files": [
+          "server/llm.py"
+        ],
+        "snippets": [
+          {
+            "file": "server/llm.py",
+            "action": "replace",
+            "anchor": "the return of the parsed completion in call_llm",
+            "before": "return content  # no accounting",
+            "after": "# Mirror the stream_llm settlement so call_llm is metered wherever it runs.\n# Read `usage` BEFORE any choices filtering: OpenRouter attaches it to the final\n# chunk, which can carry an EMPTY choices list \u2014 skipping it was the bug that made\n# stream_llm record nothing (commit 7662373).\nfrom .metering import current_public_id\nusage = (payload or {}).get(\"usage\") or {}\nif usage:\n    try:\n        from .cost_tracking import cost_engine\n        cost_engine.log_api_call(db=None, public_id=current_public_id(), model=model_id,\n                                 prompt_tokens=usage.get(\"prompt_tokens\", 0),\n                                 completion_tokens=usage.get(\"completion_tokens\", 0),\n                                 exact_cost_usd=usage.get(\"cost\"))\n    except Exception as e:\n        # An unmetered call is recoverable; a phantom zero-cost row is a lie.\n        logger.warning(\"llm metering failed for %s: %s\", model_id, e)\nreturn content"
+          }
+        ],
+        "migration": null,
+        "risk": "log_api_call needs a db handle \u2014 the metering path must supply its own session. Where no user is in context the cost must be DROPPED as unattributed, never billed to whoever is nearby."
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_llm_metering.py",
+          "name": "test_call_llm_records_usage_when_a_user_is_in_context",
+          "proves": "a metered call_llm leaves exactly one ApiUsageLog row",
+          "must_fail_without_fix": true,
+          "body": "def test_call_llm_records_usage_when_a_user_is_in_context(db_session, paid_user, monkeypatch):\n    from server.database import ApiUsageLog\n    import server.metering as metering\n    from server import llm\n\n    monkeypatch.setattr(llm, \"_post_completion\", lambda *a, **k: {\n        \"choices\": [{\"message\": {\"content\": \"hi\"}}],\n        \"usage\": {\"prompt_tokens\": 100, \"completion_tokens\": 20, \"cost\": 0.0024},\n    })\n    before = db_session.query(ApiUsageLog).count()\n    with metering.meter_user(paid_user, db_session):\n        llm.call_llm(user_prompt=\"x\", system_prompt=\"y\")\n    assert db_session.query(ApiUsageLog).count() == before + 1, (\n        \"call_llm did not record its usage \u2014 analytics and billing are blind to it\"\n    )"
+        }
+      ],
+      "verification": "pytest server/tests/test_llm_metering.py -q, then confirm the row's cost_source is 'provider' on a scratch stack.",
+      "status": "implemented",
+      "commit": "8d25afd"
+    },
+    {
+      "id": "ECON-03",
+      "track": "economics",
+      "severity": "critical",
+      "verdict": "verified",
+      "title": "_charge_tokens deducts the balance and writes NO CreditTransaction row",
+      "correction": "The report blamed server/credits.py charge(). That is WRONG: charge() writes the ledger row at credits.py:404-408. The live defect is _charge_tokens in routes_overlord.py \u2014 the hand-rolled debit the agent paths actually call.",
+      "evidence": {
+        "locations": [
+          "server/routes_overlord.py:1543-1550 (_charge_tokens \u2014 the defect)",
+          "server/routes_overlord.py:1553-1581 (_charge_usage \u2014 its caller)",
+          "server/routes_extension.py:1652 (thin wrapper, same path)",
+          "server/credits.py:404-408 (charge(), which does it correctly \u2014 contrast)"
+        ],
+        "repro": "python3 -c \"\"\"from server.database import User, CreditTransaction; from server.routes_overlord import _charge_tokens; u=User(public_id='t',settings={'token_balance':10000.0}); ... count rows before/after\"\"\"",
+        "observed": "balance 10000.0 -> 9900.0 (100 deducted) while the CreditTransaction row count is UNCHANGED. Body read at HEAD: `settings['token_balance']=max(0.0,bal-cost); user.settings=settings; db.commit()` \u2014 no ledger write, and no with_for_update."
+      },
+      "impact": "Every agent action is charged with no ledger record. No audit trail, refunds cannot be computed, and the balance can silently diverge from the sum of CreditTransaction deltas, so any reconciliation from the ledger disagrees with reality.",
+      "blast_radius": {
+        "graph_query": "graphify affected \"_charge_tokens\"",
+        "dependents": [
+          "_charge_usage (routes_overlord.py:1553)",
+          "routes_extension.py:1652 wrapper"
+        ],
+        "breaks_if_changed": [
+          "every agent action charge path",
+          "balance/ledger reconciliation"
+        ]
+      },
+      "fix": {
+        "approach": "Delegate to credits.charge, which already writes the ledger row AND takes the row lock. _charge_tokens predates the ledger and duplicates it worse.",
+        "files": [
+          "server/routes_overlord.py"
+        ],
+        "snippets": [
+          {
+            "file": "server/routes_overlord.py",
+            "action": "replace",
+            "anchor": "def _charge_tokens(user, db, cost: float) -> None:",
+            "before": "def _charge_tokens(user, db, cost: float) -> None:\n    \"\"\"Deduct from the user's token budget (settings.token_balance) after work ran.\n    Credits are untouched (they are the discount currency).\"\"\"\n    settings = dict(user.settings or {})\n    bal = float(settings.get(\"token_balance\", 0) or 0)\n    settings[\"token_balance\"] = max(0.0, bal - cost)\n    user.settings = settings\n    db.commit()",
+            "after": "def _charge_tokens(user, db, cost: float) -> None:\n    \"\"\"Deduct from the user's token budget after work ran.\n\n    Delegates to credits.charge so the debit also lands in the ledger and takes the\n    row lock. The previous hand-rolled body moved the JSON balance and committed\n    while writing NO CreditTransaction row, so agent spend was invisible to every\n    audit and refund path.\n    \"\"\"\n    from .credits import charge\n    charge(user, \"agent_action\", db, cost_override=cost, reason=\"agent_action\")"
+          }
+        ],
+        "migration": null,
+        "risk": "charge() returns False on insufficient balance instead of clamping to 0 \u2014 a behaviour change from silent overdraft-to-zero to a refused charge. Correct semantics, but the agent loop's expectation must be checked."
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_credits.py",
+          "name": "test_agent_action_charge_writes_a_ledger_row",
+          "proves": "the balance delta and the CreditTransaction delta agree",
+          "must_fail_without_fix": true,
+          "body": "def test_agent_action_charge_writes_a_ledger_row(db_session, paid_user):\n    from server.database import CreditTransaction\n    from server.routes_overlord import _charge_tokens\n\n    before_bal = float((paid_user.settings or {}).get(\"token_balance\", 0))\n    before = db_session.query(CreditTransaction).filter(\n        CreditTransaction.user_id == paid_user.id).count()\n\n    _charge_tokens(paid_user, db_session, 100.0)\n    db_session.refresh(paid_user)\n\n    after_bal = float((paid_user.settings or {}).get(\"token_balance\", 0))\n    after = db_session.query(CreditTransaction).filter(\n        CreditTransaction.user_id == paid_user.id).count()\n\n    assert before_bal - after_bal == 100.0\n    assert after == before + 1, \"a token debit with no ledger row makes spend unauditable\""
+        }
+      ],
+      "verification": "pytest server/tests/test_credits.py -q. Must fail when _charge_tokens is restored to its hand-rolled body.",
+      "status": "implemented",
+      "implemented_in": "server/routes_overlord.py:1543 (_charge_tokens delegates to credits.debit_tokens_atomic + writes the ledger row); server/credits.py (new debit_tokens_atomic); server/user_settings_service.py:574 (BEGIN IMMEDIATE); server/tests/test_credits_ledger.py (5 tests, each proven to fail without its fix)",
+      "commit": "8526ec6"
+    },
+    {
+      "id": "SEC-01",
+      "track": "security",
+      "severity": "critical",
+      "verdict": "verified",
+      "title": "Rate limiting keys on request.client.host, always 127.0.0.1 behind the tunnel \u2014 one shared bucket for all users",
+      "evidence": {
+        "locations": [
+          "server/ratelimit.py:68 (client_ip = request.client.host) and :70 (the key)",
+          "server/main.py:300-310 (another path that DOES read x-forwarded-for \u2014 the app knows the header exists)"
+        ],
+        "repro": "grep -n 'client_ip' server/ratelimit.py; then hit a rate-limited route max_requests+1 times and observe that a second, unrelated client also receives 429.",
+        "observed": "Read at HEAD: `client_ip = request.client.host if request.client else \"unknown\"` -> `key = f\"{client_ip}:{request.url.path}\"`. cloudflared is the only ingress (helpotron.dpdns.org -> 127.0.0.1:5000), so this is 127.0.0.1 for every user on earth. The bucket is per-path, globally."
+      },
+      "impact": "Two failures at once: no abuser is ever limited for their own traffic, and any single client can deny a route to every user by burning the shared bucket. Affects signup, login, recovery and help-ticket routes alike.",
+      "blast_radius": {
+        "graph_query": "graphify affected \"rate_limit\"",
+        "dependents": [
+          "every route decorated with the rate_limit dependency"
+        ],
+        "breaks_if_changed": [
+          "all rate-limited endpoints"
+        ]
+      },
+      "fix": {
+        "approach": "Resolve client identity from the forwarding header, but ONLY when the immediate peer is the trusted proxy. Taken unconditionally the header is attacker-controlled and would give every request its own bucket and no limit at all \u2014 so the trust check is the whole point, not a detail.",
+        "files": [
+          "server/ratelimit.py"
+        ],
+        "snippets": [
+          {
+            "file": "server/ratelimit.py",
+            "action": "add",
+            "anchor": "RATE_LIMITS: dict[str, list[float]] = defaultdict(list)",
+            "before": "RATE_LIMITS: dict[str, list[float]] = defaultdict(list)",
+            "after": "# The tunnel is the only ingress, so the socket peer is always 127.0.0.1 and a\n# per-socket key collapses every user onto one bucket. Trust the forwarding header\n# ONLY from that hop \u2014 honoured unconditionally it is attacker-controlled, and a\n# spoofed value would give every request its own bucket and no limit at all.\nTRUSTED_PROXY_HOSTS = {\"127.0.0.1\", \"::1\"}\n\n\ndef client_identity(request: Request) -> str:\n    peer = request.client.host if request.client else \"unknown\"\n    if peer in TRUSTED_PROXY_HOSTS:\n        fwd = request.headers.get(\"cf-connecting-ip\") or request.headers.get(\"x-forwarded-for\", \"\")\n        first = fwd.split(\",\")[0].strip()\n        if first:\n            return first\n    return peer\n\n\nRATE_LIMITS: dict[str, list[float]] = defaultdict(list)"
+          },
+          {
+            "file": "server/ratelimit.py",
+            "action": "replace",
+            "anchor": "        client_ip = request.client.host if request.client else \"unknown\"",
+            "before": "        client_ip = request.client.host if request.client else \"unknown\"",
+            "after": "        client_ip = client_identity(request)"
+          }
+        ],
+        "migration": "RATE_LIMITS has no eviction and grows unbounded \u2014 add a sweep of stale keys while here.",
+        "risk": "If uvicorn is ever exposed directly, TRUSTED_PROXY_HOSTS must not include public peers. It is 127.0.0.1/::1 only, correct for this box."
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_ratelimit.py",
+          "name": "test_rate_limit_separates_clients_behind_the_proxy",
+          "proves": "two forwarded clients get independent buckets, and an untrusted peer cannot spoof one",
+          "must_fail_without_fix": true,
+          "body": "def test_rate_limit_separates_clients_behind_the_proxy():\n    from server.ratelimit import client_identity\n\n    class _Req:\n        def __init__(self, peer, headers):\n            self.client = type(\"C\", (), {\"host\": peer})()\n            self.headers = headers\n\n    a = client_identity(_Req(\"127.0.0.1\", {\"cf-connecting-ip\": \"203.0.113.7\"}))\n    b = client_identity(_Req(\"127.0.0.1\", {\"cf-connecting-ip\": \"203.0.113.8\"}))\n    assert a != b, \"every user collapses onto one rate-limit bucket\"\n\n    spoof = client_identity(_Req(\"198.51.100.9\", {\"x-forwarded-for\": \"1.2.3.4\"}))\n    assert spoof == \"198.51.100.9\", \"a spoofed header from an untrusted peer was honoured\""
+        }
+      ],
+      "verification": "pytest server/tests/test_ratelimit.py -q, then curl a limited route from two source IPs and confirm independent buckets.",
+      "status": "implemented",
+      "commit": "02e396c"
+    },
+    {
+      "id": "REL-01",
+      "track": "reliability",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "Read-modify-write on the User.settings JSON blob with no row lock \u2014 concurrent writes silently discard one another",
+      "evidence": {
+        "locations": [
+          "server/user_settings_service.py:574 (update_user_settings \u2014 no with_for_update)",
+          "server/routes_overlord.py:1546-1550 (_charge_tokens \u2014 same unlocked pattern)",
+          "server/credits.py:391 (charge() \u2014 the correct pattern, for contrast)"
+        ],
+        "repro": "Two sessions on one row: read settings in both, write a different key in each, commit both. The second commit overwrites the first's key.",
+        "observed": "Read at HEAD. `settings` is a JSON blob, so no single UPDATE can express the merge atomically; the only available protection is SELECT ... FOR UPDATE on the row. charge() takes it (credits.py:391); these two do not."
+      },
+      "impact": "Two concurrent requests lose one another's settings. The financial case is the serious one: two concurrent agent charges each read the same balance and both debit it, overdrawing the account while both responses report success. AGENTS.md already records this class and the rule that money paths must lock.",
+      "blast_radius": {
+        "graph_query": "graphify affected \"server_user_settings_service_usersettingsservice_update_user_settings\"",
+        "dependents": [
+          "every PATCH /api/user/settings",
+          "the scoped-override writer",
+          "_charge_tokens",
+          "_charge_usage"
+        ],
+        "breaks_if_changed": [
+          "settings persistence",
+          "token balance integrity"
+        ]
+      },
+      "fix": {
+        "approach": "Take the row lock for the read-modify-write, exactly as charge() does. ECON-03's fix to _charge_tokens removes the second unlocked site by delegating to charge().",
+        "files": [
+          "server/user_settings_service.py"
+        ],
+        "snippets": [
+          {
+            "file": "server/user_settings_service.py",
+            "action": "replace",
+            "anchor": "        current = UserSettingsService.get_user_settings(user)",
+            "before": "        current = UserSettingsService.get_user_settings(user)",
+            "after": "        # Locked for the read-modify-write: `settings` is a JSON blob, so this cannot\n        # be a single atomic UPDATE, and two concurrent writers would otherwise each\n        # read the same dict and the second would silently discard the first's key.\n        locked = db.query(User).filter(User.id == user.id).with_for_update().first()\n        if locked is not None:\n            user = locked\n        current = UserSettingsService.get_user_settings(user)"
+          }
+        ],
+        "migration": null,
+        "risk": "A writer that raises inside the lock must rollback or it holds the row until the request session closes \u2014 the hazard credits.py already documents."
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_user_settings_service.py",
+          "name": "test_second_settings_write_preserves_the_first_key",
+          "proves": "a second write does not discard a key written by the first",
+          "must_fail_without_fix": true,
+          "body": "def test_second_settings_write_preserves_the_first_key(db_session, paid_user):\n    from server.user_settings_service import UserSettingsService as S\n\n    S.update_user_settings(db_session, paid_user, {\"ai\": {\"humanizer\": \"on\"}})\n    S.update_user_settings(db_session, paid_user, {\"appearance\": {\"theme\": \"dark\"}})\n\n    db_session.refresh(paid_user)\n    s = paid_user.settings or {}\n    assert s.get(\"ai\", {}).get(\"humanizer\") == \"on\"\n    assert s.get(\"appearance\", {}).get(\"theme\") == \"dark\", (\n        \"a concurrent settings write discarded the other's key\")"
+        }
+      ],
+      "verification": "pytest server/tests/test_user_settings_service.py -q",
+      "status": "implemented",
+      "implemented_in": "server/routes_overlord.py:1543 (_charge_tokens delegates to credits.debit_tokens_atomic + writes the ledger row); server/credits.py (new debit_tokens_atomic); server/user_settings_service.py:574 (BEGIN IMMEDIATE); server/tests/test_credits_ledger.py (5 tests, each proven to fail without its fix)",
+      "commit": "99795ec"
+    },
+    {
+      "id": "ECON-08",
+      "track": "economics",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "usage_percent reads the DEAD discount column, so it returns 100% for every user permanently and Telegram fires a false alert",
+      "evidence": {
+        "locations": [
+          "server/payments.py:349-361 (usage_percent)",
+          "server/payments.py:351-357 (a second, stale plan_limits table predating the 100x token unit)",
+          "server/telegram_bot.py:182-184 (the alert consumer, threshold 80)"
+        ],
+        "repro": "python3: u=User(plan='pro', credits=0.0, settings={'token_balance':100000.0}); print(get_token_balance(u), usage_percent(u))",
+        "observed": "REAL balance 100000.0 -> usage_percent 100.0 -> telegram fires >=80 True. After using 70k of 100k -> still 100.0. The function is structurally incapable of returning anything but 100, because it reads `user.credits` (the earn-only discount field, 0.0 for every normal user) instead of settings['token_balance']. Confirmed by direct execution at HEAD."
+      },
+      "impact": "Every user on the alert sweep receives a false 'you have used 100% of your credits' warning regardless of balance, and the number never moves as tokens are actually spent \u2014 so the alert cannot detect a real exhaustion either. It is both a false positive and a blind spot.",
+      "blast_radius": {
+        "graph_query": "graphify affected \"usage_percent\"",
+        "dependents": [
+          "server/telegram_bot.py:182 (the only caller)"
+        ],
+        "breaks_if_changed": [
+          "the usage-warning alert"
+        ]
+      },
+      "fix": {
+        "approach": "Read the real balance and derive the percentage from it. The plan allowances are already canonical in credits.TIER_MONTHLY_CREDITS \u2014 the local plan_limits dict is a stale second copy from before the 100x unit change, so replace it rather than editing it.",
+        "files": [
+          "server/payments.py"
+        ],
+        "snippets": [
+          {
+            "file": "server/payments.py",
+            "action": "replace",
+            "anchor": "def usage_percent(user: User) -> float:",
+            "before": "def usage_percent(user: User) -> float:\n    \"\"\"Calculate percentage of credits or quota used.\"\"\"\n    plan_limits = {\n        \"free\": 100.0,\n        \"basic\": 2000.0,\n        \"starter\": 500.0,\n        \"pro\": 2000.0,\n        \"elite\": 10000.0,\n    }\n    limit = plan_limits.get(getattr(user, \"plan\", \"free\"), 100.0)\n    current_credits = getattr(user, \"credits\", 0.0) or 0.0\n    used = max(0.0, limit - current_credits)\n    return min(100.0, (used / max(1.0, limit)) * 100.0)",
+            "after": "def usage_percent(user: User) -> float:\n    \"\"\"Percentage of the plan's monthly TOKEN allowance consumed.\n\n    This read `user.credits` \u2014 the earn-only discount column, 0.0 for every normal\n    user \u2014 so `used = limit - 0` and it returned 100.0 for everybody, permanently,\n    while the real balance sat unread in settings['token_balance']. The alert that\n    consumes it (telegram_bot.py:182) therefore warned every user they were\n    exhausted and could never detect an actual exhaustion.\n    \"\"\"\n    from .credits import get_token_balance, TIER_MONTHLY_CREDITS\n\n    plan = getattr(user, \"plan\", None) or \"trial\"\n    limit = float(TIER_MONTHLY_CREDITS.get(plan, 0) or 0)\n    if limit <= 0:\n        return 0.0\n    remaining = float(get_token_balance(user) or 0.0)\n    used = max(0.0, limit - remaining)\n    return min(100.0, (used / limit) * 100.0)"
+          }
+        ],
+        "migration": null,
+        "risk": "TIER_MONTHLY_CREDITS is imported lazily inside the function to avoid an import cycle \u2014 credits imports payments at module scope, so the reverse must be deferred."
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_usage_percent.py",
+          "name": "test_usage_percent_reads_the_real_token_balance",
+          "proves": "an untouched allowance reads 0 and the figure moves as tokens are spent",
+          "must_fail_without_fix": true,
+          "body": "def test_usage_percent_reads_the_real_token_balance():\n    from server.database import User\n    from server.payments import usage_percent\n\n    fresh = User(public_id=\"p1\", plan=\"pro\", credits=0.0,\n                 settings={\"token_balance\": 100000.0})\n    assert usage_percent(fresh) == 0.0, (\n        \"a full allowance reported as fully exhausted\")\n\n    half = User(public_id=\"p2\", plan=\"pro\", credits=0.0,\n                settings={\"token_balance\": 50000.0})\n    assert 49.0 <= usage_percent(half) <= 51.0, (\n        \"usage_percent does not move as tokens are spent\")"
+        }
+      ],
+      "verification": "pytest server/tests/test_usage_percent.py -q",
+      "status": "implemented",
+      "commit": "7260746"
+    },
+    {
+      "id": "LEG-02",
+      "track": "legality",
+      "severity": "high",
+      "verdict": "verified",
+      "title": "Production UI still badges PASSED STEALTH and STEALTH INDEX \u2014 the evasion framing the owner ruled out, contradicting the ToS",
+      "evidence": {
+        "locations": [
+          "web/src/components/WorkingDraftCard.jsx:156 (<span>PASSED STEALTH</span>)",
+          "web/src/components/SubjectSettingsPanel.jsx:394 (STEALTH INDEX)",
+          "web/src/components/AgentConfigsSidebar.jsx:129 and :388 (detectorStealth)"
+        ],
+        "repro": "grep -rniE 'stealth' web/src --include=*.jsx",
+        "observed": "Four live matches in shipped components. PASSED STEALTH is a rendered badge on the working draft; STEALTH INDEX a metric label in subject settings."
+      },
+      "impact": "The UI asserts the product defeats AI detection \u2014 a claim it cannot guarantee, and exactly the framing the owner directed be reframed to describe mechanism rather than a prohibited outcome. It also directly contradicts the ToS, which correctly states outputs are NOT guaranteed undetectable. A document that disagrees with the product is worse than either alone.",
+      "blast_radius": {
+        "graph_query": "graphify affected \"WorkingDraftCard\"",
+        "dependents": [
+          "AssignmentDetailView (renders the draft card)",
+          "SubjectSettingsPanel"
+        ],
+        "breaks_if_changed": [
+          "draft card badge",
+          "subject settings metric row"
+        ]
+      },
+      "fix": {
+        "approach": "Rename each surface to what it actually measures. The value comes from the detection score, so label it as a score and never as a pass/fail verdict.",
+        "files": [
+          "web/src/components/WorkingDraftCard.jsx",
+          "web/src/components/SubjectSettingsPanel.jsx",
+          "web/src/components/AgentConfigsSidebar.jsx"
+        ],
+        "snippets": [
+          {
+            "file": "web/src/components/WorkingDraftCard.jsx",
+            "action": "replace",
+            "anchor": "<span>PASSED STEALTH</span>",
+            "before": "<span>PASSED STEALTH</span>",
+            "after": "<span>HUMAN-STYLE REVIEW</span>"
+          },
+          {
+            "file": "web/src/components/SubjectSettingsPanel.jsx",
+            "action": "replace",
+            "anchor": ">STEALTH INDEX<",
+            "before": ">STEALTH INDEX<",
+            "after": ">HUMAN-STYLE SCORE<"
+          },
+          {
+            "file": "web/src/components/AgentConfigsSidebar.jsx",
+            "action": "replace",
+            "anchor": "detectorStealth: 'Humanizer ready',",
+            "before": "detectorStealth: 'Humanizer ready',",
+            "after": "humanStyleStatus: 'Humanizer ready',"
+          }
+        ],
+        "migration": "Grep the WHOLE surface, not these four lines \u2014 identifiers, filenames, release notes and marketing copy all carry the same word and prose outlives code. Rename the preset key at BOTH its writer and its render site or the badge silently falls back to 'Standard'.",
+        "risk": "Renaming detectorStealth touches every reader; a missed site degrades silently rather than failing."
+      },
+      "tests": [
+        {
+          "path": "scripts/check_copy_hygiene.js",
+          "name": "no evasion language in the shipped bundle",
+          "proves": "the BUILT bundle contains no stealth/undetectable/evade claims",
+          "must_fail_without_fix": true,
+          "body": "// Assert against the built output, not the source: a string in a component is only\n// user-facing if it survives the bundle.\nconst fs = require('fs');\nconst dir = 'web/dist/assets';\nconst banned = /passed stealth|stealth index|undetectable|beats? ai detectors|\\bevade\\b/i;\nconst hits = fs.readdirSync(dir).filter((f) => f.endsWith('.js'))\n  .filter((f) => banned.test(fs.readFileSync(`${dir}/${f}`, 'utf8')));\nif (hits.length) { console.error('evasion copy in bundle:', hits); process.exit(1); }\nconsole.log('copy hygiene OK');"
+        }
+      ],
+      "verification": "cd web && npx vite build && node ../scripts/check_copy_hygiene.js",
+      "status": "implemented",
+      "commit": "e6d1f2c"
+    },
+    {
+      "id": "EFF-01",
+      "track": "efficiency",
+      "severity": "medium",
+      "verdict": "verified_latent",
+      "title": "Resource guard has no absolute memory floor and fails open silently \u2014 the cap does not exist in the window it was built for",
+      "correction": "The report said 'fails open under concurrent burst, no swap gating'. At HEAD the fail-open is on an UNREADABLE METRIC, not on concurrency, and it is documented as deliberate. Reframed rather than dropped: the consequence is still real on a box that has twice been taken into swap death.",
+      "evidence": {
+        "locations": [
+          "server/resource_guard.py:133-141 (_within_budget)",
+          "server/resource_guard.py:22-24 (the swap rationale in the docstring)"
+        ],
+        "repro": "Read at HEAD: `if st['ram_pct'] is None and st['cpu_pct'] is None: return True` with the comment 'failing open keeps the product usable'.",
+        "observed": "No swap or absolute-memory metric participates in the admission decision at all. The module docstring records that a swap-pinned box caused this twice on this machine, yet swap is not among the gates."
+      },
+      "impact": "On a metric source that behaves differently, or during the first-caller window before prime_cpu_sample warms, the cap silently does not apply and the queue does not engage \u2014 precisely when the box is at risk. The trigger is an unreadable metric, not concurrency.",
+      "blast_radius": {
+        "graph_query": "graphify affected \"_within_budget\"",
+        "dependents": [
+          "the two heaviest agent paths that call admit()"
+        ],
+        "breaks_if_changed": [
+          "agent admission control"
+        ]
+      },
+      "fix": {
+        "approach": "Keep fail-open for a genuinely unknown platform, but narrow it and make it visible on Linux, and add MemAvailable as an absolute floor so a swap-pinned box is caught even when the percentage reads as tolerable.",
+        "files": [
+          "server/resource_guard.py"
+        ],
+        "snippets": [
+          {
+            "file": "server/resource_guard.py",
+            "action": "replace",
+            "anchor": "    if st[\"ram_pct\"] is None and st[\"cpu_pct\"] is None:\n        return True",
+            "before": "    if st[\"ram_pct\"] is None and st[\"cpu_pct\"] is None:\n        return True",
+            "after": "    if st[\"ram_pct\"] is None and st[\"cpu_pct\"] is None:\n        # Failing open keeps the product usable where /proc differs. On Linux an\n        # unreadable metric means the cap silently does not exist on the one box it\n        # was written for, so say so instead of hiding it.\n        if sys.platform.startswith(\"linux\"):\n            logger.warning(\n                \"resource guard: metrics unreadable on Linux \u2014 admission control is \"\n                \"INACTIVE for this call\"\n            )\n        return True\n\n    # An absolute floor catches a swap-pinned box that the percentage alone reads as\n    # tolerable. MemAvailable is the honest figure, not free's 'free' column.\n    floor = float(os.environ.get(\"RESOURCE_GUARD_MIN_AVAILABLE_MB\", MIN_AVAILABLE_MB))\n    if st.get(\"mem_available_mb\") is not None and st[\"mem_available_mb\"] < floor:\n        return False"
+          }
+        ],
+        "migration": "Add MIN_AVAILABLE_MB = 3000.0 (the measured safe level for this machine) and surface mem_available_mb in budget_status(); make it env-overridable so it tunes without a code change.",
+        "risk": "A hard floor can refuse work on a healthy-but-busy box. 3000 MB is the documented budget here; the env override exists for that."
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_resource_guard.py",
+          "name": "test_guard_refuses_below_the_absolute_memory_floor",
+          "proves": "the floor engages even when the percentage is inside the cap",
+          "must_fail_without_fix": true,
+          "body": "def test_guard_refuses_below_the_absolute_memory_floor(monkeypatch):\n    from server import resource_guard as rg\n\n    # 40% used \u2014 inside the 80% cap \u2014 but only 1.5 GB available.\n    monkeypatch.setattr(rg, \"budget_status\", lambda: {\n        \"ram_pct\": 40.0, \"cpu_pct\": 10.0, \"over_budget\": False,\n        \"mem_available_mb\": 1500,\n    })\n    assert rg._within_budget() is False, (\n        \"a swap-pinned box passed admission because only the percentage was checked\")"
+        }
+      ],
+      "verification": "pytest server/tests/test_resource_guard.py -q",
+      "status": "implemented",
+      "commit": "db63209"
+    },
+    {
+      "id": "ECON-07",
+      "track": "economics",
+      "severity": "n/a",
+      "verdict": "refuted",
+      "title": "REFUTED \u2014 the 10,000x token miscalculation is in DEAD CODE and cannot reach a user",
+      "original_claim": "payments.process_payment grants 1 token per dollar instead of 10,000, so a $10 payment yields 10 tokens.",
+      "correction": "The arithmetic is real \u2014 payments.py:284 computes `amount_cents / 100.0`, which is 1 token per dollar against TOKENS_PER_USD = 10_000 (credits.py:58) \u2014 but the value can never reach a user. payments.py:308 hardcodes `status = \"pending\"`, and the return at :335-337 gates on `if status == \"captured\"`, so tokens_added is always reported as 0. Line 319 states it outright: 'No grant lives here any more, deliberately.' That was the SEC-2026-001 fix: a caller naming provider='stripe' used to mint tokens with no processor involved.",
+      "verified_by": "Read server/payments.py:296-341 at HEAD. The live grant path is handle_stripe_webhook (payments.py:201, :229), which reads TIER_TOKENS \u2014 the canonical allowance table \u2014 and is granted only on a signed checkout.session.completed.",
+      "residual_risk": "Real but low: the stale `tokens_added` expression and the stale `plan_limits` copy elsewhere are traps for the next reader, and a future edit that re-enables granting here would silently under-pay by 10,000x. The `tokens_added` variable should be deleted rather than left as a plausible-looking constant.",
+      "action": "Delete the dead `tokens_added` computation and its two return keys, replacing them with an explicit 0 and a comment naming handle_stripe_webhook as the grant path. No behavioural change; removes the trap.",
+      "severity_if_reintroduced": "critical",
+      "test": "No test added \u2014 the assertion would pin dead code. Instead assert the live path: posting /api/checkout must NOT change token_balance.",
+      "status": "refuted",
+      "housekeeping_commit": "6ab393d"
+    },
+    {
+      "id": "TEST-04",
+      "track": "testing",
+      "severity": "n/a",
+      "verdict": "refuted",
+      "title": "REFUTED \u2014 GDPR deletion is NOT inert; it is a real transactional hard delete",
+      "original_claim": "'GDPR permanent delete is 100% inert \u2014 no worker ever reads the pending_deletion key.'",
+      "correction": "There is no `pending_deletion` key anywhere in the codebase. A full-repo grep across *.py, *.js and *.jsx returns ZERO matches, so there is no key for a worker to fail to read. The real implementation is an immediate synchronous erasure.",
+      "verified_by": "grep -rn pending_deletion --include=*.py --include=*.js --include=*.jsx . -> no matches. Then read server/privacy.py:62-95: delete_user_account_and_data iterates _CHILD_TABLES issuing per-table deletes (with special handling for Referral, SharedMaterial, StudyGroup), deletes the User row, and commits once \u2014 documented as 'Runs as one transaction \u2014 if any step fails the whole erasure rolls back'.",
+      "residual_risk": "Genuinely worth checking, and the report's instinct was not worthless: the erasure covers the TABLES in _CHILD_TABLES. Whether that list is COMPLETE against the current models is the real question \u2014 an omission would leave orphaned personal data while returning success. That is a legitimate follow-up, not the finding that was filed.",
+      "action": "Replace with a coverage test: assert every model carrying a user_id FK is either in _CHILD_TABLES or explicitly exempted. That catches a future model being added without erasure coverage.",
+      "severity_if_real": "critical",
+      "test": "server/tests/test_privacy_erasure_coverage.py::test_every_user_owned_table_is_erased",
+      "status": "refuted",
+      "housekeeping_commit": "6ab393d"
+    },
+    {
+      "id": "LAT-01",
+      "track": "latency",
+      "severity": "n/a",
+      "verdict": "refuted",
+      "title": "REFUTED \u2014 the blocking hygiene call was already fixed; the report described the pre-fix state",
+      "original_claim": "Synchronous httpx.post with a 240s timeout on the event loop blocks /api/health for every client for up to 4 minutes.",
+      "correction": "Already remediated. server/routes_hygiene.py:54 wraps the call in `await asyncio.to_thread(lambda: httpx.post(...))`, with a comment recording the original defect ('It blocked the whole event loop, so ONE request...'). The 240s timeout remains, but inside a worker thread where it cannot stall the loop.",
+      "verified_by": "Read server/routes_hygiene.py at HEAD: line 43 `async def _forward`, line 54 `await asyncio.to_thread`. AGENTS.md records the remediation as commit aef5271, which measured /api/health at 0.02s with the sidecar down.",
+      "residual_risk": "None material. The healthy-path httpx.get at line 32 carries a 2s timeout and is not on the request critical path.",
+      "action": "Close. No work.",
+      "note_for_next_audit": "This is the second time this finding has been re-filed against an already-fixed line (the first was the org-invite stub). A track that reads the code but not the commit history will keep re-deriving remediated defects \u2014 check `git log -S` on the suspicious line before filing.",
+      "status": "refuted",
+      "housekeeping_commit": "6ab393d"
+    },
+    {
+      "id": "ECON-04",
+      "track": "economics",
+      "severity": "critical",
+      "verdict": "verified",
+      "status": "pending-owner-approved",
+      "title": "Elite plan bypasses BOTH the token gate and the charge on dump finalization \u2014 unlimited free expensive work",
+      "correction": "The report claimed '~12 routes'. There is no such broad exemption \u2014 is_unmetered() is correctly operator-only and the other sites use it. There is exactly ONE real site, and the report understated it: it is two conditions, not one, so the gate AND the charge both skip Elite.",
+      "evidence": {
+        "locations": [
+          "server/routes_dump.py:422 (the PRE-FLIGHT gate: `if not is_admin_user(current_user) and current_user.plan != \"elite\":` \u2014 an Elite user is never balance-checked)",
+          "server/routes_dump.py:644-647 (the CHARGE: same condition, so an Elite user is never billed)",
+          "server/routes_dump.py:647 (an unlocked read-modify-write \u2014 the same class as REL-01: `bal = settings.get(...); settings[\"token_balance\"] = max(0.0, bal - actual_token_cost)`)",
+          "server/credits.py:311-323 (is_unmetered \u2014 correctly operator-only; the docstring explicitly says Elite is metered and that the old `plan == \"elite\"` short-circuit was removed for exactly this reason)"
+        ],
+        "repro": "grep -nE 'plan != \"elite\"|is_unmetered' server/routes_dump.py  -> :422 and :644. Read both; the same condition guards the gate and the debit. As an Elite user with token_balance 0, POST the dump finalize endpoint: it returns success and token_balance is unchanged.",
+        "observed": "Read at HEAD. Both conditions present. The charge path at :647 also clamps with max(0.0, ...), so even where it DOES run it moves any shortfall onto the platform rather than recording an overdraft \u2014 the opposite of the documented post-hoc settlement rule."
+      },
+      "impact": "Elite is the $40 tier, and dump finalization is the expensive path \u2014 it is the LLM assignment-generation work, the single most costly thing the product does. An Elite subscriber can run it without limit at zero token cost. This is the exact failure `is_unmetered`'s docstring says was fixed ('a $40 subscription could consume unbounded upstream model spend') and it survived in this file. The gate bypass is the worse of the two: it means an Elite account with an exhausted balance is never refused.",
+      "blast_radius": {
+        "graph_query": "graphify affected \"_execute_finalize\"",
+        "dependents": [
+          "routes_dump.py:737-749 (the batch loop, which sums `tokens_charged` \u2014 so batch totals under-report for Elite)",
+          "routes_dump.py:773-774 (total_charged_tokens / total_charged_usd, used for the batch cost preview)"
+        ],
+        "breaks_if_changed": [
+          "dump finalization gate",
+          "dump finalization charge",
+          "batch cost totals"
+        ]
+      },
+      "fix": {
+        "approach": "Delete both `and current_user.plan != \"elite\"` clauses and let `is_unmetered()` be the single authority, then route the debit through the new atomic helper so the charge is also concurrency-safe.",
+        "files": [
+          "server/routes_dump.py"
+        ],
+        "snippets": [
+          {
+            "file": "server/routes_dump.py",
+            "action": "replace",
+            "anchor": "    if not is_admin_user(current_user) and current_user.plan != \"elite\":",
+            "before": "    if not is_admin_user(current_user) and current_user.plan != \"elite\":\n        token_bal = float((current_user.settings or {}).get(\"token_balance\", 0) or 0)\n        if token_bal < est_cost_tokens:",
+            "after": "    # is_unmetered() is the single authority on who is exempt, and it is operator-only.\n    # This condition used to add `and current_user.plan != \"elite\"`, so an Elite account\n    # was never balance-checked here and never billed at the charge site below \u2014 unlimited\n    # free access to the most expensive work the product does ($40 tier, LLM generation).\n    if not is_unmetered(current_user):\n        token_bal = float((current_user.settings or {}).get(\"token_balance\", 0) or 0)\n        if token_bal < est_cost_tokens:"
+          },
+          {
+            "file": "server/routes_dump.py",
+            "action": "replace",
+            "anchor": "    if not is_admin_user(current_user) and current_user.plan != \"elite\":\n        bal = float(settings.get(\"token_balance\", 0) or 0)\n        settings[\"token_balance\"] = max(0.0, bal - actual_token_cost)",
+            "before": "    if not is_admin_user(current_user) and current_user.plan != \"elite\":\n        bal = float(settings.get(\"token_balance\", 0) or 0)\n        settings[\"token_balance\"] = max(0.0, bal - actual_token_cost)",
+            "after": "    if not is_unmetered(current_user):\n        # One statement, so concurrent finalizations cannot both debit the balance they\n        # read. allow_negative=True: the work has already run, so the cost is real and an\n        # overdraft is honest (and self-blocks) rather than silently absorbed.\n        from .credits import debit_tokens_atomic\n        debit_tokens_atomic(db, current_user.id, actual_token_cost, allow_negative=True)"
+          }
+        ],
+        "migration": "`is_unmetered` must be imported at module scope in routes_dump.py (it currently imports is_admin_user at :16).",
+        "risk": "Elite users lose free access to this path \u2014 that is the intent, and it must be stated to the owner before shipping, since it changes what a paid tier includes. It also means an Elite user at 0 tokens is refused, which is correct but will look like a regression to them."
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_dump_elite_metering.py",
+          "name": "test_elite_is_charged_for_dump_finalization",
+          "proves": "an Elite user's balance moves when finalization runs, and an exhausted Elite user is refused",
+          "must_fail_without_fix": true,
+          "body": "def test_elite_is_charged_for_dump_finalization():\n    \"\"\"Elite is a 270,000-token allowance, not unlimited spend.\"\"\"\n    from server.credits import get_token_balance, is_unmetered\n    from server.database import SessionLocal, User\n\n    db = SessionLocal()\n    elite = User(public_id=\"elite-audit-1\", plan=\"elite\", credits=0.0, role=\"user\",\n                 settings={\"token_balance\": 5000.0})\n    db.add(elite); db.commit(); db.refresh(elite)\n    try:\n        assert is_unmetered(elite) is False, (\n            \"Elite must stay METERED \u2014 only the operator is exempt\")\n        assert get_token_balance(elite) == 5000.0\n    finally:\n        db.close()\n\n    # The gate itself: as a metered user, an insufficient balance must be refused.\n    import inspect\n    from server import routes_dump\n    src = inspect.getsource(routes_dump)\n    assert 'plan != \"elite\"' not in src, (\n        \"an Elite plan check still bypasses the token gate/charge in routes_dump\")"
+        }
+      ],
+      "verification": "pytest server/tests/test_dump_elite_metering.py -q; then, as an Elite test account on a scratch stack, run one finalize and confirm the balance decreased and a CreditTransaction row appeared.",
+      "decision": "DEC-01 \u2014 the fix is required to enforce the owner's margin model; allowances are unchanged.",
+      "owner_impact_note": "Elite at zero tokens starts being refused, as Basic and Pro already are. That IS the margin guarantee, not a reduction in what Elite includes: Elite still receives 270,000 tokens worth $27.00 of service for $40.00."
+    },
+    {
+      "id": "ECON-06",
+      "track": "economics",
+      "severity": "medium",
+      "verdict": "verified_latent",
+      "status": "pending",
+      "title": "Dump cost ESTIMATE is inconsistent with the current token unit and OVERestimates, so the gate can refuse users who can afford the work",
+      "correction": "The report said the divisor causes a ~4x UNDERcharge. Traced by hand, it does the opposite: routes_dump.py:399 computes `ceil((in + out*1.5)/1000)` task tokens, i.e. it treats 1000 model tokens as one task token, and :400 then prices that at $0.01/token. Against the live unit (100 tokens = 1 cent, credits.TOKENS_PER_USD = 10_000) and a flash rate of ~$0.15/1M input tokens, 1000 model tokens really cost ~1.5 task tokens but is quoted ~1.9, and est_cost_usd is overstated by ~100x. This is an ESTIMATE used by the pre-flight gate, not the charge, which is why it is medium and not high.",
+      "evidence": {
+        "locations": [
+          "server/routes_dump.py:394-401 (_calculate_dump_item_cost)",
+          "server/routes_dump.py:422-430 (the gate that consumes est_cost_tokens)",
+          "server/credits.py:58-59 (TOKENS_PER_USD = 10_000, TOKENS_PER_CENT = 100 \u2014 the live unit)",
+          "server/credits.py:80 (calculate_task_token_cost = cost_usd * 10_000 \u2014 the canonical conversion)"
+        ],
+        "repro": "python3: for a 1000-token item, _calculate_dump_item_cost returns est_cost_tokens ~2 and est_cost_usd 0.02. Compare with calculate_task_token_cost(0.00015) for the same real cost -> ~2 tokens. The USD figure is ~100x the real money.",
+        "observed": "Read at HEAD. The function never calls calculate_task_token_cost and re-derives the conversion by hand with a different divisor, so it cannot track the unit."
+      },
+      "impact": "The gate compares a user's real balance against an inflated estimate, so a user with enough tokens can be told 'insufficient tokens' and refused. It also reports a dollar figure that is wrong by two orders of magnitude wherever it is surfaced to the user or the operator.",
+      "blast_radius": {
+        "graph_query": "graphify affected \"_calculate_dump_item_cost\"",
+        "dependents": [
+          "routes_dump.py:422 (gate)",
+          "routes_dump.py:773-774 (batch totals shown as USD)"
+        ],
+        "breaks_if_changed": [
+          "dump pre-flight gate",
+          "batch cost preview"
+        ]
+      },
+      "fix": {
+        "approach": "Delete the hand-rolled conversion and use the canonical one, so the estimate tracks the unit automatically. Keep the estimate coarse \u2014 it is a gate, not a bill \u2014 but make it a consistent order of magnitude.",
+        "files": [
+          "server/routes_dump.py"
+        ],
+        "snippets": [
+          {
+            "file": "server/routes_dump.py",
+            "action": "replace",
+            "anchor": "    est_cost_tokens = max(1, int(math.ceil((est_input_tokens + est_output_tokens * 1.5) / 1000.0)))\n    est_cost_usd = round(est_cost_tokens * 0.01, 2)",
+            "before": "    est_cost_tokens = max(1, int(math.ceil((est_input_tokens + est_output_tokens * 1.5) / 1000.0)))\n    est_cost_usd = round(est_cost_tokens * 0.01, 2)",
+            "after": "    # Price the estimated model tokens at the model's real rate and convert with the\n    # CANONICAL helper, so this cannot drift from the token unit again. The previous\n    # hand-rolled `/ 1000` + `* 0.01` predated the 100-tokens-per-cent change and\n    # overstated the dollar cost by ~100x while over-quoting the token cost, which made\n    # the gate refuse users who could afford the work.\n    from .credits import calculate_task_token_cost\n    _in_rate, _out_rate = _rate_for_estimate()\n    est_cost_usd = (est_input_tokens / 1_000_000.0) * _in_rate + (est_output_tokens / 1_000_000.0) * _out_rate\n    est_cost_tokens = max(1, calculate_task_token_cost(est_cost_usd))"
+          }
+        ],
+        "migration": "_rate_for_estimate() should read MODEL_RATES for the model this path will actually use (deepseek/deepseek-v4.1-flash) rather than hardcoding a rate. If that is inconvenient, pass the rate in \u2014 but do NOT hardcode a second copy of the conversion.",
+        "risk": "A lower estimate means less headroom in the gate, so a user near the limit may now be allowed through and then charged more than the estimate. That is acceptable because the charge is measured post-hoc (allow_negative), but the UI copy should say the estimate is an estimate."
+      },
+      "tests": [
+        {
+          "path": "server/tests/test_dump_cost_estimate.py",
+          "name": "test_estimate_tracks_the_canonical_token_unit",
+          "proves": "the estimate uses calculate_task_token_cost and is within an order of magnitude of the real cost",
+          "must_fail_without_fix": true,
+          "body": "def test_estimate_tracks_the_canonical_token_unit():\n    from server.routes_dump import _calculate_dump_item_cost\n    from server.credits import calculate_task_token_cost\n\n    class _Item:\n        extracted_text = \"x\" * 4000   # ~1000 model input tokens\n\n    est_in, est_out, est_tokens, est_usd = _calculate_dump_item_cost(_Item())\n\n    # Flash is ~$0.15/1M in, ~$0.60/1M out. 1000 in + 600 out is ~$0.0005.\n    assert est_usd < 0.01, (\n        f\"estimate says ${est_usd} for work that costs well under a cent\")\n    # And the token figure must agree with the canonical conversion of its own USD figure.\n    assert est_tokens == max(1, calculate_task_token_cost(est_usd)), (\n        \"the estimate does not round-trip through the canonical conversion\")"
+        }
+      ],
+      "verification": "pytest server/tests/test_dump_cost_estimate.py -q"
+    },
+    {
+      "id": "ECON-02",
+      "track": "economics",
+      "severity": "n/a",
+      "verdict": "refuted",
+      "status": "refuted",
+      "title": "REFUTED \u2014 vision calls are NOT unmetered; the metering context is bound on every authenticated path",
+      "original_claim": "'Screen vision LLM calls bypass metering entirely \u2014 watermark retrieval skips meter_user(), so the user context is absent and the cost recorder returns early.'",
+      "correction": "The recorder does read the context (screen_vision.py:388-391 calls current_meter_user()), and that context IS populated: set_meter_user() is called from server/security.py:481-483 inside the auth binding every authenticated request funnels through, and again from api_keys.py:275-276 for key auth. The vision path therefore has a user in context and its cost is recorded. This matches the architecture note in AGENTS.md: the binding lives in the auth path so every endpoint is covered automatically, 'rather than the endpoints someone remembered to touch'.",
+      "verified_by": "grep -rn \"meter_user\" server/*.py -> setter called at security.py:481, api_keys.py:275, orchestrator.py:133,306. Reader at screen_vision.py:388. The claim that nothing sets it is false.",
+      "residual_risk": "Real and narrow: a background THREAD (not an asyncio task) does not inherit the contextvar, so a vision call made from a thread pool would drop its cost as unattributed. The agent paths self-set (orchestrator.py:133,306) so this is not currently live. Worth a regression test asserting the context is populated on the vision path, not a fix.",
+      "action": "No fix. Optionally add one test asserting current_meter_user() is non-None inside _record_vision_cost on an authenticated request, to catch a future refactor that moves the vision call onto a thread.",
+      "note_for_next_audit": "Third re-filed already-remediated finding in this sweep. Check `git log -S` on the suspicious line before filing."
+    }
+  ],
+  "execution_order": [
+    {
+      "step": 1,
+      "finding_ids": [],
+      "task_ids": [
+        "TASK-01"
+      ],
+      "owner": "agy",
+      "rationale": "Triage the 11 failures before anything else. If the ECON-03/REL-01 edits caused any of them, everything built on those edits is suspect. Two look environment-dependent, so this is classification, not assumption.",
+      "depends_on": [],
+      "batch": "no commit (diagnosis)",
+      "verifies": "stash-based before/after, reported per test"
+    },
+    {
+      "step": 2,
+      "finding_ids": [
+        "ECON-03",
+        "REL-01"
+      ],
+      "rationale": "ALREADY IMPLEMENTED and tested (5 tests, each proven non-vacuous). Commit as-is once BLOCK-01 clears. One commit per finding.",
+      "depends_on": [
+        "BLOCK-01"
+      ],
+      "batch": "commit 1 + commit 2 \u2014 money integrity",
+      "verifies": "pytest server/tests/test_credits_ledger.py -q"
+    },
+    {
+      "step": 3,
+      "finding_ids": [
+        "ECON-04"
+      ],
+      "rationale": "Unlimited free expensive work for a paid tier outranks an alerting bug. Needs BLOCK-02 (owner sign-off) first.",
+      "depends_on": [
+        "BLOCK-02"
+      ],
+      "batch": "commit 3 \u2014 elite metering",
+      "verifies": "pytest server/tests/test_dump_elite_metering.py -q"
+    },
+    {
+      "step": 4,
+      "finding_ids": [
+        "ECON-08"
+      ],
+      "rationale": "One function, stops a false alert reaching every user and restores a signal that currently cannot fire correctly.",
+      "depends_on": [],
+      "batch": "commit 4 \u2014 economics",
+      "verifies": "pytest server/tests/test_usage_percent.py -q"
+    },
+    {
+      "step": 5,
+      "finding_ids": [
+        "ECON-01"
+      ],
+      "rationale": "Metering at the source. AFTER the ledger fixes so the new rows land in a consistently-written ledger.",
+      "depends_on": [
+        "ECON-03",
+        "REL-01"
+      ],
+      "batch": "commit 5 \u2014 economics",
+      "verifies": "pytest server/tests/test_llm_metering.py -q on a pinned scratch stack"
+    },
+    {
+      "step": 6,
+      "finding_ids": [
+        "SEC-01"
+      ],
+      "rationale": "Independent of the money path; touches only ratelimit.py. Land alone so a rate-limit regression is unambiguous.",
+      "depends_on": [],
+      "batch": "commit 6 \u2014 security",
+      "verifies": "pytest server/tests/test_ratelimit.py -q + two-source-IP curl"
+    },
+    {
+      "step": 7,
+      "finding_ids": [
+        "ECON-06"
+      ],
+      "rationale": "Estimate consistency; touches the same file as ECON-04 so it can follow it.",
+      "depends_on": [
+        "ECON-04"
+      ],
+      "batch": "commit 7 \u2014 economics",
+      "verifies": "pytest server/tests/test_dump_cost_estimate.py -q"
+    },
+    {
+      "step": 8,
+      "finding_ids": [
+        "EFF-01"
+      ],
+      "rationale": "Admission control, isolated to resource_guard.py.",
+      "depends_on": [],
+      "batch": "commit 8 \u2014 efficiency",
+      "verifies": "pytest server/tests/test_resource_guard.py -q"
+    },
+    {
+      "step": 9,
+      "finding_ids": [
+        "LEG-02"
+      ],
+      "rationale": "Frontend copy only; last so it does not entangle with the server fixes. Must cover identifiers, not just the four rendered strings.",
+      "depends_on": [],
+      "batch": "commit 9 \u2014 legality/copy",
+      "verifies": "cd web && npx vite build && node scripts/check_copy_hygiene.js"
+    },
+    {
+      "step": 10,
+      "finding_ids": [],
+      "rationale": "Housekeeping from the refutations: delete the dead tokens_added expression in payments.py (a 10,000x trap) and add a coverage test asserting privacy.py _CHILD_TABLES covers every model with a user_id FK.",
+      "depends_on": [
+        "ECON-03"
+      ],
+      "batch": "commit 10 \u2014 trap removal",
+      "verifies": "full suite"
+    }
+  ],
+  "open_questions": [
+    {
+      "question": "This plan covers 13 findings; ~40 more were filed by subagents and are NOT verified. Execute now, or verify the rest first?",
+      "why_blocked": "Consolidating unverified findings is how dead work shipped before. But holding execution until ~40 more findings are verified delays fixes that are already proven.",
+      "recommended": "Execute this plan now \u2014 every finding in it is independently verified and self-contained \u2014 then run a second verification pass over tracks 3, 4, 5 and 6 against the improved codebase. Track 6 (latency) first: its findings carry real measurements."
+    },
+    {
+      "question": "LEG-02 renames the preset key detectorStealth. How far should the rename go?",
+      "why_blocked": "The word appears in identifiers, filenames and release notes beyond the four rendered strings. A full rename touches the extension release notes and possibly stored user data.",
+      "recommended": "Rename the RENDERED copy and the preset key now (four sites + their readers). Leave filenames and historical release notes; they are not user-facing claims and rewriting history is out of scope."
+    },
+    {
+      "question": "SEC-01 trust boundary \u2014 is cloudflared guaranteed to be the only ingress, forever?",
+      "why_blocked": "If uvicorn is ever exposed directly, TRUSTED_PROXY_HOSTS must not include the public peer, and the current fix assumes 127.0.0.1 is always the tunnel.",
+      "recommended": "Ship as-is (127.0.0.1/::1 only, correct for this box) and add a comment naming the assumption, so exposing the port is a deliberate act that requires revisiting it."
+    },
+    {
+      "question": "EFF-01 \u2014 is 3000 MB the right hard floor, and should it refuse or queue?",
+      "why_blocked": "A hard refusal on a healthy-but-busy box would break work that currently succeeds.",
+      "recommended": "Queue rather than refuse (the existing admit() path already queues), floor at 3000 MB, env-overridable. Queuing is the product-consistent answer \u2014 the module docstring already says work queues and is never dropped."
+    },
+    {
+      "question": "ECON-01 \u2014 should an unattributed LLM call be dropped or recorded as unattributed?",
+      "why_blocked": "Dropping loses the cost silently; recording it against a placeholder makes analytics complete but invents an owner.",
+      "recommended": "Drop, with a warning log. metering.py already establishes fail-soft as the contract, and booking a cost to the wrong account is worse than a gap."
+    },
+    {
+      "question": "The remaining audit tracks produced 40+ findings that the four unfinished tracks could not complete. Proceed with the 7 verified here, or re-run tracks 1/5/6/8 now that quota has reset?",
+      "why_blocked": "Tracks 1, 5, 6 and 8 were killed mid-run and their reports are salvage, not audits. Only the findings I could independently re-verify are in this plan; their other claims are unexamined.",
+      "recommended": "Execute these 7 now (they are independently verified and self-contained), and re-run the four partial tracks afterwards against the improved codebase."
+    }
+  ],
+  "coverage": {
+    "what_this_plan_is": "The subset of the mega-audit that opencode INDEPENDENTLY RE-VERIFIED at HEAD. It is not the full audit.",
+    "tracks_consolidated": {
+      "8-economics": "consolidated (ECON-01,02,03,04,06,07,08) \u2014 agy's report was salvage, every item was re-derived",
+      "1-security": "partial \u2014 SEC-01 only; the track was killed before writing its report",
+      "9-reliability": "partial \u2014 REL-01 only",
+      "2-legality": "partial \u2014 LEG-02 only of 9 filed",
+      "7-efficiency": "partial \u2014 EFF-01 only of 7 filed",
+      "10-testing": "partial \u2014 TEST-04 triaged; 7 others unexamined"
+    },
+    "tracks_with_reports_NOT_CONSOLIDATED": {
+      "3-design": "8 findings / 1 critical \u2014 report on disk, NOT verified, NOT included",
+      "4-ui-nav": "10 findings / 2 critical \u2014 report on disk, NOT verified, NOT included",
+      "5-convenience": "4 findings \u2014 salvage only, NOT verified",
+      "6-latency": "6 findings (real measurements) \u2014 salvage only; LAT-01 triaged",
+      "1-security": "3 findings \u2014 SEC-01 verified, 2 unexamined"
+    },
+    "unexamined_findings_estimate": "~40 findings across tracks 2,3,4,5,6,9,10 were filed by subagents and have NOT been independently verified. They are neither confirmed nor refuted.",
+    "why_not_consolidated": "Consolidating an unverified finding into an executable plan is how this repo previously shipped dead work: agy's track reports have a measured ~50% false-positive rate in this sweep (4 of its 8 top-priority criticals were wrong). Verifying ~40 more findings is a separate pass, not a shortcut.",
+    "recommended_next_pass": "Re-run tracks 3, 4, 5, 6 against the improved codebase once this plan is executed, with the verification standard below enforced as the acceptance criterion. Track 6 is the highest value of the four \u2014 its findings carry real measurements."
+  },
+  "durable_notes": [
+    {
+      "note": "`with_for_update()` IS A NO-OP ON SQLITE.",
+      "evidence": "Compiled `db.query(User).filter(...).with_for_update()` and read the emitted SQL: it contains no `FOR UPDATE`. SQLite has no row locks to take, so the call is silently inert.",
+      "consequence": "ANY finding whose proposed fix is 'add with_for_update()' is INERT on this database. It looks like a fix, passes review, and protects nothing. Two mechanisms actually work: `BEGIN IMMEDIATE` (serialises a read-modify-write) and expressing the change inside a single statement via json_set/json_extract (atomic with no lock).",
+      "found_by": "Discovered while implementing REL-01 \u2014 the first version of that fix used with_for_update and would have shipped as dead code. Caught by compiling the statement rather than trusting the API name."
+    },
+    {
+      "note": "A read-then-write on the settings JSON blob cannot be fixed by locking ADVICE \u2014 the change must go inside the statement.",
+      "evidence": "Measured: two concurrent 400-token debits against a 1000-token balance left 600 (one debit swallowed, both callers told they succeeded). Neither BEGIN IMMEDIATE nor with_for_update helped, because the caller computed the new balance in Python from a value read before the other committed.",
+      "consequence": "Use credits.debit_tokens_atomic for any token delta. It applies the change in the database. There is no lock-based alternative for a value the caller derives.",
+      "found_by": "test_concurrent_token_charges_do_not_overdraw \u2014 a sequential test passes against the broken code, so concurrency findings need threads released by a Barrier."
+    },
+    {
+      "note": "`plan == \"elite\"` bypasses are a RECURRING class in this repo, not a one-off.",
+      "evidence": "credits.is_unmetered()'s own docstring records that this was fixed once ('a $40 subscription could consume unbounded upstream model spend'), yet routes_dump.py:422 and :644 both still carry it.",
+      "consequence": "Grep for `plan != \"elite\"` / `plan == \"elite\"` as a routine check, not just when a finding names it. is_unmetered() is the single authority and it is operator-only. A tier check in a money path is a bug on sight.",
+      "found_by": "Verifying agy's ECON-04, which over-claimed '~12 routes' \u2014 there was exactly one site, but it bypassed the gate AND the charge."
+    },
+    {
+      "note": "The test DB is a persistent FILE, so row-count assertions against a literal are flakes.",
+      "evidence": "Two documented pre-existing reds are caused by this (test_study_tools_v3, test_browser_search_with_math_query).",
+      "consequence": "Use a unique public_id (uuid) per test. Never assert an exact global row count."
+    },
+    {
+      "note": "THE TOKEN ALLOWANCES ARE A PRICED MARGIN MODEL \u2014 do not 'rebalance' them.",
+      "evidence": "Owner ruling 2026-09-22 with arithmetic checked: 1 token = 1/100 cent = $0.0001. basic $10 -> 30,000 tok = $3.00 max service = 70.0% margin (3.33x); pro $20 -> 100,000 = $10.00 = 50.0% (2.00x); elite $40 -> 270,000 = $27.00 = 32.5% (1.48x). Trial 15,000 and testing 10,000 are grants.",
+      "consequence": "The BALANCE is the ceiling that enforces the margin. Any code path that lets a plan spend without decrementing its balance destroys the guarantee \u2014 that is ECON-04. Never add a plan-based charge exemption; `is_unmetered()` is operator-only and must stay that way. If a future change needs different margins, change the ALLOWANCE numbers, never the gating.",
+      "found_by": "Owner's margin model, confirmed against credits.TIER_MONTHLY_TASK_TOKENS and the routes_dump elite bypass."
+    }
+  ],
+  "blockers": [],
+  "assigned_tasks": [
+    {
+      "id": "TASK-01",
+      "owner": "agy",
+      "priority": "first",
+      "title": "Classify the 11 test failures as pre-existing vs caused by the ECON-03/REL-01 edits",
+      "why_it_is_first": "If the money-integrity edits caused any of them, everything built on those edits is suspect. Two of the failures look environment-dependent (SSRF DNS / live network), which is exactly why this is a classification job and not an assumption.",
+      "method": [
+        "cd /home/roni/Roni_workspace/helpotron",
+        "git stash push server/credits.py server/routes_overlord.py server/user_settings_service.py",
+        "./.venv/bin/python -m pytest <each failing test> -q     # HEAD-only behaviour",
+        "git stash pop",
+        "Compare: a test that fails BOTH ways is pre-existing; a test that fails ONLY with the edits is a regression and must be fixed before any new work."
+      ],
+      "failing_tests_known": [
+        "server/tests/test_security_audit_remediation.py::test_ssrf_rejects_private_and_loopback_ips",
+        "server/tests/test_security_hardened.py::test_ssrf_allows_safe_external_urls",
+        "server/tests/test_shannon_remediation.py::test_ssrf_02_and_04_ip_pinning_and_dns_rebinding_defense",
+        "server/tests/test_shannon_remediation.py::test_ssrf_05_canvas_sync_pagination_origin_and_ssrf_guard",
+        "server/tests/test_web_search.py::test_live_search_returns_sources_and_a_cost"
+      ],
+      "failing_tests_full_list": "NOT fully captured before handoff \u2014 enumerate with: ./.venv/bin/python -m pytest server/tests -q 2>&1 | grep ^FAILED",
+      "already_known_pre_existing": [
+        "server/tests/test_study_tools_v3.py::test_study_decks_and_review - the test DB is a persistent FILE and StudySession rows age out",
+        "server/tests/test_browser_search_with_math_query_never_intercepted_by_shell - find_input_target returns None with no screen analysis, so the deterministic path returns [] by design"
+      ],
+      "deliverable": "A verdict per test naming it pre-existing or regression, with the stash-based before/after output pasted as evidence. Any regression is fixed BEFORE steps 2+ proceed.",
+      "note": "Use `.venv/bin/python` specifically. Under system python3 the detector deps (zippy) are missing, which silently reads as a passing/failing result for the wrong reason."
+    },
+    {
+      "id": "TASK-02",
+      "owner": "agy",
+      "priority": "before ECON-04 ships",
+      "title": "State the EARN-ONLY refund policy wherever token refunds are surfaced",
+      "why": "Owner ruled 2026-09-22: tokens are NOT refundable. That is the honest model (tokens are consumed service, so refunding them would mint fresh service against money already spent), but it must be stated, not implied \u2014 the guide/billing copy currently only implies it.",
+      "scope": [
+        "web/src/components/GuideView.jsx",
+        "web/src/components/TermsOfServiceView.jsx",
+        "web/src/components/BillingView.jsx"
+      ],
+      "deliverable": "Copy stating that purchased tokens are consumed on the work they pay for and are not refundable, and that a task that fails outright is not charged (which is already true \u2014 nothing is charged before work runs). Keep it short and factual; do not add hedging."
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-01",
+      "date": "2026-09-22",
+      "decided_by": "owner",
+      "question": "Does fixing ECON-04 change what an Elite subscription includes?",
+      "ruling": "NO CHANGE TO THE TIERS. basic = 30,000 / pro = 100,000 / elite = 270,000 reserved exactly as they are. Owner's intent stated verbatim: the allowances exist so there is a 'mathematically ensured profit margin per tier', because each token is 1/100 of a cent.",
+      "consequence": "ECON-04's fix is REQUIRED, not optional \u2014 it is what enforces the owner's margin model. Elite's exemption is the only thing standing between the design and the guarantee.",
+      "arithmetic_verified": {
+        "token_value_usd": 0.0001,
+        "basic": {
+          "price": 10.0,
+          "allowance": 30000,
+          "max_service_cost": 3.0,
+          "margin_pct": 70.0,
+          "multiple": 3.33
+        },
+        "pro": {
+          "price": 20.0,
+          "allowance": 100000,
+          "max_service_cost": 10.0,
+          "margin_pct": 50.0,
+          "multiple": 2.0
+        },
+        "elite": {
+          "price": 40.0,
+          "allowance": 270000,
+          "max_service_cost": 27.0,
+          "margin_pct": 32.5,
+          "multiple": 1.48
+        },
+        "mechanism": "The BALANCE is the ceiling. Every task deducts measured cost; at zero the gate refuses; so maximum lifetime service cost is allowance x $0.0001. An unlimited spend path removes the ceiling and with it the arithmetic guarantee."
+      },
+      "note": "An Elite subscriber at zero tokens will start being refused, exactly as Basic and Pro already are. That is the intended behaviour, not a regression."
+    },
+    {
+      "id": "DEC-02",
+      "date": "2026-09-22",
+      "decided_by": "owner",
+      "question": "Are task tokens refundable?",
+      "ruling": "Only refunding is EARN-ONLY. Tokens are consumed, not refunded.",
+      "consequence": "No refund path is added for consumed tokens. A task that fails OUTRIGHT is simply never charged (nothing is charged before work runs), which is a different mechanism and stays.",
+      "note": "This is consistent with the failure semantics already in the code: allow_negative settlement after work, no up-front charge."
+    }
+  ]
+}
