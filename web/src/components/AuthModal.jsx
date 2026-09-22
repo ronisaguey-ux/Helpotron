@@ -462,7 +462,7 @@ export default function AuthModal({
                   </p>
                   {tab === 'signup' && (
                     <p className="font-body-sm text-[11px] text-on-surface-variant/80 mt-1">
-                      New accounts start at 0 tokens. The trial grants 150 once you enable 2FA,
+                      New accounts start at 0 tokens. The trial grants 15,000 once you enable 2FA,
                       pass a $0.01 verification, and it is approved.
                     </p>
                   )}

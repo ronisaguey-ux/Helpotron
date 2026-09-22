@@ -20,7 +20,7 @@ const CITATION_STYLES = ['APA 7th', 'MLA 9th', 'Chicago Author-Date', 'IEEE', 'A
 const GATING_OPTIONS = [
   { id: 'submit_lms', label: 'Submit to LMS' },
   { id: 'send_messages', label: 'Send messages' },
-  { id: 'big_spend', label: 'Big spend (>100 tokens)' },
+  { id: 'big_spend', label: 'Big spend (>10,000 tokens)' },
   { id: 'flagship_model', label: 'Flagship model invocation' },
 ];
 

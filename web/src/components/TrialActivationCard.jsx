@@ -104,7 +104,7 @@ export default function TrialActivationCard({ userId = '', onActivated = null })
   };
 
   const activeStep = !stepOk(1) ? 1 : !stepOk(2) ? 2 : 3;
-  const claim = trial.credits_grant || 150;
+  const claim = trial.credits_grant || 15000;
 
   return (
     <section className="relative rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-primary/30 shadow-xl p-6 sm:p-8 overflow-hidden">
