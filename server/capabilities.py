@@ -25,7 +25,7 @@ class CapabilitiesEngine:
             "version": "2.7.0",
             "environment": getattr(config, "environment", "development"),
             "currency_model": {
-                "task_token_value_usd": 0.01,
+                "task_token_value_usd": 0.0001,
                 "credit_discount_value_usd": 1.00,
                 "microcredit_exchange_rate": 1000,
                 "pricing_type": "pay_as_you_go_tokens",
@@ -65,4 +65,3 @@ class CapabilitiesEngine:
 
 
 capabilities = CapabilitiesEngine()
-
