@@ -46,7 +46,7 @@ function dayLabel(ts) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' }).toUpperCase();
 }
 
-export default function ActivityView({ admin = false, initialMode = 'timeline' }) {
+export default function ActivityView({ admin = false, initialMode = 'timeline', onNavigate = null, user = null }) {
   const [mode, setMode] = useState(initialMode === 'notifications' ? 'notifications' : 'timeline');
   const [filter, setFilter] = useState('all');
   const demo = demoEnabled();
@@ -106,7 +106,7 @@ export default function ActivityView({ admin = false, initialMode = 'timeline' }
       <div className="space-y-5">
         <style>{AURORA_CHIP_TINTS}</style>
         {controls}
-        <NotificationsView />
+        <NotificationsView onNavigate={onNavigate} user={user} />
       </div>
     );
   }

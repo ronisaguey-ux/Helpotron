@@ -876,7 +876,13 @@ export default function App() {
                     )
                   )}
 
-                  {activeView === 'activity' && <ActivityView initialMode={viewTab} />}
+                  {activeView === 'activity' && (
+                    <ActivityView
+                      initialMode={viewTab}
+                      onNavigate={handleSelectView}
+                      user={{ credits, public_id: userId, token_balance: tokenBalance }}
+                    />
+                  )}
 
                   {/* WORKSPACE */}
                   {activeView === 'agent' && (
