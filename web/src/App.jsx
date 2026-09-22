@@ -213,13 +213,19 @@ export default function App() {
     cost: ['credits', 'plans'],
     wallet: ['credits', 'plans'],
     billing: ['credits', 'plans'],
+    pricing: ['credits', 'plans'],
     referral: ['credits', 'earn'],
     leaderboard: ['credits', 'earn'],
       // History is a TAB in Library now (owner 2026-09-19) — the two were
       // views of the same material. A stale deep-link still lands on the list.
       history: ['library', 'completed'],
+      study: ['library', 'practice'],
       notifications: ['activity', 'notifications'],
     'ai-workspace': ['agent', null],
+    guide: ['guide', null],
+    terms: ['terms', null],
+    privacy: ['privacy', null],
+    features: ['overview', null],
   };
   const [viewTab, setViewTab] = useState(null);
   const viewKey = activeView === 'overview' && openAssignment
@@ -303,6 +309,12 @@ export default function App() {
     '/automation': ['automation', null],
     '/message_admin': ['message_admin', null],
     '/admin': ['admin', null],
+    '/pricing': ['credits', 'plans'],
+    '/study': ['library', 'practice'],
+    '/guide': ['guide', null],
+    '/terms': ['terms', null],
+    '/privacy': ['privacy', null],
+    '/features': ['overview', null],
   };
   /* Paths the anonymous landing page legitimately serves. */
   const PUBLIC_PATHS = new Set(['/', '/features', '/pricing', '/guide', '/terms', '/privacy', '/extension']);
@@ -591,6 +603,10 @@ export default function App() {
   /* `tab` is optional and wins over the legacy alias table, so a caller can
    * land on insights:progress without needing a `progress` alias to exist. */
   const handleSelectView = (viewKey, tab = null) => {
+    if (viewKey === 'signup' || viewKey === 'login') {
+      openAuth(viewKey);
+      return;
+    }
     const mapped = LEGACY_VIEWS[viewKey];
     const nextView = mapped ? mapped[0] : viewKey;
     const nextTab = tab ?? (mapped ? mapped[1] : null);
