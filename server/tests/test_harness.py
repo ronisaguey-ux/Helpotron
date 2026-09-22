@@ -63,11 +63,13 @@ def test_flash_pro_self_healing_loop(harness):
         harness.flash_pro_self_healing_loop(
             system_prompt="Generate thesis and citation plan.",
             user_prompt="Topic: AI Ethics",
-            required_keys=["status", "model"],
+            required_keys=["status", "model", "repaired_citation_tree"],
         )
     )
-    assert result["status"] in ("success", "healed")
-    assert "status" in result["data"]
+    assert result["status"] == "healed"
+    assert result["healed"] is True
+    assert result["attempts"] == 2
+    assert "repaired_citation_tree" in result["data"]
 
 
 def test_telemetry_logger(harness):
