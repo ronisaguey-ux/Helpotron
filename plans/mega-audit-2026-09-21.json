@@ -580,7 +580,7 @@
       "severity": "medium",
       "verdict": "verified_latent",
       "status": "implemented",
-      "implementation_commit": "7f29b2e",
+      "implementation_commit": "7f29b2e (follow-up 48a63a2)",
       "title": "Dump cost ESTIMATE is inconsistent with the current token unit and OVERestimates, so the gate can refuse users who can afford the work",
       "correction": "The report said the divisor causes a ~4x UNDERcharge. Traced by hand, it does the opposite: routes_dump.py:399 computes `ceil((in + out*1.5)/1000)` task tokens, i.e. it treats 1000 model tokens as one task token, and :400 then prices that at $0.01/token. Against the live unit (100 tokens = 1 cent, credits.TOKENS_PER_USD = 10_000) and a flash rate of ~$0.15/1M input tokens, 1000 model tokens really cost ~1.5 task tokens but is quoted ~1.9, and est_cost_usd is overstated by ~100x. This is an ESTIMATE used by the pre-flight gate, not the charge, which is why it is medium and not high.",
       "evidence": {
@@ -876,6 +876,8 @@
       "deliverable": "A verdict per test naming it pre-existing or regression, with the stash-based before/after output pasted as evidence. Any regression is fixed BEFORE steps 2+ proceed.",
       "note": "Use `.venv/bin/python` specifically. Under system python3 the detector deps (zippy) are missing, which silently reads as a passing/failing result for the wrong reason.",
       "status": "completed",
+      "deliverable_file": "plans/audit/FAILURE-TRIAGE.md",
+      "implementation_commit": "d52c1fa",
       "resolution": "Triaged: 5 tests pass completely; test_scoped_settings.py FakeDB double fixed in 99795ec; test_extension_agent_chat.py in-memory settings sync fixed in 8526ec6."
     },
     {
