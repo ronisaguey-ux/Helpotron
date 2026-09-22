@@ -31,7 +31,13 @@ def test_finalize_practice_quiz_preserves_quiz_shape(client, unique_user, monkey
 
     db = SessionLocal()
     try:
-        user = User(public_id=unique_user, plan="elite", credits=100.0)
+        # Elite is metered by task tokens (ECON-04 removed the elite gate bypass which previously let
+        # this pass with a zero token balance). Fund the user with sufficient tokens; credits is dead discount.
+        user = User(
+            public_id=unique_user,
+            plan="elite",
+            settings={"token_balance": 10000.0},
+        )
         db.add(user)
         db.commit()
         db.refresh(user)

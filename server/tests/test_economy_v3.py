@@ -74,7 +74,9 @@ def test_dump_batch_estimate_and_finalize():
     assert est_data["status"] == "success"
     assert est_data["count"] == 3
     assert est_data["total_tokens"] >= 3
-    assert est_data["total_cost"] >= 0.03
+    # ECON-06 / BUG-02: Under canonical token unit (1 token = 1/100 cent), 3 small dump items cost ~$0.0015.
+    # The previous assertion (>= 0.03) pinned the old 100x overstatement. Assert against positive real cost.
+    assert est_data["total_cost"] > 0
     assert len(est_data["items"]) == 3
 
     # 2. Finalize batch with skip of item 2
