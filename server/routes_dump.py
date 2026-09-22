@@ -14,6 +14,7 @@ from .assignment_dump import assignment_dump_manager, classify_assignment_meta
 from .database import Assignment, Draft, StudyMaterial, Transcript, UniversalDumpItem, User, get_db, utcnow
 from .routes_features import get_current_authenticated_user
 from .security import is_admin_user
+from .credits import debit_tokens_atomic, is_unmetered
 
 router = APIRouter(prefix="/api/dump", tags=["assignment_dump"])
 
@@ -419,7 +420,9 @@ async def _execute_finalize(
     source_text = (item.extracted_text or "").strip()
     est_input_tokens, est_output_tokens, est_cost_tokens, _ = _calculate_dump_item_cost(item)
 
-    if not is_admin_user(current_user) and current_user.plan != "elite":
+    # is_unmetered() is the single authority on who is exempt, and it is operator-only.
+    # An Elite subscription has a monthly allowance, not unlimited free dump work.
+    if not is_unmetered(current_user):
         token_bal = float((current_user.settings or {}).get("token_balance", 0) or 0)
         if token_bal < est_cost_tokens:
             return {
@@ -641,12 +644,12 @@ async def _execute_finalize(
     actual_output_tokens = max(1, int(len(content or "") / 4)) if content else est_output_tokens
     actual_token_cost = max(1, int(math.ceil((actual_input_tokens + actual_output_tokens * 1.5) / 1000.0)))
 
-    if not is_admin_user(current_user) and current_user.plan != "elite":
-        settings = dict(current_user.settings or {})
-        bal = float(settings.get("token_balance", 0) or 0)
-        settings["token_balance"] = max(0.0, bal - actual_token_cost)
-        current_user.settings = settings
-        db.commit()
+    if not is_unmetered(current_user):
+        new_bal = debit_tokens_atomic(db, current_user.id, actual_token_cost, allow_negative=True)
+        if hasattr(current_user, "settings"):
+            s = dict(getattr(current_user, "settings", None) or {})
+            s["token_balance"] = new_bal
+            current_user.settings = s
 
     assignment.progress = {
         **(assignment.progress or {}),
