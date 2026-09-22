@@ -1845,14 +1845,16 @@ async def transcribe(file: UploadFile = File(...),
     if not text.strip():
         raise HTTPException(500, "transcription returned empty text")
 
-    # charge: 1 credit per started hour of audio
+    # charge: 500 task tokens per started hour of audio ($0.05 floor)
     hours = max(1.0, math.ceil((duration or 3600.0) / 3600.0))
+    TRANSCRIPTION_TOKEN_RATE = 500.0
+    charge_tokens = hours * TRANSCRIPTION_TOKEN_RATE
     from .credits import get_token_balance, set_token_balance, is_unmetered
     if not is_unmetered(current_user):
-        if get_token_balance(current_user) < hours:
+        if get_token_balance(current_user) < charge_tokens:
             raise HTTPException(402, "insufficient task tokens for transcription")
-        set_token_balance(current_user, get_token_balance(current_user) - hours)
-        db.add(credits.CreditTransaction(user_id=current_user.id, delta=-hours, reason=f"spend:transcription:{hours}h"))
+        set_token_balance(current_user, get_token_balance(current_user) - charge_tokens)
+        db.add(credits.CreditTransaction(user_id=current_user.id, delta=-charge_tokens, reason=f"spend:transcription:{hours}h"))
 
     t = Transcript(user_id=current_user.id, assignment_id=assignment_id, source="upload",
                    text=text, duration_seconds=duration)
