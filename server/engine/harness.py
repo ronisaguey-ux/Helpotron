@@ -318,6 +318,13 @@ class DeepSeekHarness:
                 "synthesized_plan": "Multi-agent rubric decomposition complete.",
                 "analysis": "Peer-reviewed citations and thesis alignment verified.",
             }
+            if "Fix this JSON payload" in user_prompt and "Missing keys:" in user_prompt:
+                m = re.search(r"Missing keys: \[(.*?)\]", user_prompt)
+                if m:
+                    for key_str in m.group(1).split(","):
+                        k = key_str.strip().strip("'\"")
+                        if k:
+                            mock_data[k] = f"healed_{k}"
             return {"type": "json", "data": mock_data, "model": model, "latency_ms": 45.0}
         return {
             "type": "text",
