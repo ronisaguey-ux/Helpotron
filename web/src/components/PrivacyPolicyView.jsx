@@ -138,7 +138,7 @@ export default function PrivacyPolicyView({ publicMode = false, onBack = null, o
                 Privacy &amp; Data Governance
               </h1>
               <p className="text-sm text-on-surface-variant mt-2 leading-relaxed">
-                Clear storage: We store only what is required to run and bill your workspace. You keep control of your own data — nothing is sold, and you can delete your workspace data from the account settings.
+                Clear storage: Helpotron is operated by Helpotron Autonomous Systems LLC ("we", "us", or "our"). We store only what is required to run and bill your workspace. You keep control of your own data — nothing is sold, and you can delete your workspace data from the account settings.
               </p>
             </div>
 

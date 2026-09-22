@@ -34,7 +34,7 @@ export default function TermsOfServiceView({ onBack = null, publicMode = false, 
         <div className="space-y-3 text-xs sm:text-sm leading-relaxed text-on-surface-variant">
           <p>
             By creating an account, opening the browser extension, or otherwise using Helpotron
-            (the "Service"), you agree to be bound by these Terms of Service and by our{' '}
+            (the "Service"), operated by Helpotron Autonomous Systems LLC ("Company", "we", "us", or "our"), you agree to be bound by these Terms of Service and by our{' '}
             <strong className="text-on-surface">Privacy Policy</strong>, which is part of these Terms. If you do not agree,
             do not use the Service.
           </p>
