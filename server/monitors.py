@@ -349,12 +349,18 @@ def _snapshot() -> Dict[str, Any]:
     }
 
 
+_snapshot_count = 0
+
+
 def _persist(snap: Dict[str, Any]) -> None:
+    global _snapshot_count
     try:
         DATALAKE_DIR.mkdir(parents=True, exist_ok=True)
         with HISTORY_FILE.open("a", encoding="utf-8") as f:
             f.write(json.dumps(snap, ensure_ascii=False) + "\n")
-        _trim_history()
+        _snapshot_count += 1
+        if _snapshot_count % 30 == 0:
+            _trim_history()
     except Exception as e:
         logger.error("persist snapshot failed: %s", e)
 
@@ -371,10 +377,10 @@ def _trim_history() -> None:
 async def run_monitors_loop() -> None:
     """Background task (lifespan-managed): snapshot every MONITORS_INTERVAL."""
     global _last_snapshot, _last_snapshot_ts, _snap_requests
-    snapshot_once()
+    await asyncio.to_thread(snapshot_once)
     while True:
         await asyncio.sleep(MONITORS_INTERVAL)
-        snapshot_once()
+        await asyncio.to_thread(snapshot_once)
 
 
 def snapshot_once() -> Dict[str, Any]:
