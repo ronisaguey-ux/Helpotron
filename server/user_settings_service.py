@@ -557,6 +557,19 @@ class UserSettingsService:
 
         return settings
 
+    @staticmethod
+    def _deep_merge_settings(dest: dict, src: dict) -> dict:
+        """Recursively merges src dictionary into dest dictionary in place.
+        Preserves sibling keys in nested dictionaries (REL-02).
+        """
+        for k, v in src.items():
+            if isinstance(v, dict) and isinstance(dest.get(k), dict):
+                UserSettingsService._deep_merge_settings(dest[k], v)
+            else:
+                dest[k] = copy.deepcopy(v)
+        return dest
+
+
     #: Keys whose value is a COMPLETE document rather than a bag of independent
     #: preferences, and which must therefore be REPLACED on write, not merged.
     #:
@@ -612,7 +625,7 @@ class UserSettingsService:
                 # Still copy, so the caller's object cannot alias the stored JSON.
                 current[k] = copy.deepcopy(v)
             elif isinstance(v, dict) and isinstance(current.get(k), dict):
-                current[k].update(v)
+                UserSettingsService._deep_merge_settings(current[k], v)
             else:
                 current[k] = v
 
