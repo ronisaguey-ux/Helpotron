@@ -206,6 +206,18 @@ async def lifespan(_app: FastAPI):
     for problem in config.validate():
         logger.warning("config: %s", problem)
     init_db()
+    # Convert any session row still storing its token in the clear. The lazy
+    # fallback in SessionStore only converts a row that is actually used, so a
+    # dormant row would keep leaking its credential — measured 2026-09-23, all
+    # 364 live rows were raw. Existing sessions survive (the cookie still holds
+    # the raw value and lookup hashes it), so nobody is signed out.
+    try:
+        from .security import migrate_legacy_session_tokens
+        _converted = migrate_legacy_session_tokens()
+        if _converted:
+            logger.info("session token hashing: migrated %d legacy row(s)", _converted)
+    except Exception as e:
+        logger.warning("session token migration failed: %s", e)
     Path("./exports").mkdir(parents=True, exist_ok=True)
     Path("./uploads").mkdir(parents=True, exist_ok=True)
     Path("./datalake_storage").mkdir(parents=True, exist_ok=True)
@@ -379,8 +391,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             if request.url.path in UNAUTHENTICATED_AUTH_PATHS:
                 auth_user_pid = None
 
-            # Reject if client supplied a foreign public_id in body on authenticated routes
-            if auth_user_pid and body_public_id and body_public_id != auth_user_pid:
+            # Reject if client supplied a foreign public_id in body on authenticated routes.
+            #
+            # /api/admin/* MUST be exempt, and that is not a hole — it is the whole
+            # point of those routes. Their authorization is require_admin() (verified
+            # per-route), and their entire job is to act on a DIFFERENT account:
+            # setting another user's plan, tokens, password or ban. Without this
+            # exemption every one of those calls 403'd on the body's public_id
+            # before the admin check could even run, so the Control Center's "set
+            # tokens" / "set plan" / "change password" silently did nothing —
+            # measured: RoniDev setting dreybejerkin22 to 200 tokens returned
+            # 403 "public_id does not match authenticated user". The owner reported
+            # exactly this ("setting the user to 200 tokens did nothing").
+            #
+            # The guard's real target is the SELF-SERVICE surface: a user must not
+            # reach another account by writing its public_id into a body. Admin
+            # routes are the sanctioned cross-account path and already fail closed.
+            _is_admin_route = request.url.path.startswith("/api/admin/")
+            if auth_user_pid and body_public_id and body_public_id != auth_user_pid and not _is_admin_route:
                 return JSONResponse({"detail": "public_id does not match authenticated user"}, status_code=403)
 
             rate_limit_user = auth_user_pid or body_public_id

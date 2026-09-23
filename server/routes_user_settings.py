@@ -733,7 +733,17 @@ async def change_password(payload: ChangePasswordPayload, request: Request, db: 
     revoke_user_jwts(user.id)
     current_token = request.cookies.get(SESSION_COOKIE_NAME)
     if current_token:
-        db.query(UserSession).filter(UserSession.user_id == user.id, UserSession.token != current_token).delete()
+        # Tokens are stored HASHED, so a raw comparison matches no row. Resolve
+        # the caller's own session through the same path every other lookup uses
+        # — which also migrates a legacy raw row, so a pre-hash session is kept
+        # rather than silently deleted by the session making this very request.
+        from .security import SessionStore
+        current = SessionStore._find(db, current_token)
+        if current is not None:
+            db.query(UserSession).filter(
+                UserSession.user_id == user.id,
+                UserSession.id != current.id,
+            ).delete()
     else:
         db.query(UserSession).filter(UserSession.user_id == user.id).delete()
 

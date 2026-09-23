@@ -261,12 +261,58 @@ SESSION_COOKIE_NAME = "helpotron_session"
 _API_KEY_PREFIX = "htk_"
 
 
+# A sha256 digest is 64 lowercase hex chars. Used to tell an already-migrated
+# session row from a legacy one that still stores its token in the clear.
+HEX64_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _hash_token(token: str) -> str:
+    """One-way hash of a session token, for storage.
+
+    A session token is a bearer credential: whoever reads the row can act as
+    the user. It was stored verbatim (measured 2026-09-23: 364 live rows, each
+    a usable 64-char token), so any DB read — a backup, a dump, a leaked file —
+    handed over every live session. API keys were already hashed
+    (`api_keys.hash_key`); sessions were not, which was an oversight rather
+    than a decision.
+
+    Plain SHA-256, matching the API-key precedent. No salt and no per-row
+    iteration on purpose: the input is 48 bytes of `secrets` entropy, so there
+    is no dictionary to attack, and this runs on every authenticated request.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 class SessionStore:
     """Persistent session store backed by the database.
 
     Sessions survive server restarts and can be revoked per-user.
+
+    Tokens are stored HASHED. Because the digest is one-way, a legacy row that
+    still holds a raw token cannot be matched by hash, so lookup falls back to
+    the raw comparison and re-writes the row as a hash on first use. That keeps
+    every existing session working across the deploy with no forced logout,
+    while every row that is actually used becomes hashed immediately.
     """
     _session_expiry: int = 7 * 24 * 60 * 60
+
+    @classmethod
+    def _find(cls, db, token: str):
+        """Resolve a session by token, migrating a legacy raw row on the way.
+
+        Returns the UserSession or None.
+        """
+        from .database import UserSession
+        digest = _hash_token(token)
+        session = db.query(UserSession).filter(UserSession.token == digest).first()
+        if session is not None:
+            return session
+        # Legacy row: still carrying the plaintext token from before the hash.
+        session = db.query(UserSession).filter(UserSession.token == token).first()
+        if session is not None:
+            session.token = digest
+            db.commit()
+        return session
 
     @classmethod
     def create_session(cls, user_id: int, public_id: str, expiry_seconds: Optional[int] = None) -> str:
@@ -276,7 +322,7 @@ class SessionStore:
         duration = expiry_seconds if expiry_seconds is not None else cls._session_expiry
         try:
             session = UserSession(
-                token=token,
+                token=_hash_token(token),
                 user_id=user_id,
                 public_id=public_id,
                 expires_at=datetime.now(timezone.utc) + timedelta(seconds=duration),
@@ -292,7 +338,7 @@ class SessionStore:
         from .database import SessionLocal, UserSession
         db = SessionLocal()
         try:
-            session = db.query(UserSession).filter(UserSession.token == token).first()
+            session = cls._find(db, token)
             if not session:
                 return None
             # Some rows store naive UTC, some aware (legacy writes) — normalize
@@ -319,7 +365,7 @@ class SessionStore:
         from .database import SessionLocal, UserSession
         db = SessionLocal()
         try:
-            session = db.query(UserSession).filter(UserSession.token == token).first()
+            session = cls._find(db, token)
             if session:
                 db.delete(session)
                 db.commit()
@@ -331,7 +377,7 @@ class SessionStore:
         from .database import SessionLocal, UserSession
         db = SessionLocal()
         try:
-            session = db.query(UserSession).filter(UserSession.token == token).first()
+            session = cls._find(db, token)
             if not session:
                 return False
             session.expires_at = datetime.now(timezone.utc) + timedelta(seconds=cls._session_expiry)
@@ -372,6 +418,40 @@ class SessionStore:
             return count
         finally:
             db.close()
+
+
+def migrate_legacy_session_tokens() -> int:
+    """Hash every session row that still stores its token in the clear.
+
+    The lazy fallback in `SessionStore._find` only converts a row that is
+    actually USED, so a dormant row keeps leaking its credential indefinitely —
+    measured 2026-09-23, all 364 live rows were raw. This converts them all in
+    one pass at startup.
+
+    Existing sessions SURVIVE: the user's cookie still holds the raw token, and
+    lookup hashes the presented value, so a migrated row matches exactly as
+    before. Nobody is signed out.
+
+    Idempotent — a row that is already a digest is left alone, so this is safe
+    to run on every boot. Returns the number of rows converted.
+    """
+    from .database import SessionLocal, UserSession
+    db = SessionLocal()
+    try:
+        converted = 0
+        for s in db.query(UserSession).all():
+            if HEX64_RE.match(s.token or ""):
+                continue  # already a digest
+            s.token = _hash_token(s.token)
+            converted += 1
+        if converted:
+            db.commit()
+        return converted
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 # ─── security headers middleware ─────────────────────────────────────────
 
