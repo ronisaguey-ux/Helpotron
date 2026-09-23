@@ -149,7 +149,14 @@ def test_activate_requires_payment_verification(client, auth_headers, unique_use
     assert "payment verification" in res.json()["detail"]
 
 
-def test_payment_verify_manual_lane(client, auth_headers, unique_user):
+def test_payment_verify_manual_lane(client, auth_headers, unique_user, monkeypatch):
+    # Force the unconfigured branch. This asserted the manual lane "because Stripe
+    # keys are not configured in the test env" — true only until real keys were
+    # wired into .env, at which point the route took the Stripe lane and this
+    # failed. Patching the flag tests the code path, not the ambient deployment.
+    import server.payments as payments
+    monkeypatch.setattr(payments, "_stripe_enabled", lambda: False)
+
     res = client.post("/api/trial/payment-verify", headers=auth_headers)
     assert res.status_code == 200
     data = res.json()
