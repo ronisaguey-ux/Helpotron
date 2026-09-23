@@ -16,7 +16,7 @@ from .database import User, get_db
 from .payments import create_trial_verification
 from .ratelimit import limiter
 from .routes_features import get_current_authenticated_user
-from .trial_service import TrialVerificationService, TRIAL_CREDITS_GRANT
+from .trial_service import TrialVerificationService, TRIAL_CREDITS_GRANT, TRIAL_DURATION_DAYS
 
 logger = logging.getLogger("helpotron.routes_trial")
 
@@ -33,7 +33,7 @@ def _trial_state(user: User) -> dict:
         "requires_1c_payment": True,
         "two_fa_enabled": two_fa,
         "credits_grant": int(TRIAL_CREDITS_GRANT),
-        "trial_days": 7,
+        "trial_days": TRIAL_DURATION_DAYS,
     }
 
 
