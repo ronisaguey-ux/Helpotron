@@ -82,6 +82,7 @@ try:
     from .routes_simulation import router as simulation_router
     from .routes_dump import router as dump_router
     from .routes_api_keys import router as api_keys_router
+    from .routes_sessions import router as sessions_router
     from .routes_import_url import router as import_url_router
     from .routes_math import router as math_router
     from .routes_extension import router as extension_router
@@ -119,6 +120,7 @@ except (ImportError, ValueError):
     from server.routes_simulation import router as simulation_router
     from server.routes_dump import router as dump_router
     from server.routes_api_keys import router as api_keys_router
+    from server.routes_sessions import router as sessions_router
     from server.routes_import_url import router as import_url_router
     from server.routes_math import router as math_router
     from server.routes_extension import router as extension_router
@@ -504,6 +506,7 @@ app.include_router(overlord_router)
 app.include_router(simulation_router)
 app.include_router(dump_router)
 app.include_router(api_keys_router)
+app.include_router(sessions_router)
 app.include_router(import_url_router)
 app.include_router(math_router)
 app.include_router(extension_router)

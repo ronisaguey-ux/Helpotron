@@ -373,7 +373,7 @@ class SessionStore:
             db.close()
 
     @classmethod
-    def refresh_session(cls, token: str) -> bool:
+    def refresh_session(cls, token: str, request=None) -> bool:
         from .database import SessionLocal, UserSession
         db = SessionLocal()
         try:
@@ -381,6 +381,28 @@ class SessionStore:
             if not session:
                 return False
             session.expires_at = datetime.now(timezone.utc) + timedelta(seconds=cls._session_expiry)
+            # Session visibility (owner 2026-09-23). Recorded HERE rather than in
+            # a middleware: this repo has none, and every authenticated path
+            # already calls refresh_session, so this is the one place that sees
+            # all of them without inventing a new hook.
+            if request is not None:
+                session.last_used_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                try:
+                    ua = request.headers.get("user-agent")
+                    if ua:
+                        session.user_agent = ua[:256]
+                    # Trust the proxy header only as a hint; the socket address is
+                    # the fact. Behind cloudflared the socket is always the edge,
+                    # so the header is what actually identifies the client.
+                    ip = (
+                        request.headers.get("cf-connecting-ip")
+                        or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                        or (request.client.host if request.client else None)
+                    )
+                    if ip:
+                        session.ip = ip[:64]
+                except Exception:
+                    pass  # a missing header must never fail authentication
             db.commit()
             return True
         finally:
@@ -581,7 +603,7 @@ async def get_current_user(request: Request = None, websocket: WebSocket = None)
     if token:
         session = SessionStore.get_session(token)
         if session:
-            SessionStore.refresh_session(token)
+            SessionStore.refresh_session(token, request)
             db = SessionLocal()
             try:
                 user = db.query(User).filter(User.id == session['user_id']).first()
@@ -627,7 +649,7 @@ async def get_current_user(request: Request = None, websocket: WebSocket = None)
         # Survives server restarts and slides its 7-day window on use.
         session = SessionStore.get_session(bearer)
         if session:
-            SessionStore.refresh_session(bearer)
+            SessionStore.refresh_session(bearer, request)
             db = SessionLocal()
             try:
                 user = db.query(User).filter(User.id == session['user_id']).first()

@@ -32,7 +32,7 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
     if session_token:
         session = SessionStore.get_session(session_token)
         if session:
-            SessionStore.refresh_session(session_token)
+            SessionStore.refresh_session(session_token, request)
             user = db.query(User).filter(User.id == session['user_id']).first()
             if user:
                 if is_user_banned(user):
@@ -78,7 +78,7 @@ def get_current_authenticated_user(request: Request, db: Session = Depends(get_d
         # extension's stored DB session token.
         session = SessionStore.get_session(token)
         if session:
-            SessionStore.refresh_session(token)
+            SessionStore.refresh_session(token, request)
             user = db.query(User).filter(User.id == session['user_id']).first()
             if user:
                 if is_user_banned(user):
