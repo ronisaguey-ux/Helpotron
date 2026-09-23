@@ -1,5 +1,6 @@
 // Unified API client for Helpotron with automatic X-Public-ID and CSRF header handling.
 import { isDemoMode, resolveDemoRequest, mockGenerateStream } from './mock.js';
+import { humanError } from './lib/errors.js';
 
 const DEFAULT_SERVER = '';
 
@@ -245,24 +246,29 @@ async function doRequest(cleanEndpoint, options, headers) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    let message = errorText || `HTTP ${response.status}`;
-    // HTML (Cloudflare/Gateway 502/503/5xx error pages) must NEVER be rendered
-    // as the UI — prettify instead (operator 08-26: friend's insights showed
-    // the full 502-page source as text).
+    let detail = null;
     const ct = (response.headers.get('content-type') || '').toLowerCase();
-    if (ct.includes('text/html')) {
-      message = `The server gateway returned ${response.status} (temporarily unavailable). Try again in a few seconds.`;
-    }
+
+    // Parse once, and KEEP the parsed detail on the error. The raw payload is
+    // never rendered — `humanError` turns it into a sentence and stashes the
+    // original on `err.technical` so the "report this" affordance can attach
+    // real diagnostics without the user having to read them.
     try {
       const parsed = JSON.parse(errorText);
-      if (parsed && parsed.detail) {
-        message = typeof parsed.detail === 'string' ? parsed.detail : JSON.stringify(parsed.detail);
-      }
+      if (parsed && parsed.detail !== undefined) detail = parsed.detail;
+      else if (parsed && parsed.message !== undefined) detail = parsed.message;
     } catch {
-      // raw body is already a readable message — keep it
+      // Not JSON. A raw text body is only usable if it reads like a sentence.
+      detail = errorText && errorText.length <= 240 ? errorText : null;
     }
-    const err = new Error(message);
-    err.status = response.status; // so callers can branch on 401 (session expiry) etc.
+
+    // HTML (Cloudflare/gateway 5xx pages) must NEVER be shown as the message.
+    if (ct.includes('text/html')) detail = null;
+
+    const err = new Error(buildApiErrorMessage(response.status, detail));
+    err.status = response.status;
+    err.detail = detail;                       // raw, for reporting only
+    err.human = humanError(err);               // {title,message,hint,canRetry,technical}
     if (response.status === 401 && typeof window !== 'undefined') {
       const isAuthEndpoint =
         cleanEndpoint.includes('/api/login') ||
@@ -305,18 +311,26 @@ async function doRequest(cleanEndpoint, options, headers) {
 }
 
 // ── Honest Error Helpers (b1-s4, Stitch v6) ────────────────────────────────
-export const isAuthError = (err) => !!err && err.status === 401;
-export const isPermissionError = (err) => !!err && err.status === 403;
-export const isNotFoundError = (err) => !!err && err.status === 404;
-export const isRateLimitError = (err) => !!err && err.status === 429;
-export const isServerError = (err) => !!err && typeof err.status === 'number' && err.status >= 500 && err.status <= 599;
+// Re-exported from the canonical module so existing imports keep working. The
+// bodies used to live here and both of them JSON.stringified the backend detail
+// straight onto the screen; see lib/errors.js for the whole story.
+export {
+  humanError,
+  humanMessage,
+  isAuthError,
+  isPermissionError,
+  isNotFoundError,
+  isRateLimitError,
+  isServerError,
+} from './lib/errors.js';
+
+// The one helper the request path itself needs: a single sentence, never JSON.
+function buildApiErrorMessage(status, detail) {
+  return humanError({ status, detail }).message;
+}
 
 export function getErrorMessage(err, fallback = 'Operation failed. Please try again.') {
-  if (!err) return fallback;
-  if (typeof err === 'string') return err;
-  if (err.message) return err.message;
-  if (err.detail) return typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
-  return fallback;
+  return humanError(err, fallback).message;
 }
 
 export function createHonestError(status, message, code = 'API_ERROR') {
@@ -324,6 +338,7 @@ export function createHonestError(status, message, code = 'API_ERROR') {
   err.status = status;
   err.code = code;
   err.timestamp = new Date().toISOString();
+  err.human = humanError(err);
   return err;
 }
 
@@ -688,6 +703,7 @@ export const api = {
   simulationToggle: (enabled) => request('/api/simulation/toggle', { method: 'POST', body: JSON.stringify({ enabled }) }),
   simulationSeed: () => request('/api/simulation/seed', { method: 'POST' }),
   // Settings, Custom Styles, TRIO, Models & Academic Levels
+  userSettings: () => request('/api/user/settings', { method: 'GET' }),
   getUserSettings: () => request('/api/user/settings', { method: 'GET' }),
   getAcademicLevels: () => request('/api/user/academic-levels', { method: 'GET' }),
   getAvailableModels: () => request('/api/user/models', { method: 'GET' }),
@@ -712,6 +728,10 @@ export const api = {
 
   // Data Lake & Micro-Credits
   submitDataLakeMicrocredits: (data) => request('/api/datalake/microcredits/submit', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Mint a single-use key to seal an error report. See lib/reportPayload.js —
+  // the key never travels back, only its id does.
+  createReportKey: () => request('/api/reports/key', { method: 'POST' }),
   getMicrocreditsHistory: (userId) => request(`/api/datalake/microcredits/history?user_id=${userId}`, { method: 'GET' }),
   redeemMicrocredits: (data) => request('/api/datalake/microcredits/redeem', { method: 'POST', body: JSON.stringify(data) }),
   listFeedback: (params = {}) => {
@@ -784,6 +804,7 @@ export const api = {
   adminAnalytics: () => request('/api/admin/analytics', { method: 'GET' }),
   adminAdjustCredits: (userId, amount, reason) => request(`/api/admin/user/${userId}/credits?amount=${amount}&reason=${encodeURIComponent(reason)}`, { method: 'POST' }),
   adminGrantTokens: (userId, amount) => request('/api/admin/tokens/grant', { method: 'POST', body: JSON.stringify({ public_id: userId, amount }) }),
+  adminSetTokens: (userId, amount) => request('/api/admin/tokens/set', { method: 'POST', body: JSON.stringify({ public_id: userId, amount }) }),
   adminSetPlan: (userId, plan) => request(`/api/admin/user/${userId}/plan?plan=${plan}`, { method: 'POST' }),
   adminResetPassword: (userId, newPassword) => request(`/api/admin/user/${userId}/reset-password`, { method: 'POST', body: JSON.stringify({ new_password: newPassword }) }),
   // Control Center: change a user's password without their current one (08-28);

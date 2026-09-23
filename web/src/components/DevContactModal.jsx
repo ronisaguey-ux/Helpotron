@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, MessageCircle, Send, Loader2, Paperclip } from 'lucide-react';
 import { api } from '../api.js';
+import { formatErrorMessage } from '../lib/overlay.js';
 
 export default function DevContactModal() {
   const [open, setOpen] = useState(false);
@@ -40,7 +41,7 @@ export default function DevContactModal() {
       setAttachment(null);
       loadHistory();
     } catch (e) {
-      setToast(`⚠️ Could not send: ${e.message}`);
+      setToast(`⚠️ Could not send: ${formatErrorMessage(e)}`);
     } finally {
       setSending(false);
     }

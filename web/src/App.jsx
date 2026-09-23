@@ -24,6 +24,9 @@ import NotFound from './components/NotFound.jsx';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal.jsx';
 import { AnimatedLogo } from './components/ui/AnimatedLogo.jsx';
 import { ToastContainer, OfflineBanner } from './components/ui/index.js';
+import ErrorReportButton from './components/ui/ErrorReportButton.jsx';
+import { humanError } from './lib/errors.js';
+import { runErrorAction } from './lib/errorActions.js';
 
 /* ── LAZY: with automatic chunk retry for seamless zero-downtime updates ── */
 function lazyWithRetry(componentImport) {
@@ -109,34 +112,54 @@ class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       const isChunkError = this.state.error?.message?.includes('Failed to fetch dynamically imported module') ||
         this.state.error?.message?.includes('ChunkLoadError');
+      // One human sentence, never the raw runtime message. This used to render
+      // `this.state.error.message` in a mono box, which is a stack-adjacent
+      // string straight from the bundler or a library — the owner's "random
+      // backend code on my screen", in the one screen that catches everything.
+      const info = humanError(this.state.error);
       return (
         <div className="app-background min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex items-center justify-center p-4">
           <div className="clean-card max-w-lg w-full p-8 text-center space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-rose-600/10 text-rose-400 text-2xl font-bold flex items-center justify-center mx-auto border border-rose-500/20">
               ⚠️
             </div>
+            {/* 1. Showcase */}
             <h2 className="text-lg font-semibold">
-              {isChunkError ? 'New Version Available' : 'Something went wrong'}
+              {isChunkError ? 'New Version Available' : info.title}
             </h2>
+            {/* 2. Explanation */}
             <p className="text-xs text-[var(--text-muted)]">
               {isChunkError
-                ? 'A newer version of the web app was published. Please reload to load the latest components.'
-                : 'An unexpected error occurred during rendering. You can reset session state below.'}
+                ? 'A newer version of the web app was published, so part of this page could not load. Reloading will pick it up — nothing you saved is affected.'
+                : info.message}
             </p>
-            <div className="p-3 bg-[var(--bg-surface)] rounded-[var(--radius-md)] text-left text-[11px] font-mono text-rose-300 overflow-x-auto max-h-32 border border-[var(--border-subtle)]">
-              {this.state.error?.message || 'Unknown runtime error'}
+            {info.hint ? (
+              <p className="text-[11px] text-[var(--text-muted)] opacity-80">{info.hint}</p>
+            ) : null}
+            {/* The technical detail is captured for the report and deliberately
+                NOT rendered. There is no longer any code path here that can put
+                a raw error message on screen. */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
+              {/* 3. Call to action — the action that fits THIS failure. */}
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.removeItem('helpotron.chunk_reload');
+                  sessionStorage.removeItem('helpotron.chunk_retry');
+                  runErrorAction({ kind: isChunkError ? 'clear-cache' : 'refresh' });
+                }}
+                className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium rounded-[var(--radius-sm)] text-xs transition cursor-pointer"
+              >
+                {isChunkError ? 'Clear cache & reload' : 'Reload page'}
+              </button>
+              <ErrorReportButton
+                error={info}
+                title={isChunkError ? 'New version available' : info.title}
+                kind={info.kind}
+                surface="app-boundary"
+                className="w-full sm:w-auto"
+              />
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                sessionStorage.removeItem('helpotron.chunk_reload');
-                sessionStorage.removeItem('helpotron.chunk_retry');
-                window.location.reload();
-              }}
-              className="w-full py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium rounded-[var(--radius-sm)] text-xs transition cursor-pointer"
-            >
-              Reload Latest App Version
-            </button>
           </div>
         </div>
       );

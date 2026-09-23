@@ -4,11 +4,84 @@
 // (manual / auto / yolo) synced to the backend ai.mode setting, and the popup
 // itself is the approval surface for agent actions when it is open.
 
+/* Server errors must read as sentences, never as backend payloads.
+   FastAPI returns `detail` as an ARRAY for validation failures and `typeof []`
+   is 'object', so a naive render prints raw JSON or "[object Object]" — the
+   owner's "errors literally just flash random backend code on my screen".
+   The formatter lives in server_logic.js (loaded before this file) so the popup
+   and the agent tab cannot drift apart. */
+const humanErr = (detail, status) =>
+  (globalThis.HelpotronSL && globalThis.HelpotronSL.humanErrorText)
+    ? globalThis.HelpotronSL.humanErrorText(detail, status)
+    : `Something went wrong${status ? ` (HTTP ${status})` : ''}.`;
+
+/* Give a button a busy state for the duration of an async action.
+ *
+ * Owner report (2026-09-23): the extension is "crowded and clunky". The clunky
+ * half is this: the primary buttons (Scrape, Humanize, Start Typing) ran for
+ * seconds with the button unchanged and still clickable. The only feedback was
+ * the status line at the very bottom, so a click looked like it had been
+ * ignored and invited a second one.
+ *
+ * TIMING follows the standard loading-indicator research:
+ *   < 1s   no spinner — a flash of "Working…" that disappears reads as a glitch
+ *          and makes the action feel SLOWER than rendering the result directly.
+ *   1s+    a spinner plus the verb, which is enough confirmation for a wait of
+ *          a few seconds.
+ * So the button is DISABLED instantly (that is the part that prevents a double
+ * submit, and it must not wait) while the visible swap is delayed by
+ * BUSY_LABEL_DELAY_MS. A fast action therefore shows nothing at all, which is
+ * the correct outcome.
+ *
+ * Disables the control, swaps in a spinner + the verb the user triggered, and
+ * ALWAYS restores the original markup — including when the action throws. */
+const BUSY_LABEL_DELAY_MS = 400;
+
+async function withBusy(btn, busyLabel, fn) {
+  if (!btn) return fn();
+  if (btn.dataset.busy === '1') return undefined;   // ignore a double click
+
+  const original = btn.innerHTML;
+  btn.dataset.busy = '1';
+
+  // Immediate: block the second click.
+  btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
+
+  // Delayed: only claim to be working if it is actually taking a moment.
+  let labelTimer = null;
+  let labelShown = false;
+  const showLabel = () => {
+    labelShown = true;
+    btn.classList.add('is-busy');
+    btn.innerHTML = `<span class="btn-spinner" aria-hidden="true"></span><span>${busyLabel}</span>`;
+  };
+  labelTimer = setTimeout(showLabel, BUSY_LABEL_DELAY_MS);
+
+  try {
+    return await fn();
+  } finally {
+    if (labelTimer) clearTimeout(labelTimer);
+    btn.dataset.busy = '0';
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+    if (labelShown) {
+      btn.classList.remove('is-busy');
+      btn.innerHTML = original;
+    }
+  }
+}
+
 const statusEl = document.getElementById('status');
 const serverInput = document.getElementById('server');
 const unparseableBox = document.getElementById('unparseableBox');
 const unparseableReason = document.getElementById('unparseableReason');
-const btnOpenDataLake = document.getElementById('btnOpenDataLake');
+const btnOpenDataLake = document.getElementById('btnRetryScrape')?.addEventListener('click', () => {
+  const b = document.getElementById('btnScrapeCurrent');
+  if (b) b.click();
+});
+
+document.getElementById('btnOpenDataLake');
 const openAssignmentBtn = document.getElementById('openAssignmentBtn');
 
 const CRAWL_CACHE_KEY = 'helpotron_crawl_cache';
@@ -228,9 +301,15 @@ function setStatus(text) {
 const btnStatusCloseEl = document.getElementById('btnStatusClose');
 if (btnStatusCloseEl) btnStatusCloseEl.addEventListener('click', () => setStatus(''));
 
+// Three parts, per the owner's rule for every error state: what happened, why,
+// and what to do about it. The raw `reason` from the server is passed through
+// humanErr so a payload can never land on screen here either.
 function showUnparseable(reason) {
   unparseableBox.style.display = 'block';
-  unparseableReason.innerText = `⚠️ Unparseable Website: ${reason || 'Unsupported DOM or protected webview.'}`;
+  const why = humanErr(reason, null);
+  unparseableReason.innerText = why && !/^Something went wrong/.test(why)
+    ? why
+    : "The page didn't give up any text or files we could capture. It may be a protected viewer, or it may still be loading.";
 }
 
 function hideUnparseable() {
@@ -533,7 +612,7 @@ async function setAgentMode(mode) {
       setStatus(`✅ Permission mode saved to your account: ${mode}`);
     } else {
       const d = await res.json().catch(() => ({}));
-      setStatus(`⚠️ Saved locally, but the account rejected it: ${d.detail || res.status}`);
+      setStatus(`⚠️ Saved locally, but the account rejected it: ${humanErr(d.detail, res.status)}`);
     }
   } catch (e) {
     setStatus(`⚠️ Saved locally; could not reach the server (${String(e).slice(0, 60)}).`);
@@ -944,7 +1023,7 @@ function answerApproval(reqId, decision, note, opts) {
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
-            showApprovalStatus(`⚠️ Could not send your decision (HTTP ${res.status}${data.detail ? ' — ' + data.detail : ''})`);
+            showApprovalStatus(`⚠️ Could not send your decision — ${humanErr(data.detail, res.status)}`);
           } else if (d === 'deny') {
             showApprovalStatus('⛔ Rejected the agent action.');
           } else if (d === 'neutral') {
@@ -1257,7 +1336,8 @@ openAssignmentBtn?.addEventListener('click', () => {
   setStatus(`📖 Opening bubble #${id} in Helpotron…`);
 });
 
-document.getElementById('btnScrapeCurrent')?.addEventListener('click', async () => {
+const btnScrapeCurrentEl = document.getElementById('btnScrapeCurrent');
+btnScrapeCurrentEl?.addEventListener('click', () => withBusy(btnScrapeCurrentEl, 'Reading the tab…', async () => {
   hideUnparseable();
   openAssignmentBtn.style.display = 'none';
   const tabId = await activeTabId();
@@ -1276,9 +1356,9 @@ document.getElementById('btnScrapeCurrent')?.addEventListener('click', async () 
     setStatus('❌ Nothing could be collected — no content and no files found.');
     showUnparseable(resp.error);
   } else {
-    setStatus(`❌ ${resp?.error || 'Extraction failed'}`);
+    setStatus(`❌ ${humanErr(resp?.error, null)}`);
   }
-});
+}));
 
 // ── Scrape option 2: everything on the tab (site crawl, results revealed) ────
 const btnStartCrawl = document.getElementById('btnScrapeSite');
@@ -1388,7 +1468,7 @@ async function pollCrawlStatus() {
   }
 }
 
-btnStartCrawl?.addEventListener('click', async () => {
+btnStartCrawl?.addEventListener('click', () => withBusy(btnStartCrawl, 'Starting crawl…', async () => {
   hideUnparseable();
   const tabId = await activeTabId();
   if (!tabId) { setStatus('❌ No focused tab to crawl.'); return; }
@@ -1400,7 +1480,7 @@ btnStartCrawl?.addEventListener('click', async () => {
   } else {
     setStatus(`❌ ${resp?.error || 'Failed to start site crawl'}`);
   }
-});
+}));
 
 btnStopCrawl?.addEventListener('click', async () => {
   setStatus('⏹ Stopping site crawl…');
@@ -1485,7 +1565,7 @@ document.getElementById('saveSettings')?.addEventListener('click', async () => {
       return;
     }
     if (res.status === 402) {
-      setStatus(`❌ ${data.detail || 'This key has reached its limit.'}`);
+      setStatus(`❌ ${humanErr(data.detail, res.status)}`);
       return;
     }
     if (!res.ok) {
@@ -3525,12 +3605,12 @@ async function runAgentTurn(text, opts = {}) {
     }
 
     if (!res.ok) {
-      const errDetail = data.detail;
-      let errText = `HTTP ${res.status}`;
-      if (typeof errDetail === 'string') errText = errDetail;
-      else if (Array.isArray(errDetail)) errText = errDetail.map((d) => (d && d.msg) || JSON.stringify(d)).join('; ');
-      else if (errDetail && typeof errDetail === 'object') errText = errDetail.message || errDetail.msg || JSON.stringify(errDetail);
-      addPopupChatMsg('agent', `⚠️ Error: ${errText}`);
+      // One human sentence, never the raw payload — see humanErr() above. This
+      // path used to fall through to JSON.stringify for any object `detail`,
+      // which is what printed `[{"type":"missing","loc":["body","f0"],...}]`
+      // straight into the chat.
+      const errText = humanErr(data.detail, res.status);
+      addPopupChatMsg('agent', `⚠️ ${errText}`);
       return { ok: false, fatal: true, error: errText };
     }
 
@@ -3994,11 +4074,11 @@ async function detectDocTabs() {
   });
 }
 
-if (btnRefreshAssignments) btnRefreshAssignments.addEventListener('click', loadAssignmentsForLaunch);
-if (btnRefreshDocTabs) btnRefreshDocTabs.addEventListener('click', detectDocTabs);
+if (btnRefreshAssignments) btnRefreshAssignments.addEventListener('click', () => withBusy(btnRefreshAssignments, 'Refreshing…', loadAssignmentsForLaunch));
+if (btnRefreshDocTabs) btnRefreshDocTabs.addEventListener('click', () => withBusy(btnRefreshDocTabs, 'Detecting…', detectDocTabs));
 
 if (btnStartLaunchToDoc) {
-  btnStartLaunchToDoc.addEventListener('click', async () => {
+  btnStartLaunchToDoc.addEventListener('click', () => withBusy(btnStartLaunchToDoc, 'Starting…', async () => {
     const text = (ltdTextInput ? ltdTextInput.value : '').trim();
     if (!text) {
       setStatus('⚠️ Please enter or select assignment text to type.');
@@ -4035,11 +4115,11 @@ if (btnStartLaunchToDoc) {
       setStatus(`✅ Typing started in tab #${resp.tabId}`);
       if (ltdTypingStatus) ltdTypingStatus.textContent = 'Typing into document…';
     } else {
-      setStatus(`❌ Launch failed: ${(resp && resp.error) || 'unknown error'}`);
+      setStatus(`❌ Launch failed: ${humanErr((resp && resp.error), null)}`);
       if (ltdActiveCard) ltdActiveCard.style.display = 'none';
       typingState.active = false;
     }
-  });
+  }));
 }
 
 if (btnPauseTyping) {

@@ -10,11 +10,64 @@ from sqlalchemy.orm import Session
 from .database import DataSubmission, User, get_db, utcnow
 from .routes_features import get_current_authenticated_user
 from .security import is_admin_user
-from .datalake import datalake_manager, datalake_agent
+from .datalake import datalake_manager, datalake_agent, _anonymize_id
+from . import error_reports
 from .moderation import flag_content, screen_content
 from .user_settings_service import user_settings_service
 
 router = APIRouter(prefix="/api", tags=["datalake"])
+
+
+@router.post("/reports/key")
+async def issue_error_report_key(
+    current_user: User = Depends(get_current_authenticated_user),
+):
+    """Issue a single-use key for sealing an error report.
+
+    The browser uses this to AES-GCM-seal the diagnostic bundle so the raw
+    contents are never rendered, logged or screenshotted (owner requirement
+    2026-09-23: "the user never sees back end logic ever even when reporting").
+
+    Only the KEY is returned; the id travels back with the envelope and is how
+    the server finds the key again. The key itself never round-trips, so an
+    envelope intercepted in flight cannot be opened.
+    """
+    issued = error_reports.issue_report_key()
+    return {
+        "status": "ok",
+        "key_id": issued["key_id"],
+        "key": issued["key"],
+        "algorithm": "AES-256-GCM",
+        "expires_in": issued["expires_in"],
+    }
+
+
+@router.post("/reports/open")
+async def open_sealed_report(
+    payload: Dict[str, Any],
+    current_user: User = Depends(get_current_authenticated_user),
+):
+    """Unseal a stored error report. Admin-only.
+
+    Deliberately NOT reachable by a normal account: the reports belong to
+    whoever filed them, and the diagnostics name internal paths and models. An
+    operator reads them; a user cannot open someone else's bundle.
+    """
+    if not is_admin_user(current_user):
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    envelope = (payload or {}).get("envelope")
+    if not isinstance(envelope, dict):
+        raise HTTPException(status_code=400, detail="No envelope supplied")
+
+    try:
+        # consume_key=False so an operator can re-read a report while triaging;
+        # the key still expires out of the registry on its own TTL.
+        diagnostics = error_reports.unseal_report(envelope, consume_key=False)
+    except error_reports.ReportSealError as exc:
+        raise HTTPException(status_code=400, detail=f"Could not open the report: {exc}") from exc
+
+    return {"status": "ok", "diagnostics": diagnostics}
 
 
 class FeedbackSubmission(BaseModel):
@@ -384,15 +437,57 @@ async def get_datalake_stats(current_user: User = Depends(get_current_authentica
 # ── Remediation BATCH-04: IDOR-guarded data-lake entry deletion ─────────────
 @router.delete("/datalake/{entry_id}")
 def delete_datalake_entry(
-    entry_id: int,
+    entry_id: str,
     current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db),
 ):
-    """Deletes one data-lake submission with a strict ownership check."""
-    entry = db.query(DataSubmission).filter(DataSubmission.id == entry_id).first()
+    """Deletes one data-lake entry, with a strict ownership check on both stores.
+
+    `entry_id` deliberately accepts EITHER identifier, because the two stores
+    this feature spans use different ones:
+
+    * a micro-credit `submission_id` — `mc_e9f6a3df`. This is what the Data Lake
+      UI holds and sends: its history list is read from
+      `microcredit_submissions.jsonl`, whose records carry `submission_id` and
+      no numeric row id (`DataLakeView.jsx` does `item.id || item.submission_id`).
+    * a numeric `DataSubmission` row id — the original behaviour, kept so the
+      admin/moderation path and any older caller keep working.
+
+    The param was declared `int`, so FastAPI rejected every real submission id
+    with a 422 `int_parsing` before the handler ran — returned to the user as
+    the literal body `{"type":"int_parsing","loc":["path","entry_id"],...}`.
+    That is the owner's report "tried to data lake and this showed up as an
+    error", filed as a data-lake submission titled exactly that.
+
+    The JSONL file is the authoritative store for micro-credits: the submit
+    route only ever writes the file, so a delete touching only the DB would
+    leave the entry visible on the next refresh.
+    """
+    is_admin = is_admin_user(current_user)
+
+    # ── micro-credit submission: string id, JSONL-backed ────────────────────
+    if not entry_id.isdigit():
+        record = datalake_manager.get_microcredit_submission(entry_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="Data lake entry not found")
+
+        # Ownership is proven against the stored hash, and fails CLOSED: a record
+        # predating anonymization has no user_hash, and "no owner recorded" must
+        # not read as "anyone may delete this".
+        owner_hash = record.get("user_hash")
+        expected = _anonymize_id(current_user.public_id)
+        if not is_admin and (not owner_hash or owner_hash != expected):
+            raise HTTPException(status_code=403, detail="Cannot delete resources uploaded by another user")
+
+        if not datalake_manager.delete_microcredit_submission(entry_id):
+            raise HTTPException(status_code=404, detail="Data lake entry not found")
+        return {"status": "success", "message": f"Data lake entry {entry_id} deleted."}
+
+    # ── legacy numeric DataSubmission row ───────────────────────────────────
+    entry = db.query(DataSubmission).filter(DataSubmission.id == int(entry_id)).first()
     if not entry:
         raise HTTPException(status_code=404, detail="Data lake entry not found")
-    if entry.user_id != current_user.id and not getattr(current_user, "is_admin", False):
+    if entry.user_id != current_user.id and not is_admin:
         raise HTTPException(status_code=403, detail="Cannot delete resources uploaded by another user")
     db.delete(entry)
     db.commit()

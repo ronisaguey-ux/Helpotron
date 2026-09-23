@@ -213,7 +213,7 @@
     </button>
     <button class="nav-tab" id="tabNavChat" type="button" role="tab" aria-selected="false" aria-controls="viewChat" title="Study Buddy chat" aria-label="Study Buddy chat">
       <svg class="ic ic--sm"><use href="#i-chat" /></svg>
-      <span>Study Buddy</span>
+      <span>Buddy</span>
     </button>
     <button class="nav-tab" id="tabNavType" type="button" role="tab" aria-selected="false" aria-controls="viewType" title="Launch to Doc — humanized typing" aria-label="Launch to Doc">
       <svg class="ic ic--sm"><use href="#i-doc" /></svg>
@@ -277,16 +277,25 @@
             </div>
 
             <!-- Unparseable page -->
+            <!-- Every error surface carries three things: (1) SHOWCASE — what
+                 happened; (2) EXPLANATION — why, in words a person would use;
+                 (3) CALL TO ACTION — what to do about it. -->
             <div class="error-card" id="unparseableBox" style="display:none">
               <div class="e-title">
                 <svg class="ic ic--sm"><use href="#i-alert" /></svg>
-                Unparseable website
+                Couldn't read this page
               </div>
-              <div class="e-body" id="unparseableReason">Unsupported DOM or protected webview.</div>
+                <div class="e-body" id="unparseableReason">The page didn't give up any text or files we could capture.</div>
+              <div class="e-actions">
+                <button class="btn btn--outline btn--sm" id="btnRetryScrape" type="button">
+                  <svg class="ic ic--sm"><use href="#i-refresh" /></svg>
+                  Try again
+                </button>
               <button class="btn btn--outline btn--sm" id="btnOpenDataLake" type="button">
                 <svg class="ic ic--sm"><use href="#i-folder" /></svg>
                 Open Data Lake
               </button>
+              </div>
             </div>
 
             <!-- Success: open the created bubble -->
@@ -645,10 +654,10 @@
           <div class="field">
             <label class="field-label" style="font-size:11px;">Accent Color</label>
             <div class="swatches" style="display:flex;gap:8px;">
-              <button class="swatch selected" data-accent="teal" style="width:24px;height:24px;border-radius:50%;background:#59d8c9;border:2px solid var(--outline);cursor:pointer;" aria-label="Teal" title="Teal"></button>
-              <button class="swatch" data-accent="indigo" style="width:24px;height:24px;border-radius:50%;background:#bfc2ff;border:2px solid transparent;cursor:pointer;" aria-label="Indigo" title="Indigo"></button>
-              <button class="swatch" data-accent="rose" style="width:24px;height:24px;border-radius:50%;background:#ffb2be;border:2px solid transparent;cursor:pointer;" aria-label="Rose" title="Rose"></button>
-              <button class="swatch" data-accent="amber" style="width:24px;height:24px;border-radius:50%;background:#ffc46b;border:2px solid transparent;cursor:pointer;" aria-label="Amber" title="Amber"></button>
+              <button class="swatch selected" data-accent="teal" style="background:#59d8c9;border:2px solid var(--outline);" aria-label="Teal" title="Teal"></button>
+              <button class="swatch" data-accent="indigo" style="background:#bfc2ff;border:2px solid transparent;" aria-label="Indigo" title="Indigo"></button>
+              <button class="swatch" data-accent="rose" style="background:#ffb2be;border:2px solid transparent;" aria-label="Rose" title="Rose"></button>
+              <button class="swatch" data-accent="amber" style="background:#ffc46b;border:2px solid transparent;" aria-label="Amber" title="Amber"></button>
             </div>
           </div>
         </section>

@@ -30,6 +30,19 @@
 // silent.
 
 
+/* Server errors must read as sentences, never as backend payloads.
+   FastAPI returns `detail` as an ARRAY for validation failures and `typeof []`
+   is 'object', so a naive render prints raw JSON or "[object Object]" — the
+   owner's "errors literally just flash random backend code on my screen".
+   The formatter lives in server_logic.js (loaded before this file) so the popup
+   and the agent tab cannot drift apart. */
+const humanErr = (detail, status) =>
+  (globalThis.HelpotronSL && globalThis.HelpotronSL.humanErrorText)
+    ? globalThis.HelpotronSL.humanErrorText(detail, status)
+    : `Something went wrong${status ? ` (HTTP ${status})` : ''}.`;
+
+
+
 // ── Environment guards (page stays usable when not running as an extension) ──
 const hasChrome = typeof chrome !== 'undefined' && !!chrome.runtime;
 const hasTabCapture = hasChrome && !!(chrome.tabCapture && chrome.tabCapture.getMediaStreamId);
@@ -647,7 +660,7 @@ async function lookNow() {
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    if (!res.ok) throw new Error(humanErr(data.detail, res.status));
     const analysis = data.analysis || 'no analysis returned';
     els.visionOutput.textContent = `→ ${analysis}`;
     setStatus(`👁 Vision: ${data.status === 'success' ? 'ok' : data.status}`);
@@ -1562,7 +1575,7 @@ async function runAgentTurnTab(text, opts = {}) {
       clearTimeout(fetchTimer);
     }
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    if (!res.ok) throw new Error(humanErr(data.detail, res.status));
     if (data && data.status === 'permission_required') {
       // Server permission gate (09-07): action needs the user's decision before
       // the agent can execute. Renders this page's shared card; answers post to
@@ -1824,7 +1837,7 @@ function answerAgentApproval(reqId, decision, note, opts) {
           body: JSON.stringify({ req_id: reqId, decision: d, ...(text ? { text } : {}), auto_add: autoAdd }),
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) done(`⚠️ Could not send your decision (HTTP ${res.status}${data.detail ? ' — ' + data.detail : ''})`);
+        if (!res.ok) done(`⚠️ Could not send your decision — ${humanErr(data.detail, res.status)}`);
         else if (d === 'deny') done('⛔ Rejected the agent action.');
         else if (d === 'neutral') done('⚪ Neutral — the agent got your note.');
         else if (autoAdd) done('✅ Allowed — added to auto-approved actions.');

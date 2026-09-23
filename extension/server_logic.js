@@ -134,9 +134,87 @@
     }
   }
 
+  // ── Error text ────────────────────────────────────────────────────────────
+  // Owner report (2026-09-23): "the errors literally just flash random backend
+  // code on my screen". FastAPI returns `detail` as an ARRAY for validation
+  // failures, and `typeof [] === 'object'`, so every naive `data.detail` render
+  // either prints the literal JSON or the string "[object Object]". Neither is
+  // a sentence a person can act on.
+  //
+  // This turns any server error payload into one short, human line. It never
+  // returns markup, JSON or a traceback: if the only thing available looks like
+  // code, it falls back to a plain sentence about the status code.
+
+  const _STATUS_TEXT = {
+    400: 'That request was not understood.',
+    401: 'Your API key is missing, expired or was deleted. Reconnect in Settings.',
+    403: 'Your account is not allowed to do that.',
+    404: 'That item no longer exists.',
+    409: 'That conflicts with something already saved.',
+    413: 'That is too large to send.',
+    422: 'Some of the details sent were not valid.',
+    429: 'Too many requests — wait a moment and try again.',
+    500: 'The server hit an internal error.',
+    502: 'The server is restarting. Try again shortly.',
+    503: 'Helpotron is temporarily unavailable. Try again shortly.',
+    504: 'The server took too long to answer.',
+  };
+
+  // Reject anything that reads as machine output rather than a message.
+  function _looksHuman(s) {
+    if (typeof s !== 'string') return false;
+    const t = s.trim();
+    if (t.length < 3) return false;
+    if (t.length > 240) return false;
+    if (/[[\]{}<>]/.test(t)) return false;            // JSON, HTML, python dicts
+    if (/^https?:\/\//i.test(t)) return false;         // a bare URL is not a message
+    if (/Traceback|Error:|Exception|\bat [a-z]+\.[a-z]+\(/i.test(t)) return false;
+    if (/^[A-Z0-9_]{6,}$/.test(t)) return false;       // ERROR_CODE_STYLE
+    if (/\n/.test(t)) return false;                    // multi-line = a dump
+    return true;
+  }
+
+  function humanErrorText(detail, status) {
+    const fallback = _STATUS_TEXT[status] || (status ? `Something went wrong (HTTP ${status}).` : 'Something went wrong.');
+
+    // A plain string message is the common, useful case.
+    if (typeof detail === 'string') return _looksHuman(detail) ? detail.trim() : fallback;
+
+    // FastAPI validation errors arrive as a list of {loc, msg, type}. The `msg`
+    // is the only part written for a human; `loc` names the field, which is the
+    // detail that actually helps ("the `title` field is required").
+    if (Array.isArray(detail)) {
+      const parts = [];
+      for (const item of detail) {
+        const msg = item && typeof item === 'object' ? (item.msg || item.message) : item;
+        if (!_looksHuman(msg)) continue;
+        // loc is like ["body","title"] → "title"; skip the body/query marker.
+        let field = '';
+        if (item && Array.isArray(item.loc)) {
+          const bits = item.loc.filter((x) => x !== 'body' && x !== 'query' && x !== 'path' && typeof x === 'string');
+          field = bits.length ? ` (${bits[bits.length - 1]})` : '';
+        }
+        parts.push(msg.trim() + field);
+        if (parts.length === 3) break;
+      }
+      return parts.length ? parts.join('; ') : fallback;
+    }
+
+    // Nested objects vary; try the usual message keys before giving up.
+    if (detail && typeof detail === 'object') {
+      for (const k of ['message', 'msg', 'error', 'reason', 'detail']) {
+        if (typeof detail[k] === 'string' && _looksHuman(detail[k])) return detail[k].trim();
+      }
+      return fallback;
+    }
+
+    return fallback;
+  }
+
   const SL = {
     fetchBootstrap, humanMovePoints, crawlPlan,
     buildAssignmentPayload, fetchQueueStatus,
+    humanErrorText, looksHumanMessage: _looksHuman,
   };
 
   // Classic script: publish to the global scope so the worker, the event page

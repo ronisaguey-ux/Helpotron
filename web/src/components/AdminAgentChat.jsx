@@ -10,6 +10,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Bot, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import api from '../api.js';
+import { formatErrorMessage } from '../lib/overlay.js';
 import SectionCard from './SectionCard.jsx';
 
 const SUGGESTIONS = [
@@ -60,7 +61,7 @@ export default function AdminAgentChat() {
         push('agent', res?.reply || '✅ Done.', res?.execution ? { execution: res.execution } : {});
       }
     } catch (e) {
-      push('agent', `⚠️ The agent couldn't reach the backend right now (${e.message}). In demo mode responses are simulated.`);
+      push('agent', `⚠️ The agent couldn't reach the backend right now. ${formatErrorMessage(e)}`);
     } finally {
       setBusy(false);
     }

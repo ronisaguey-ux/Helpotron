@@ -150,3 +150,148 @@ def test_api_feedback_and_datalake_routes():
     stats_resp = client.get("/api/datalake/stats", headers=headers)
     assert stats_resp.status_code == 200
     assert stats_resp.json()["status"] == "success"
+
+
+# ── Data-lake delete route: the identifier and the ownership guard ──────────
+#
+# Regression cover for two defects measured live on 2026-09-23:
+#
+#  1. The route declared `entry_id: int`, but the id the UI holds is the JSONL
+#     record's `submission_id` (`mc_e9f6a3df`). FastAPI rejected every real id
+#     with a 422 `int_parsing` before the handler ran — surfaced to the user as
+#     the literal body `{"type":"int_parsing","loc":["path","entry_id"],...}`.
+#  2. The route deleted a `DataSubmission` DB row, but micro-credit submissions
+#     are written ONLY to `microcredit_submissions.jsonl`, so even a numeric id
+#     would have left the entry on screen at the next refresh.
+
+def _submit(client, headers, title="delete-route probe"):
+    """Submits one micro-credit entry and returns its submission_id."""
+    resp = client.post(
+        "/api/datalake/microcredits/submit",
+        headers=headers,
+        json={
+            "data_type": "Academic Dataset & General Notes",
+            "title": title,
+            "data_content": "probe body used to exercise the delete route",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()["submission"]["submission_id"]
+
+
+def test_datalake_delete_accepts_a_string_submission_id(client, auth_headers):
+    """The id the UI actually sends must be accepted, not rejected as a non-int."""
+    sid = _submit(client, auth_headers)
+    assert sid.startswith("mc_")
+
+    resp = client.delete(f"/api/datalake/{sid}", headers=auth_headers)
+    assert resp.status_code == 200, (
+        f"string submission ids must be accepted; got {resp.status_code}: {resp.text}"
+    )
+
+    # The entry must be gone from the STORE, not just reported as deleted — the
+    # whole defect was a delete that touched the wrong backend.
+    from server.datalake import datalake_manager
+    assert datalake_manager.get_microcredit_submission(sid) is None
+
+
+def test_datalake_delete_is_not_a_422_when_the_id_is_unknown(client, auth_headers):
+    """An unknown id is a 404. A 422 here is the int_parsing bug returning."""
+    resp = client.delete("/api/datalake/mc_doesnotexist", headers=auth_headers)
+    assert resp.status_code == 404, resp.text
+
+
+def test_datalake_delete_requires_authentication(client, auth_headers):
+    """Anonymous deletes must be refused — this is an ownership-guarded route."""
+    sid = _submit(client, auth_headers)
+    resp = client.delete(f"/api/datalake/{sid}")
+    assert resp.status_code in (401, 403), resp.text
+
+
+def test_datalake_delete_refuses_another_users_entry(client, auth_headers_factory):
+    """The IDOR guard: a non-owner must not be able to delete a foreign entry.
+
+    Both users are created through the real signup/login path, so the only
+    difference between the request that succeeds above and this one is who is
+    asking.
+    """
+    victim = auth_headers_factory("delete-victim-" + os.urandom(4).hex())
+    attacker = auth_headers_factory("delete-attacker-" + os.urandom(4).hex())
+
+    sid = _submit(client, victim, title="owned by the victim")
+
+    # The attacker is authenticated and is not an admin: must be refused.
+    resp = client.delete(f"/api/datalake/{sid}", headers=attacker)
+    assert resp.status_code == 403, (
+        f"a non-owner delete must be 403, got {resp.status_code}: {resp.text}"
+    )
+
+    # And it must still be there afterwards — a 403 that still deleted would be
+    # the worst of both.
+    from server.datalake import datalake_manager
+    assert datalake_manager.get_microcredit_submission(sid) is not None
+
+
+def test_stored_hash_resolves_under_the_current_salt(client, auth_headers, unique_user):
+    """A user's own history must be resolvable by the hash on their record.
+
+    This is the invariant that silently broke when the salt was derived from a
+    rotating secret: `user_hash` is the only key the history filter and the
+    ownership check can match on, so an unresolvable hash means the user cannot
+    see or delete their own submissions. `DATALAKE_SALT` must therefore be a
+    dedicated, stable value.
+    """
+    sid = _submit(client, auth_headers, title="hash resolvability probe")
+
+    from server.datalake import datalake_manager
+    rec = datalake_manager.get_microcredit_submission(sid)
+    assert rec is not None
+    assert rec.get("user_hash") == _anonymize_id(unique_user), (
+        "the stored hash must re-derive from the current salt; a mismatch means "
+        "the salt moved and this user's history is now orphaned"
+    )
+
+    # ...and the history filter must therefore find it.
+    listed = datalake_manager.list_microcredit_submissions(user_id=unique_user, limit=10**6)
+    assert any(r.get("submission_id") == sid for r in listed), (
+        "the per-user history filter must return the entry the user just created"
+    )
+
+
+def test_anonymization_uses_a_dedicated_salt_not_a_rotatable_secret(monkeypatch):
+    """The salt must not fall back to `SECRET_KEY`.
+
+    `SECRET_KEY` is rotated as routine security hygiene. When the salt followed
+    it, every stored `user_hash` became unresolvable at the next rotation:
+    measured 2026-09-23, 118 of 123 attributable records were orphaned, and the
+    users could neither see nor delete their own submissions. A dedicated
+    `DATALAKE_SALT` is the fix, and `SECRET_KEY` must never be its source.
+    """
+    from server import datalake
+
+    # With a dedicated salt present it must be the one used, regardless of what
+    # SECRET_KEY says.
+    monkeypatch.setenv("DATALAKE_SALT", "dedicated-salt-value")
+    monkeypatch.setenv("SECRET_KEY", "rotated-secret-value")
+    with_dedicated = datalake._anonymize_id("someone")
+
+    monkeypatch.setenv("DATALAKE_SALT", "dedicated-salt-value")
+    monkeypatch.setenv("SECRET_KEY", "a-completely-different-rotated-secret")
+    still_same = datalake._anonymize_id("someone")
+
+    assert with_dedicated == still_same, (
+        "rotating SECRET_KEY must NOT change the data-lake hash; if it does, "
+        "every stored submission is orphaned by the next rotation"
+    )
+
+    # Show the failure mode explicitly, so the reason for the assertion is
+    # legible to whoever breaks this next: with no dedicated salt the hash DOES
+    # follow SECRET_KEY, and that is exactly the bug.
+    monkeypatch.delenv("DATALAKE_SALT", raising=False)
+    monkeypatch.setenv("SECRET_KEY", "rotated-secret-value")
+    follows_secret = datalake._anonymize_id("someone")
+    monkeypatch.setenv("SECRET_KEY", "a-completely-different-rotated-secret")
+    assert datalake._anonymize_id("someone") != follows_secret, (
+        "this assertion documents the original defect: without DATALAKE_SALT the "
+        "hash tracks SECRET_KEY"
+    )
