@@ -74,6 +74,14 @@ def create_checkout_session(db: Session, user: User, plan: str, is_annual: bool 
         user.stripe_customer_id = customer_id
         db.commit()
 
+    # Trial length comes from the canonical constant, not a literal. This said `7`
+    # while trial_service.TRIAL_DURATION_DAYS had moved to 14 (owner 2026-09-19), so
+    # the UI advertised two weeks and Stripe granted one — and the number lived in two
+    # places, which is how it drifted. Imported lazily: trial_service imports payments,
+    # so a module-scope import here would be a cycle.
+    from .trial_service import TRIAL_DURATION_DAYS
+    trial_days = TRIAL_DURATION_DAYS if not is_annual else 0
+
     session = stripe.checkout.Session.create(
         customer=customer_id,
         mode="subscription",
@@ -81,7 +89,7 @@ def create_checkout_session(db: Session, user: User, plan: str, is_annual: bool 
         success_url=os.getenv("WEB_ORIGIN", "http://localhost:5173") + "/?checkout=success",
         cancel_url=os.getenv("WEB_ORIGIN", "http://localhost:5173") + "/?checkout=cancel",
         subscription_data={
-            "trial_period_days": 7 if not is_annual else 0,
+            "trial_period_days": trial_days,
             "metadata": {"plan": plan, "is_annual": str(is_annual)},
         },
         metadata={"plan": plan, "is_annual": str(is_annual)},
