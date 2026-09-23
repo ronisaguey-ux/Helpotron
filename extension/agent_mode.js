@@ -1680,7 +1680,11 @@ async function runAgentTaskTab(userText) {
   let budget = 100;
   try {
     const copy = await globalThis.HelpotronSL?.fetchBootstrap?.();
-    const n = Number(copy && copy.ui && copy.ui.tool_call_budget);
+    // `/ui-config` returns `{**_UI_CONFIG, ...}` — the budget is TOP-LEVEL, not
+    // under `ui`. Reading `copy.ui.…` always yielded undefined, so this silently
+    // fell back to the hardcoded 100 and the server's authoritative number was
+    // never used. popup.js already reads it correctly.
+    const n = Number(copy && copy.tool_call_budget);
     if (Number.isFinite(n) && n > 0) budget = n;
   } catch { /* offline: keep the default */ }
 
@@ -1695,6 +1699,12 @@ async function runAgentTaskTab(userText) {
     used += outcome.ran || 0;
     lastNoops = outcome.noops || [];
     round += 1;
+
+    // Determinate progress. This loop can run up to 40 rounds / 100 tool calls
+    // over several minutes, and it used to show only an indefinite "Thinking…" —
+    // the timing rule is that anything past ~10s needs a determinate indicator,
+    // never a loop. The server publishes the real budget; show it.
+    setStatus(`Round ${round} · ${used} of ${budget} tool calls used`);
 
     const batchRan = outcome.ran || 0;
     if (batchRan > 0 && lastNoops.length >= batchRan) stalledRounds += 1;
