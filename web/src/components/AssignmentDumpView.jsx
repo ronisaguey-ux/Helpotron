@@ -47,7 +47,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+
   const [isDragOver, setIsDragOver] = useState(false);
   const [recording, setRecording] = useState(false);
   const [activeTab, setActiveTab] = useState('all'); // all, pending, finalized, audio
@@ -73,6 +73,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
 
   // Inline Delete State
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const fileInputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -116,7 +117,6 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
   const handleUploadFile = async (file) => {
     if (!file) return;
     setUploading(true);
-    setUploadProgress(20);
     setInlineError('');
 
     try {
@@ -124,16 +124,13 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
       formData.append('file', file);
       formData.append('user_id', userId);
 
-      setUploadProgress(60);
       const res = await api.uploadDumpFile(formData);
-      setUploadProgress(100);
       showToast(`Uploaded ${file.name} successfully!`);
       await fetchItems();
     } catch (e) {
       setInlineError(e.message || 'Error uploading file to Assignment Dump');
     } finally {
       setUploading(false);
-      setUploadProgress(0);
     }
   };
 
@@ -196,6 +193,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
 
   const handleDeleteItem = async (itemId) => {
     setInlineError('');
+    setDeletingId(itemId);
     try {
       await api.deleteDumpItem(itemId);
       setDeleteConfirmId(null);
@@ -203,6 +201,8 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
       await fetchItems();
     } catch (e) {
       setInlineError(e.message || 'Failed to delete dump item');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -373,9 +373,10 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
           <button
             type="button"
             onClick={fetchItems}
-            className="px-2.5 py-1 rounded-lg bg-surface-container text-on-surface font-label-caps text-[10px] hover:bg-surface-container-high transition"
+            disabled={loading}
+            className="px-2.5 py-1 rounded-lg bg-surface-container text-on-surface font-label-caps text-[10px] hover:bg-surface-container-high transition disabled:opacity-60"
           >
-            Retry
+            {loading ? 'Retrying…' : 'Retry'}
           </button>
         </div>
       )}
@@ -426,10 +427,20 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
 
           {uploading && (
             <div className="w-full max-w-xs mt-2 space-y-1">
-              <div className="h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden">
-                <div className="bg-primary h-full rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+              {/* Indeterminate on purpose. This was a bar animated 20 -> 60 -> 100
+                  by the CODE, not by upload progress, so it reached 100% while
+                  nothing had been processed — a promise the app could not keep.
+                  There is no progress channel to wire it to (a single POST), and a
+                  sweeping bar is the honest signal for a wait with no percentage. */}
+              <div
+                role="progressbar"
+                aria-label="Uploading and processing"
+                aria-valuetext="Processing"
+                className="h-1.5 w-full bg-surface-container-high rounded-full overflow-hidden"
+              >
+                <div className="h-full w-1/3 rounded-full bg-primary animate-dump-indeterminate" />
               </div>
-              <span className="font-code-sm text-[10px] text-primary">Processing OCR &amp; audio extraction...</span>
+              <span className="font-code-sm text-[10px] text-primary">Processing OCR &amp; audio extraction... this can take a moment for long files.</span>
             </div>
           )}
         </div>
@@ -593,9 +604,10 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                       <button
                         type="button"
                         onClick={() => handleDeleteItem(item.id)}
-                        className="px-2.5 py-1 bg-error text-on-error rounded-lg text-[10px] font-label-caps"
+                        disabled={deletingId === item.id}
+                        className="px-2.5 py-1 bg-error text-on-error rounded-lg text-[10px] font-label-caps disabled:opacity-60"
                       >
-                        Confirm
+                        {deletingId === item.id ? 'Deleting…' : 'Confirm'}
                       </button>
                       <button
                         type="button"

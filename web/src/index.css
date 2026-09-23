@@ -683,6 +683,16 @@ html[data-anim="reduced"] *, html[data-anim="reduced"] *::before, html[data-anim
 }
 .animate-pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
 
+/* Indeterminate progress sweep (Assignment Dump upload).
+   A wait with no percentage must not show a determinate-looking bar: the old
+   one was animated 20 -> 60 -> 100 by the code itself, so it hit 100% before
+   anything had been processed. */
+@keyframes dump-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+.animate-dump-indeterminate { animation: dump-indeterminate 1.4s ease-in-out infinite; }
+
 /* Spin (loading spinners) */
 @keyframes spin-smooth {
   from { transform: rotate(0deg); }
