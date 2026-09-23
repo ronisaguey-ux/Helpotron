@@ -1582,10 +1582,9 @@ def update_settings(public_id: str, body: SettingsIn, db: Session = Depends(get_
     # nobody asked for, and cross-user writes already have an owner in
     # server/admin.py. This endpoint is self-service, and only self-service.
     #
-    # TODO(owner): confirm whether /api/users/{public_id} should ever write
-    # another user's settings. Until that is decided it refuses, which is the
-    # reversible direction — a privilege NOT granted can be added later; one
-    # granted and shipped cannot be taken back from anyone who already used it.
+    # Owner decision (2026-09-22): Confirmed strictly self-service. Users modify
+    # only their own settings. Administrative cross-account actions are reserved
+    # exclusively for the owner via dedicated admin routes.
     user = db.query(User).filter(User.id == current_user.id).first() or current_user
     if user.public_id != public_id:
         raise HTTPException(
