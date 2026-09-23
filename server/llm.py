@@ -23,6 +23,54 @@ except Exception:
 
 logger = logging.getLogger(__name__)
 
+# ── upstream error breaker ───────────────────────────────────────────────────
+# A provider outage was retried once per candidate model, per caller, forever —
+# so an outage was re-billed on every call while giving the user nothing. These
+# track CONSECUTIVE upstream failures (a success resets the count), and once the
+# threshold is crossed within the window, call_llm refuses for a cooldown.
+_BREAKER_THRESHOLD = int(os.getenv("LLM_BREAKER_THRESHOLD", "5") or 5)
+_BREAKER_WINDOW_S = float(os.getenv("LLM_BREAKER_WINDOW_S", "60") or 60)
+_BREAKER_COOLDOWN_S = float(os.getenv("LLM_BREAKER_COOLDOWN_S", "60") or 60)
+_breaker_failures: List[float] = []   # monotonic timestamps of recent failures
+_breaker_tripped_until = 0.0
+
+
+def _now() -> float:
+    import time
+    return time.monotonic()
+
+
+def note_upstream_failure() -> None:
+    """Record one failed upstream attempt (per MODEL attempt, not per call)."""
+    global _breaker_tripped_until
+    now = _now()
+    _breaker_failures.append(now)
+    # Only failures inside the window count toward tripping.
+    cutoff = now - _BREAKER_WINDOW_S
+    while _breaker_failures and _breaker_failures[0] < cutoff:
+        _breaker_failures.pop(0)
+    if len(_breaker_failures) >= _BREAKER_THRESHOLD:
+        _breaker_tripped_until = now + _BREAKER_COOLDOWN_S
+        logger.error(
+            "LLM breaker TRIPPED: %d upstream failures in %.0fs — refusing calls for %.0fs",
+            len(_breaker_failures), _BREAKER_WINDOW_S, _BREAKER_COOLDOWN_S,
+        )
+
+
+def note_upstream_success() -> None:
+    """A real answer clears the breaker — it is a consecutive-failure counter."""
+    global _breaker_tripped_until
+    _breaker_failures.clear()
+    _breaker_tripped_until = 0.0
+
+
+def upstream_is_tripped() -> bool:
+    return _now() < _breaker_tripped_until
+
+
+def upstream_trip_remaining_s() -> float:
+    return max(0.0, _breaker_tripped_until - _now())
+
 class ModelPolicy:
     """Canonical Single Source of Truth for Model Routing, Pricing & Prohibitions."""
 
@@ -387,6 +435,17 @@ async def call_llm(
     if response_format in ("json", "json_object") or json_mode:
         json_mode = True
 
+    # Upstream error breaker. A provider outage used to be retried once per
+    # candidate model, per caller, indefinitely — every retry a billed request
+    # on a service that is already failing. Once the upstream is demonstrably
+    # down, refuse fast and let the caller (and the user) see a 503 instead of
+    # paying to rediscover the outage on every call.
+    if upstream_is_tripped():
+        raise RuntimeError(
+            "LLM provider appears to be down (repeated upstream failures) — "
+            f"refusing for another {upstream_trip_remaining_s():.0f}s to avoid re-billing a failing service"
+        )
+
     effective_modality = "vision" if images else modality
     route = resolve_model_routing(
         effort=effort,
@@ -526,9 +585,11 @@ async def call_llm(
 
                 if db and user_id:
                     await record_routing_telemetry(db, user_id, {**route, "model": cand_id}, usage)
+                note_upstream_success()
                 return content
             except Exception as err:
                 openrouter_err = err
+                note_upstream_failure()
                 logger.warning("call_llm openrouter model %s failed: %s — next candidate", cand_id, err)
 
     # OpenRouter is the ONLY LLM channel (owner rule 2026-09-07: "all llm
