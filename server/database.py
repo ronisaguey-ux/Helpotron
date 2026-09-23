@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Any, Generator
+from typing import Any, Generator, Optional
 
 from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, Boolean, UniqueConstraint, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
@@ -108,6 +108,18 @@ class User(Base):
     api_keys = relationship("ApiKey", back_populates="user", cascade="all, delete-orphan")
 
 
+@event.listens_for(User.settings, "set")
+def _on_user_settings_set(target, value, oldvalue, initiator):
+    """Ensure SQLAlchemy change tracking always detects mutations on User.settings."""
+    from sqlalchemy.orm.attributes import flag_modified
+    try:
+        if hasattr(target, "__dict__") and "settings" in target.__dict__:
+            flag_modified(target, "settings")
+    except Exception:
+        pass
+
+
+
 class UserSession(Base):
     """Persistent user session for authentication."""
     __tablename__ = "user_sessions"
@@ -118,6 +130,12 @@ class UserSession(Base):
     public_id: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
+    # Session visibility (owner 2026-09-23): a user could not see or end their
+    # own sessions, so a stolen cookie was invisible and unkillable from inside
+    # the app. 2FA only guards sign-in; this is what guards a live session.
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     user = relationship("User", back_populates="sessions")
 
@@ -816,6 +834,16 @@ def init_db() -> None:
                 conn.execute(text(
                     "CREATE INDEX IF NOT EXISTS ix_payments_provider_ref ON payments (provider_ref)"
                 ))
+
+                # 2026-09-23: session visibility. create_all will not add these
+                # to the 364 existing rows, so the live DB needs them here.
+                columns_sessions = [row[1] for row in conn.execute(text("PRAGMA table_info(user_sessions)")).fetchall()]
+                if columns_sessions and "last_used_at" not in columns_sessions:
+                    conn.execute(text("ALTER TABLE user_sessions ADD COLUMN last_used_at DATETIME"))
+                if columns_sessions and "user_agent" not in columns_sessions:
+                    conn.execute(text("ALTER TABLE user_sessions ADD COLUMN user_agent VARCHAR(256)"))
+                if columns_sessions and "ip" not in columns_sessions:
+                    conn.execute(text("ALTER TABLE user_sessions ADD COLUMN ip VARCHAR(64)"))
 
                 conn.commit()
             except Exception:
