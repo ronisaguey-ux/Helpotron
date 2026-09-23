@@ -3718,6 +3718,12 @@ async function runAgentTask(userText) {
     lastNoops = outcome.noops || [];
     round += 1;
 
+    // Determinate progress. This loop can run up to 40 rounds / 100 tool calls
+    // over several minutes, and it used to show only an indefinite "Thinking…" —
+    // the timing rule is that anything past ~10s needs a determinate indicator,
+    // never a loop. The server publishes the real budget; show it.
+    setStatus(`Round ${round} · ${used} of ${budget} tool calls used`);
+
     // A batch where every action was reported as having no effect is a wasted
     // round. One is forgiven — the model may simply have guessed wrong and
     // deserves a chance to change approach now that it can see the result. TWO
