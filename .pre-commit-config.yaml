@@ -27,3 +27,16 @@ repos:
       - id: check-added-large-files
         args: ['--maxkb=5000']
       - id: detect-private-key
+
+  - repo: local
+    hooks:
+      - id: check-copy-hygiene
+        name: check copy hygiene
+        entry: node scripts/check_copy_hygiene.js
+        language: system
+        pass_filenames: false
+      - id: check-stale-numbers
+        name: check stale numbers
+        entry: node scripts/check_stale_numbers.js
+        language: system
+        pass_filenames: false
