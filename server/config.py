@@ -80,6 +80,16 @@ class Settings(BaseSettings):
     stripe_api_key: str = os.getenv("STRIPE_API_KEY", "")
     stripe_secret_key: str = os.getenv("STRIPE_SECRET_KEY", "")
     stripe_webhook_secret: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    # Checkout price ids. These MUST be pydantic fields rather than plain
+    # `os.getenv()` calls at their use site, because BaseSettings reads .env
+    # itself and never puts those values in os.environ. Reading them with
+    # os.getenv() therefore returns empty unless something else already called
+    # load_dotenv() — an invisible import-order dependency that made checkout
+    # raise "No Stripe price configured" in a fresh process while working in the
+    # running server (2026-09-23). Declaring them here removes the dependency.
+    stripe_price_basic: str = ""
+    stripe_price_pro: str = ""
+    stripe_price_elite: str = ""
     paypal_client_id: str = os.getenv("PAYPAL_CLIENT_ID", "")
     paypal_secret: str = os.getenv("PAYPAL_SECRET", "")
 

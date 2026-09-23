@@ -16,11 +16,25 @@ logger = logging.getLogger("helpotron.payments")
 
 SUPPORTED_PROVIDERS = {"stripe", "cashapp", "zelle", "venmo", "paypal"}
 
-STRIPE_PRICE_IDS = {
-    "basic": os.getenv("STRIPE_PRICE_BASIC", ""),
-    "pro": os.getenv("STRIPE_PRICE_PRO", ""),
-    "elite": os.getenv("STRIPE_PRICE_ELITE", ""),
-}
+# Stripe price ids, read from `config` rather than `os.getenv`.
+#
+# This was a module-level dict of `os.getenv("STRIPE_PRICE_*")` calls, which read
+# os.environ — but config.py is a pydantic BaseSettings that reads .env directly and
+# never populates os.environ. So the dict was populated ONLY if some other module had
+# already called load_dotenv() (server/llm.py does). Proven 2026-09-23: importing
+# payments alone left every id empty, so create_checkout_session raised
+# ValueError("No Stripe price configured for plan 'basic'"), while importing llm
+# first made it work. Checkout succeeding was a side effect of import order.
+#
+# Resolved on each call, so it cannot go stale and cannot depend on what was
+# imported first. The name is kept callable-only on purpose: a module-level
+# constant is what caused the bug.
+def stripe_price_ids() -> dict:
+    return {
+        "basic": config.stripe_price_basic,
+        "pro": config.stripe_price_pro,
+        "elite": config.stripe_price_elite,
+    }
 
 # Monthly TASK TOKEN allowances. Tokens are the usage currency; the legacy
 # name is kept as an alias so existing importers keep working.
@@ -60,7 +74,7 @@ def create_checkout_session(db: Session, user: User, plan: str, is_annual: bool 
     import stripe
     stripe.api_key = config.stripe_secret_key
 
-    price_id = STRIPE_PRICE_IDS.get(plan, "")
+    price_id = stripe_price_ids().get(plan, "")
     if not price_id:
         raise ValueError(f"No Stripe price configured for plan '{plan}'")
 
