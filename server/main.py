@@ -2220,7 +2220,17 @@ def checkout(body: CheckoutIn, request: Request, db: Session = Depends(get_db), 
 
 @app.post("/api/stripe/webhook")
 async def stripe_webhook(request: Request):
-    """Handle Stripe webhook events."""
+    """Handle Stripe webhook events.
+
+    Refuses cleanly when Stripe is not configured. Without this guard the
+    handler reached `import stripe` (payments.py) on an install where the
+    package is absent, so EVERY webhook — including a valid test one — returned
+    a 500 with a stack trace. A 503 saying "billing is not enabled" is the
+    honest answer, and it stops Stripe's retry storm from hammering the route.
+    """
+    from .payments import _stripe_enabled
+    if not _stripe_enabled():
+        raise HTTPException(503, "Billing is not enabled on this deployment")
     payload = await request.body()
     sig_header = request.headers.get("Stripe-Signature", "")
     try:
