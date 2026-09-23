@@ -238,11 +238,39 @@ async function doRequest(cleanEndpoint, options, headers) {
     }
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  // Bounded request. Without a timeout a hung backend spun the caller forever —
+  // a spinner with no end and no error, which is the worst of both. A request
+  // that has produced no response in 30s (10s for a health probe) is not slow,
+  // it is stuck, and the user is better served by a retryable error than by
+  // waiting it out. `options.timeoutMs` overrides for deliberately long calls.
+  const timeoutMs = Number(options.timeoutMs)
+    || (cleanEndpoint.includes('/health') ? 10000 : 30000);
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+  } catch (e) {
+    if (timer) clearTimeout(timer);
+    const aborted = e && (e.name === 'AbortError' || e.code === 20);
+    if (aborted) {
+      const err = new Error(
+        `The server took too long to respond (over ${Math.round(timeoutMs / 1000)}s).`
+      );
+      err.status = 0;
+      err.detail = 'timeout';
+      err.human = humanError(err);
+      throw err;
+    }
+    throw e;
+  }
+  if (timer) clearTimeout(timer);
 
   if (!response.ok) {
     const errorText = await response.text();
