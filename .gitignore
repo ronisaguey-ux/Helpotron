@@ -79,3 +79,9 @@ verify-artifacts/_mock-account.json
 
 # vibedoctor scan artifacts
 .vibedoctor/
+
+# audit harvest and raw sweep dumps (Task 2 decision: keep on disk as evidence, ignore from git)
+research/a*.txt
+research/s3-harvest/
+research/s3-h*.json
+research/security_audit_findings_20260917.json
