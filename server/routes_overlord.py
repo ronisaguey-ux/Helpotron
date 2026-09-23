@@ -2288,6 +2288,8 @@ def _build_agent_chat_prompt(user, payload: ChatMessageRequest, db: Session) -> 
 async def stream_chat_message(payload: ChatMessageRequest, request: Request, db: Session = Depends(get_db)):
     """Streaming chat endpoint: live reasoning and tokens with seamless fallback to non-streaming."""
     user = _get_current_user(request, db)
+    from .ratelimit import check_costly
+    check_costly("agent_turn", request, user)
 
     ctx = _build_agent_chat_prompt(user, payload, db)
     settings = ctx["settings"]
@@ -2446,6 +2448,13 @@ async def stream_chat_message(payload: ChatMessageRequest, request: Request, db:
 async def send_chat_message(payload: ChatMessageRequest, request: Request, db: Session = Depends(get_db)):
     """One agent, any request: the LLM picks the action, the pipeline executes it."""
     user = _get_current_user(request, db)
+    # Rate-limit AFTER the account is known — the bucket must be per-account, and
+    # a dependency would run before this and could only see the IP (which behind
+    # cloudflared is one shared address). Limit is deliberately 60/min: the
+    # extension loop legitimately runs up to 40 rounds, so a tighter cap would
+    # break a working task, which is worse than no cap.
+    from .ratelimit import check_costly
+    check_costly("agent_turn", request, user)
     from .security import is_admin_user
     is_admin = bool(getattr(user, "is_admin", False)) or is_admin_user(user)
 
