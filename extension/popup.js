@@ -3841,27 +3841,46 @@ if (btnHumanizeLtd) {
       setStatus('🔒 Please log in before humanizing.');
       return;
     }
-    const orig = btnHumanizeLtd.innerHTML;
-    btnHumanizeLtd.disabled = true;
-    btnHumanizeLtd.innerHTML = '<span>Humanizing…</span>';
-    try {
-      const res = await fetch(`${srv}/api/assignment/humanize`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
-        body: JSON.stringify({ content: text }),
-      });
-      if (!res.ok) throw new Error(`server ${res.status}`);
-      const data = await res.json();
-      const out = (data && data.content) ? String(data.content) : text;
-      if (ltdTextInput) ltdTextInput.value = out;
-      updateLtdWordCount();
-      setStatus(`✨ Humanized ${out.split(/\s+/).filter(Boolean).length} words — ready to type.`);
-    } catch (e) {
-      setStatus(`⚠️ Humanize failed — ${e.message}`);
-    } finally {
-      btnHumanizeLtd.disabled = false;
-      btnHumanizeLtd.innerHTML = orig;
-    }
+    // A humanize run drives the local base model for 6-90s. A static label for
+    // that long tells the user nothing about whether it is working, so past 5s
+    // the status rotates — a determinate-ish signal on a wait with no percentage.
+    let rotator = null;
+    const HUMANIZE_ROTATE_MS = 5000;
+    const startedAt = Date.now();
+    const phases = ['✍️ Reading your draft…', '🧠 Rewriting in a human voice…', '🔍 Checking the result…'];
+    let phase = 0;
+    rotator = setInterval(() => {
+      const el = Date.now() - startedAt;
+      setStatus(`${phases[phase % phases.length]} (${Math.round(el / 1000)}s)`);
+      phase += 1;
+    }, HUMANIZE_ROTATE_MS);
+
+    await withBusy(btnHumanizeLtd, 'Humanizing…', async () => {
+      try {
+        const res = await fetch(`${srv}/api/assignment/humanize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
+          body: JSON.stringify({ content: text }),
+        });
+        if (!res.ok) {
+          // Read the body so the message the user sees is the server's own
+          // human-readable text, never a bare "server 500".
+          let detail = null;
+          try { detail = await res.json(); } catch { /* non-JSON body */ }
+          throw new Error(humanErr(detail, res.status));
+        }
+        const data = await res.json();
+        const out = (data && data.content) ? String(data.content) : text;
+        if (ltdTextInput) ltdTextInput.value = out;
+        updateLtdWordCount();
+        setStatus(`✨ Humanized ${out.split(/\s+/).filter(Boolean).length} words — ready to type.`);
+      } catch (e) {
+        // `humanErr` is the shared formatter (server_logic.js) — a per-file copy
+        // would drift, and this is the same normalizer every other call site uses.
+        setStatus(`⚠️ Humanize failed — ${humanErr(e && e.message ? e.message : e)}`);
+      }
+    });
+    if (rotator) clearInterval(rotator);
   });
 }
 
