@@ -157,6 +157,38 @@ def _caller_key(request: "Request", user=None) -> tuple[str, str]:
     return f"ip:{client}", "address"
 
 
+def check_costly(kind: str, request: "Request", user=None,
+                 limit: int | None = None, window: float | None = None) -> None:
+    """Count one cost-incurring call for this caller, raising 429 when over.
+
+    The callable form of `costly_guard`, for the routes that resolve their user
+    INSIDE the body rather than through a FastAPI dependency
+    (`_get_current_user(request, db)` in routes_overlord / routes_extension).
+
+    That difference is not cosmetic: a dependency runs BEFORE the handler, so it
+    cannot see the resolved account and would have to key on the request alone —
+    which is the IP-collision bug all over again. Calling this immediately after
+    the user is resolved is what makes the bucket per-account.
+    """
+    from fastapi import HTTPException
+
+    default_limit, default_window = DEFAULT_COSTLY_LIMITS.get(kind, (60, 60.0))
+    eff_limit = limit if limit is not None else default_limit
+    eff_window = window if window is not None else default_window
+
+    key = f"costly:{kind}:{_caller_key(request, user)[0]}"
+    if not limiter.allow(key, eff_limit, window=eff_window):
+        retry_after = limiter.retry_after(key, eff_limit, window=eff_window)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                "That was a lot of requests at once. "
+                f"Try again in {retry_after} seconds."
+            ),
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
 def costly_guard(kind: str, limit: int | None = None, window: float | None = None):
     """FastAPI dependency: rate-limit a cost-incurring route per caller.
 

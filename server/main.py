@@ -2499,7 +2499,10 @@ except (ImportError, ValueError):
 humanizer_pipeline = AIHumanizerPipeline()
 
 @app.post("/api/assignment/humanize")
-async def humanize_assignment_route(payload: dict, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def humanize_assignment_route(payload: dict, request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # A humanize run drives the local base model for seconds of CPU per call.
+    from .ratelimit import check_costly
+    check_costly("humanize", request, current_user)
     text = payload.get("content", "")
     # settings ride through so HIP follows the humanizer toggle (owner 2026-09-17).
     sanitized_text, metrics = await humanizer_pipeline.humanize_loop(

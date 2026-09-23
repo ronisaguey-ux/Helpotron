@@ -296,6 +296,25 @@ async def download_extension_zip():
 # inferred from the version segments; an admin can overwrite name/notes via
 # POST /api/extension/releases.
 PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
+    "2.7.3": [
+        # Grouped, in rough order of how much they change for the user. Rendered
+        # verbatim by the popup's What's New, so keep each line self-contained.
+        #
+        # The delta over 2.7.2 is the handful of fixes that landed after that
+        # build was cut: the Launch-to-Doc hand-off, the scrolling/loop rework,
+        # and the model badge. 2.7.2's own notes described some of this from the
+        # plan — this is the build where it actually works.
+        "LAUNCH TO DOC",
+        "\U0001f680 It opens already set up. Click Launch to Doc on the website, then type in the extension: the assignment you launched appears at the top of the list, already selected, with the text the website resolved filled in. No hunting for the assignment, no re-typing the instructions.",
+        "",
+        "AGENT MODE",
+        "\U0001f4dc Scrolling actually scrolls, and we no longer claim otherwise. The agent reported the actions it SENT rather than what the page did, so it could say it had scrolled while nothing moved. It now reads the page back, scrolls question lists that live in their own panel (the usual quiz layout), and says plainly when a step had no effect instead of showing a green tick.",
+        "\U0001f501 Multi-step tasks actually finish. It used to do one batch of actions and stop with a promise about the rest \u2014 so \u201cwork through this quiz\u201d ended at question 1. It now re-reads the screen after each batch and keeps going on its own, up to 100 actions in one task, and it is told to work out the full scope of what you asked and see it through rather than stopping at the first step.",
+        "\U0001f6d1 Stops when it should. If two batches in a row change nothing it stops and says why, instead of repeating the same miss \u2014 and it still stops for your approval, or if you pause it.",
+        "",
+        "MODEL",
+        "\U0001f3f7\ufe0f The badge tells the truth. It used to name a model that was never being used, because the slider and the routing disagreed. It now shows the model that actually runs \u2014 and the extension only ever uses models that can see the page, since a text-only model cannot drive one.",
+    ],
     "2.7.2": [
         # Grouped, in rough order of how much they change for the user. Rendered
         # verbatim by the popup's What's New, so keep each line self-contained.
@@ -1649,6 +1668,10 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
     node='extensions' and with auth that the extension's session_token passes.
     """
     user = await _extension_current_user(request, db)
+    # Rate-limit after auth so the bucket is per-account, never the shared
+    # cloudflared IP. 60/min keeps the 40-round agent loop viable.
+    from .ratelimit import check_costly
+    check_costly("agent_turn", request, user)
     settings = dict(user.settings or {})
 
     # Metering watermark (owner 2026-09-17): sum everything this request consumes
