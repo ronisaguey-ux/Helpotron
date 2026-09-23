@@ -38,6 +38,15 @@ class Settings(BaseSettings):
     turnstile_secret: str = os.getenv("TURNSTILE_SECRET", "")
     captcha_bypass_secret: str = os.getenv("CAPTCHA_BYPASS_SECRET", "")
 
+    # Daily upstream-cost ceiling for UNMETERED accounts (operator only), in USD.
+    # `is_unmetered` means admin and charge_actual_usage returns 0 for them, so
+    # without this the operator has no cost ceiling at all — a rate limit bounds
+    # request COUNT, not cost, and one action can be a 40-round agent task or a
+    # two-hour transcription. Generous on purpose: Elite is ~$27/month ≈ $0.90/day,
+    # so $10/day is ~11x headroom while still bounding a runaway (a real incident
+    # was $19.43 in one day). Set to 0 to disable.
+    admin_daily_cost_cap_usd: float = float(os.getenv("ADMIN_DAILY_COST_CAP_USD", "10.0") or 10.0)
+
     # CORS
     cors_origins: List[str] = [
         "http://localhost:5173",

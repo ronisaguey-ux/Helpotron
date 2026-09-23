@@ -136,16 +136,68 @@ def usage_cents_since(db: Session, user_id: int, since_id: int) -> float:
         return 0.0
 
 
-def has_usage_balance(user: Any) -> bool:
+def daily_cost_exceeded(db: Session, user: Any, cap_usd: Optional[float] = None) -> bool:
+    """Has an UNMETERED account already spent past its daily cap?
+
+    `is_unmetered` means admin, and `charge_actual_usage` returns 0 for an
+    unmetered account — so the operator has no cost ceiling at all. A rate limit
+    bounds the COUNT of requests, not their cost, and one action can be a 40-round
+    agent task or a two-hour transcription.
+
+    The spend is already recorded for every user including the operator
+    (`ApiUsageLog.base_cost_usd`, written by cost_tracking), so this is one SUM.
+
+    The cap is deliberately generous — Elite is ~$27/month ≈ $0.90/day, so $10/day
+    is ~11x headroom for legitimate use while still bounding a runaway. A real
+    prior incident was $19.43 in a single day.
+
+    Fail OPEN on any error: a metering outage must not brick the operator's own
+    account. This is a runaway brake, not a security boundary.
+    """
+    from server.database import ApiUsageLog
+    if cap_usd is None:
+        try:
+            from server.config import config
+            cap_usd = float(getattr(config, "admin_daily_cost_cap_usd", 10.0) or 10.0)
+        except Exception:
+            cap_usd = 10.0
+    if cap_usd <= 0:
+        return False  # cap disabled
+    try:
+        from datetime import datetime, timedelta, timezone
+        since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
+        spent = (db.query(func.coalesce(func.sum(ApiUsageLog.base_cost_usd), 0.0))
+                   .filter(ApiUsageLog.user_id == user.id,
+                           ApiUsageLog.created_at >= since)
+                   .scalar())
+        if float(spent or 0.0) >= cap_usd:
+            logger.warning("operator daily cost cap hit for %s: $%.4f >= $%.2f in 24h",
+                           getattr(user, "public_id", "?"), float(spent or 0.0), cap_usd)
+            return True
+        return False
+    except Exception as e:
+        logger.warning("daily_cost_exceeded failed open for %s: %s",
+                       getattr(user, "public_id", "?"), e)
+        return False
+
+
+def has_usage_balance(user: Any, db: Optional[Session] = None) -> bool:
     """Eligibility check for starting metered work — no deduction.
 
     Owner (2026-09-17): "just charge the token costs after its calculated, dont
     guess before". So the gate no longer holds an estimate; it only refuses to
     START work for an account that has nothing left. The real cost is charged
     afterwards by charge_actual_usage().
+
+    An UNMETERED account (admin) has no token balance to check, so the daily cost
+    cap is the only brake it has. `db` is optional because most callers are
+    metered and do not need the spend query; when it is omitted for an unmetered
+    account the cap is simply not consulted, which preserves the old behaviour.
     """
     try:
         if is_unmetered(user):
+            if db is not None and daily_cost_exceeded(db, user):
+                return False
             return True
         return get_token_balance(user) > 0
     except Exception:
@@ -276,6 +328,8 @@ def set_token_balance(user: User, value: float) -> None:
     settings = dict(getattr(user, "settings", None) or {})
     settings["token_balance"] = max(0.0, float(value))
     user.settings = settings
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(user, "settings")
 
 
 def debit_tokens_atomic(db: Session, user_id: int, amount: float, allow_negative: bool = True) -> float:
