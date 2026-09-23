@@ -239,6 +239,22 @@ def auth_headers(client, unique_user):
     return _get_auth_headers_for_user(unique_user)
 
 
+@pytest.fixture()
+def auth_headers_factory():
+    """Fixture form, so tests need no import — `from conftest import ...`
+    resolves to the REPO ROOT conftest, not this one.
+
+    Returns a callable that mints Bearer headers for an arbitrary public_id, so
+    a single test can act as TWO different users. That is what an ownership
+    (IDOR) test needs, and there was no way to do it before.
+    """
+
+    def _make(public_id: str, plan: str = "none") -> dict:
+        return _get_auth_headers_for_user(public_id, plan)
+
+    return _make
+
+
 @pytest.fixture
 def db_session():
     """Isolated in-memory SQLite database session for unit tests (TEST-05)."""

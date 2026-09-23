@@ -52,24 +52,34 @@ export default function OfflineBanner() {
           <WifiOff className="w-3.5 h-3.5" />
         </div>
         <div className="flex items-center gap-2 flex-wrap min-w-0">
+          {/* 1. SHOWCASE */}
           <span className="font-mono text-[11px] font-bold text-sem-amber uppercase tracking-wider">
-            OFFLINE PERSISTENCE MODE
+            You're offline
           </span>
-          <span className="text-on-surface-variant font-mono text-[10px]">· NODE_CACHE_LOCAL</span>
+          {/* 2. EXPLANATION — always visible. This was `hidden md:inline`, so a
+              narrow window showed the banner with no explanation of what it
+              meant or what would happen to the user's work. A short version now
+              shows at every width, and the fuller one takes over when there is
+              room. */}
+          <span className="text-on-surface md:hidden truncate">
+            Changes are saved on this device.
+          </span>
           <span className="text-on-surface hidden md:inline truncate">
-            Serving local derivations · Edits queue and re-sync when network resumes.
+            Changes you make are saved here and will sync when the connection returns.
           </span>
         </div>
       </div>
 
+      {/* 3. CALL TO ACTION */}
       <button
         type="button"
         onClick={handleReconnect}
         disabled={reconnecting}
-        className="min-h-[32px] px-3 py-1 rounded-lg bg-sem-amber/20 hover:bg-sem-amber/30 text-sem-amber font-mono text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer active:scale-95 shrink-0"
+        aria-busy={reconnecting ? 'true' : undefined}
+        className="min-h-[36px] px-3 py-1 rounded-lg bg-sem-amber/20 hover:bg-sem-amber/30 text-sem-amber font-mono text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition cursor-pointer active:scale-95 shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
       >
         <RefreshCw className={`w-3.5 h-3.5 ${reconnecting ? 'animate-spin' : ''}`} />
-        <span>{reconnecting ? 'Checking...' : 'Force Reconnect'}</span>
+        <span>{reconnecting ? 'Checking…' : 'Force Reconnect'}</span>
       </button>
     </div>
   );

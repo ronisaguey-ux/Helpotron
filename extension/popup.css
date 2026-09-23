@@ -97,6 +97,7 @@ body.fluid-mode {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-height: 32px;   /* measured 26px; this chip is the only route to sign-in */
 }
 .account-chip:hover {
   border-color: var(--primary);
@@ -112,8 +113,12 @@ body.fluid-mode {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  /* 30px was measured on the rendered popup, and these are the five most-tapped
+     controls in the extension (pause, agent mode, options, pop out, close) —
+     all icon-only, so a miss is silent. 36px keeps them comfortably hittable
+     and still fits the header, which is a single row. */
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-lg);
   border: 1px solid transparent;
   background: transparent;
@@ -127,8 +132,11 @@ body.fluid-mode {
   border-color: var(--outline-variant);
 }
 .icon-btn--sm {
-  width: 26px;
-  height: 26px;
+  /* Measured 26px — these are the chat header's four actions (new chat, past
+     conversations, refresh, full tab), all icon-only, so a miss is silent.
+     32px is the documented minimum target; the header is one row and absorbs it. */
+  width: 32px;
+  height: 32px;
   padding: 0;
 }
 .icon-btn--danger {
@@ -166,7 +174,10 @@ body.fluid-mode {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  padding: 6px 6px;
+    /* 6px vertical padding rendered a 28px tab — the MAIN navigation, below a
+       comfortable target. 10px brings it to ~36px; the bar still fits because
+       the four labels are flex-basis:0 and ellipsise (see the note above). */
+    padding: 10px 6px;
   border-radius: var(--radius-lg);
   border: 1px solid transparent;
   background: transparent;
@@ -460,7 +471,7 @@ body.fluid-mode {
 }
 .model-line .model-effort { color: var(--primary); }
 .model-line .model-local { color: var(--sem-amber); }
-#btnOpenChat { min-height: 32px; padding: 6px 12px; font-size: 12px; justify-content: center; }
+#btnOpenChat { min-height: 36px; padding: 8px 12px; font-size: 12px; justify-content: center; }
 
 /* Approval card in popup — teal primary + label-caps, per design.css tokens.
    The card is a fixed dock above the view panels (see .approval-dock), NOT a
@@ -542,16 +553,74 @@ body.fluid-mode {
 }
 .icon-btn:disabled { opacity: 0.55; cursor: default; transform: none; box-shadow: none; }
 
-/* Range slider styling */
-.range-slider {
-  width: 100%;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--surface-container-highest);
-  accent-color: var(--primary);
-  cursor: pointer;
-  outline: none;
+  /* The action row inside an error card. Two actions side by side on one line,
+   wrapping on a narrow popup so neither is ever squeezed below its target. */
+.e-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
 }
+.e-actions .btn { flex: 1 1 auto; }
+
+/* Busy state for a button that is running an async action (see withBusy in
+   popup.js). Before this the primary buttons stayed enabled and unchanged while
+   the work ran, so a click looked ignored and invited a second one. */
+.btn.is-busy,
+.btn:disabled {
+  cursor: default;
+}
+.btn.is-busy { opacity: 0.85; }
+.btn-spinner {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: ht-spin 620ms linear infinite;
+}
+@keyframes ht-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .btn-spinner { animation-duration: 1.6s; }
+}
+
+/* Range slider styling.
+     The input used to be `height: 6px`, which was the height of the whole
+     control, not just its track — measured in the rendered popup. A 6px hit
+     area is not clickable in practice, and it is the only way to set effort on
+     this screen. Now the INPUT is a comfortable touch target and only the TRACK
+     is thin, which is what the original rule was trying to express. */
+  .range-slider {
+    width: 100%;
+    height: 24px;
+    background: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    accent-color: var(--primary);
+    cursor: pointer;
+    outline: none;
+  }
+  .range-slider::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--surface-container-highest);
+  }
+  .range-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -5px;         /* centre the 16px thumb on the 6px track */
+    border-radius: 50%;
+    background: var(--primary);
+    border: 2px solid var(--surface-container-lowest);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+  }
+  .range-slider:focus-visible::-webkit-slider-thumb {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
 
 /* ═══ View 2: Embedded Chat ═══ */
 .chat-container {
@@ -609,7 +678,10 @@ body.fluid-mode {
 .btn-icon-ghost {
   background: none;
   border: none;
-  padding: 2px;
+  /* 2px padding produced a ~21px target on the thread rename/pin icons. */
+  padding: 0;
+  min-width: 32px;
+  min-height: 32px;
   color: var(--on-surface-variant);
   cursor: pointer;
   display: flex;
@@ -648,6 +720,7 @@ body.fluid-mode {
   font-weight: 700;
   cursor: pointer;
   text-align: left;
+  min-height: 32px;   /* measured 20px; this row is the only way to collapse the chat settings */
 }
 .chat-controls-head:hover { color: var(--on-surface); }
 .chat-controls-title { flex: none; }
@@ -690,7 +763,10 @@ body.fluid-mode {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px;
+  /* 3px padding measured a 22px pill. These four chips ARE the chat panel's
+     controls (Edu / Screen / Study Mode / Tabs) and are tapped constantly. */
+  padding: 7px 11px;
+  min-height: 30px;
   border-radius: 999px;
   border: 1px solid var(--outline);
   background: var(--surface-container);
@@ -824,9 +900,31 @@ body.fluid-mode {
 }
 .chat-effort-range {
   flex: 1;
-  height: 4px;
+  /* This control measured 4px tall in the rendered popup — the smallest target
+     in the extension, and the only way to set effort from the chat panel. Same
+     treatment as .range-slider: a comfortable INPUT with a thin TRACK. */
+  height: 24px;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
   accent-color: var(--primary);
   cursor: pointer;
+}
+.chat-effort-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-container-highest);
+}
+.chat-effort-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--surface-container-lowest);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
 }
 .chat-model-badge {
   font-family: var(--font-mono);
@@ -1053,7 +1151,10 @@ body.fluid-mode {
 .btn-link {
   background: none;
   border: none;
-  padding: 0;
+  /* Zero padding measured a 14px target on "Refresh" and "Detect tabs" — the
+     only way to re-fetch the assignment list and the open Docs tabs. Vertical
+     padding rather than a min-height so the link keeps its inline baseline. */
+  padding: 8px 2px;
   color: var(--primary);
   font-size: 11.5px;
   font-weight: 600;
@@ -1316,6 +1417,7 @@ body.fluid-mode {
   font-weight: 600;
   cursor: pointer;
   transition: all 140ms ease-out;
+  min-height: 32px;   /* measured 21px */
 }
 .whatsnew-expand:hover { color: var(--on-surface); border-color: var(--primary); }
 .whatsnew-chevron { transition: transform 160ms ease-out; }
@@ -1366,10 +1468,13 @@ body.fluid-mode {
   flex: 0 0 auto;
 }
 .btn--xs {
-  padding: 3px 9px;
-  font-size: 10.5px;
+  /* `min-height: 0` removed the only size guarantee this button had, and it
+     measured 26px in the rendered popup. It is the dismiss control on the
+     What's-new banner, so it is the one thing a user is trying to hit. */
+  padding: 6px 12px;
+  font-size: 11px;
   border-radius: var(--radius-lg);
-  min-height: 0;
+  min-height: 32px;
 }
 
 
@@ -1385,11 +1490,19 @@ body.fluid-mode {
   margin: 0;
   padding: 3px;
 }
-.app-main .seg-btn {
-  min-height: 30px;
-  font-size: 11px;
-  padding: 4px 6px;
-}
+  /* Mode buttons.
+     `design.css` sets `.seg-btn { min-height: 36px }`; this rule used to force
+     it back down to 30px "to keep the launcher compact". That is the trade the
+     whole popup was making — shrinking the controls a user actually presses
+     below a comfortable size to fit more of them in the 600px popup limit — and
+     it is what made the surface feel cramped. The panel scrolls
+     (`.app-main { overflow-y: auto }`), so the room is there; 36px is restored
+     and the horizontal padding with it. */
+  .app-main .seg-btn {
+    min-height: 36px;
+    font-size: 11.5px;
+    padding: 6px 8px;
+  }
 
 /* Switch rows: three of them are the launcher's biggest block. Keep the
    compact 4px padding and stop the sub-labels wrapping to a second line. */
