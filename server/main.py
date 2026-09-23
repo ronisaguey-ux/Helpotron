@@ -871,7 +871,16 @@ async def _generate(db: Session, user: User, kind: str, transcript_text: str,
         logger.warning("study material usage charge failed: %s", e)
 
     if assignment_id is not None:
-        assignment = db.get(Assignment, assignment_id)
+        # C11 (real IDOR): this was `db.get(Assignment, assignment_id)` with no
+        # ownership predicate, reachable from five endpoints that take an
+        # assignment_id from the request body, so any authenticated user could
+        # set progress/status on ANOTHER user's assignment. A cross-user WRITE,
+        # not just a read. The same file does this correctly at :1657 and :1799.
+        assignment = (
+            db.query(Assignment)
+            .filter(Assignment.id == assignment_id, Assignment.user_id == user.id)
+            .first()
+        )
         if assignment:
             assignment.progress = {**assignment.progress, kind: True}
             if all(assignment.progress.get(k) for k in ALL_MATERIAL_KINDS):
@@ -2274,7 +2283,17 @@ async def _run_agent_and_persist(session: agent_session.AgentSession) -> None:
                 db.add(t)
                 db.flush()
                 if session.assignment_id is not None:
-                    a = db.get(Assignment, session.assignment_id)
+                    # Scope to the session's own owner. `db.get` by id alone
+                    # would let a session pointed at another user's
+                    # assignment mutate it — same class as C11.
+                    a = (
+                        db.query(Assignment)
+                        .filter(
+                            Assignment.id == session.assignment_id,
+                            Assignment.user_id == user.id,
+                        )
+                        .first()
+                    )
                     if a is not None:
                         a.progress = {**a.progress, "collected": True}
                         a.status = "transcribed"
