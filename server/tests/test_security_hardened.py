@@ -493,9 +493,14 @@ def test_password_change_revokes_other_sessions():
     try:
         remaining_sessions = db.query(UserSession).filter(UserSession.user_id == user_id).all()
         rem_tokens = [s.token for s in remaining_sessions]
-        # Only the current session remains, others revoked
+        # Only the current session remains, others revoked.
+        # Tokens are stored HASHED now, so the survivor is identified by its
+        # digest — asserting on the raw value would pass only while the row was
+        # still leaking its credential.
+        from server.security import _hash_token
         assert "sess_token_1" not in rem_tokens
         assert "sess_token_2" not in rem_tokens
-        assert "sess_token_curr" in rem_tokens
+        assert _hash_token("sess_token_curr") in rem_tokens
+        assert "sess_token_curr" not in rem_tokens
     finally:
         db.close()
