@@ -127,17 +127,32 @@ DEFAULT_COSTLY_LIMITS: dict[str, tuple[int, float]] = {
 }
 
 
-def _caller_key(request: "Request") -> tuple[str, str]:
+def _caller_key(request: "Request", user=None) -> tuple[str, str]:
     """Who is asking. Prefers the authenticated account over the IP.
 
     Keying on the account is the point: an attacker rotating IPs behind a shared
     office NAT or a VPN cannot dodge an account-scoped limit, and one noisy
     household does not throttle another.
+
+    `request.state.auth_user_public_id` is NOT read here any more. Nothing in the
+    codebase ever sets it (the shared auth path only sets `api_key_id` and
+    `auth_via_api_key`), so the lookup always returned None and every caller fell
+    through to the client address — which behind cloudflared is always 127.0.0.1.
+    Every user therefore shared ONE bucket, so one busy account throttled all of
+    them. The authenticated user object is the identity, and it is already
+    resolved by the time this runs.
     """
-    user = getattr(getattr(request, "state", None), "auth_user_public_id", None)
-    if user:
-        return f"user:{user}", "account"
-    # Fall back to the client address for anonymous callers.
+    public_id = getattr(user, "public_id", None)
+    if public_id:
+        return f"user:{public_id}", "account"
+    # No authenticated identity: fall back to the bearer credential, which is
+    # at least per-caller, rather than the socket address that a proxy collapses
+    # to a single value.
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        import hashlib
+        digest = hashlib.sha256(auth[7:].strip().encode("utf-8")).hexdigest()[:32]
+        return f"token:{digest}", "credential"
     client = request.client.host if request.client else "unknown"
     return f"ip:{client}", "address"
 
@@ -150,20 +165,22 @@ def costly_guard(kind: str, limit: int | None = None, window: float | None = Non
     Deliberately dependency-shaped rather than middleware: a middleware would
     have to pattern-match paths, and a new expensive route would silently miss
     it. Attaching this to the route is explicit and greppable.
-    """
-    from fastapi import Depends, HTTPException, Request
-    from .routes_features import get_current_authenticated_user
 
-    def _dep(request: Request, user=Depends(get_current_authenticated_user)):
+    The guard does NOT authenticate. It used to carry its own
+    `Depends(get_current_authenticated_user)`, which FastAPI resolved a second
+    time on every route that already depended on the same function — two auth
+    round-trips (session lookup + refresh, or an API-key hash) per request, for
+    a guard whose only job is counting. The caller's `user` is passed in
+    instead, so the dependency runs exactly once.
+    """
+    from fastapi import HTTPException, Request
+
+    def _dep(request: Request, user=None):
         default_limit, default_window = DEFAULT_COSTLY_LIMITS.get(kind, (60, 60.0))
         eff_limit = limit if limit is not None else default_limit
         eff_window = window if window is not None else default_window
 
-        # Prefer the authenticated identity; request.state is set by the auth
-        # dependency above, but fall back to the resolved user object so this
-        # works whether or not that state attribute is populated.
-        public_id = getattr(user, "public_id", None)
-        base = f"user:{public_id}" if public_id else _caller_key(request)[0]
+        base = _caller_key(request, user)[0]
         key = f"costly:{kind}:{base}"
 
         if not limiter.allow(key, eff_limit, window=eff_window):
