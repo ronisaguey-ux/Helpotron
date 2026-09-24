@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { loadSettings, saveSettings } from '../lib/settings.js';
 import SettingOverrides from './SettingOverrides.jsx';
+import Skeleton from './ui/Skeleton.jsx';
 
 const PERSONALITY_OPTIONS = [
   { id: 'global', label: 'Default (Global Preference)' },
@@ -94,7 +95,16 @@ export default function SubjectSettingsPanel({
     setOverrides(activeOverrides);
   }, [isOpen, subjectId]);
 
-  if (!isOpen || !configs) return null;
+  if (!isOpen) return null;
+  if (!configs) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  }
 
   const overrideCount = overrides.size;
 
@@ -391,7 +401,7 @@ export default function SubjectSettingsPanel({
                   <span className="font-tabular-stat text-2xl font-bold text-primary">
                     {configs.human_score_min}%
                   </span>
-                  <span className="font-code-sm text-xs text-on-surface-variant">HUMAN-STYLE SCORE</span>
+                  <span className="font-code-sm text-xs text-on-surface-variant">Human-like score</span>
                 </div>
                 <div className="flex items-center gap-1 bg-surface-container-lowest p-1 rounded-xl border border-outline-variant/20">
                   <button

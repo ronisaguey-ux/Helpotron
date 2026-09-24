@@ -162,7 +162,7 @@ export default function AssignmentConfigPanel({
           {/* 2. CITATION TOPOLOGY PICKER */}
           <div className="flex flex-col gap-2">
             <label className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider font-semibold">
-              Academic Citation Topology
+              Citation Style
             </label>
             <div className="flex flex-wrap gap-2">
               {CITATION_STYLES.map((style) => (
@@ -191,7 +191,6 @@ export default function AssignmentConfigPanel({
                   <FileText className="w-3.5 h-3.5" />
                   <span>Assignment Prompt</span>
                 </span>
-                <span className="font-code-sm text-[10px] text-on-surface-variant">SOURCE SPEC</span>
               </div>
               <p className="font-body-sm text-xs text-on-surface leading-relaxed max-h-36 overflow-y-auto whitespace-pre-wrap select-text">
                 {promptText}

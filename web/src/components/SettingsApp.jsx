@@ -12,6 +12,7 @@ import api from '../api.js';
 import { loadSettings, saveSettings } from '../demoData.js';
 import { SettingsSections } from './SettingsSections.jsx';
 import TrashPanel from './TrashPanel.jsx';
+import { toast } from '../lib/overlay.js';
 
 export const SETTINGS_NAV_ITEMS = [
   { id: 'all', label: 'All Settings', icon: Sliders },
@@ -275,7 +276,7 @@ export default function SettingsApp({
       {/* Main Bare-Bones Sections */}
       <main className="flex flex-col gap-unit-6">
         {activeSection === 'trash' && (
-          <TrashPanel onNotice={(m) => { try { window.dispatchEvent(new CustomEvent('helpotron:toast', { detail: m })); } catch (e) {} }} />
+          <TrashPanel onNotice={(m) => toast.info(m)} />
         )}
 
         <SettingsSections

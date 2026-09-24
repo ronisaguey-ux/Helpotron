@@ -322,10 +322,10 @@ export default function NewAssignmentModal({
             <Loader2 className="w-10 h-10 text-primary animate-spin" />
             <div className="flex flex-col gap-1">
               <h3 className="font-headline-lg text-title-md font-semibold text-on-surface">
-                Extracting Coursework Topology...
+                Analyzing your assignment...
               </h3>
               <p className="font-body-sm text-on-surface-variant">
-                Parsing rubric constraints, due date tokens, and theorem requirements.
+                Reading the rubric, due date, and requirements.
               </p>
             </div>
           </div>

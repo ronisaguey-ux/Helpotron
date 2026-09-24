@@ -172,7 +172,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
               </p>
               <ul className="list-disc pl-5 space-y-1">
                 <li>Student ID numbers, Social Security Numbers, and government identification records.</li>
-                <li>Full student names in extracted assignment rubrics, replaced with [NAME_REDACTED] markers.</li>
+                <li>Full student names in extracted assignment rubrics, replaced with placeholders.</li>
                 <li>Directory emails and personal phone records.</li>
               </ul>
               <h4 className="font-semibold text-[var(--text-primary)]">2.2 Zero Data Sale & Non-Commercial Educational Mandate</h4>

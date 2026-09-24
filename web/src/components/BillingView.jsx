@@ -334,7 +334,7 @@ export default function BillingView({ userId = '' }) {
                 </div>
 
                 <div className="p-3 rounded-xl bg-surface-container-low/90 border border-outline-variant/10 text-xs">
-                  <span className="font-label-caps text-[10px] text-on-surface-variant uppercase block mb-0.5">INCLUDED RUNWAY</span>
+                  <span className="font-label-caps text-[10px] text-on-surface-variant uppercase block mb-0.5">Included</span>
                   <span className="font-tabular-stat text-on-surface font-semibold text-sm">
                     {tier.tokens.toLocaleString()} Tokens / mo
                   </span>
@@ -574,7 +574,7 @@ export default function BillingView({ userId = '' }) {
                     }`}
                   >
                     <Phone className="w-4 h-4" />
-                    <span>SMS OTP</span>
+                    <span>Text message</span>
                   </button>
                 </div>
               </div>

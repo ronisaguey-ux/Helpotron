@@ -31,6 +31,7 @@ export default function FlashcardsPlayer({
   const [sessionResults, setSessionResults] = useState({}); // index -> rating
   const [isFinished, setIsFinished] = useState(false);
   const [speechActive, setSpeechActive] = useState(false);
+  const [ratingBusy, setRatingBusy] = useState(false);
 
   // Synchronize incoming cards
   useEffect(() => {
@@ -115,6 +116,8 @@ export default function FlashcardsPlayer({
 
   // Handle Rating (FSRS scale 1: Again, 2: Hard, 3: Good, 4: Easy)
   const handleRateCard = async (rating) => {
+    if (ratingBusy) return;
+    setRatingBusy(true);
     setSessionResults((prev) => ({ ...prev, [currentIndex]: rating }));
 
     if (onReviewCard) {
@@ -131,6 +134,7 @@ export default function FlashcardsPlayer({
 
     // Auto advance
     handleNext();
+    setRatingBusy(false);
   };
 
   // Text-to-speech audio pronunciation
@@ -413,7 +417,8 @@ export default function FlashcardsPlayer({
           <button
             type="button"
             onClick={() => handleRateCard(1)}
-            className="h-11 px-3 rounded-xl bg-error/15 hover:bg-error/25 border border-error/30 text-error font-label-caps text-[11px] flex flex-col items-center justify-center transition active:scale-[0.97] cursor-pointer"
+            disabled={ratingBusy}
+            className="h-11 px-3 rounded-xl bg-error/15 hover:bg-error/25 border border-error/30 text-error font-label-caps text-[11px] flex flex-col items-center justify-center transition active:scale-[0.97] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span className="font-bold">AGAIN</span>
             <span className="font-code-sm text-[9px] opacity-80">&lt;10m [1]</span>
@@ -421,7 +426,8 @@ export default function FlashcardsPlayer({
           <button
             type="button"
             onClick={() => handleRateCard(2)}
-            className="h-11 px-3 rounded-xl bg-surface-container-high hover:bg-surface-bright border border-outline-variant/30 text-on-surface font-label-caps text-[11px] flex flex-col items-center justify-center transition active:scale-[0.97] cursor-pointer"
+            disabled={ratingBusy}
+            className="h-11 px-3 rounded-xl bg-surface-container-high hover:bg-surface-bright border border-outline-variant/30 text-on-surface font-label-caps text-[11px] flex flex-col items-center justify-center transition active:scale-[0.97] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span className="font-bold">HARD</span>
             <span className="font-code-sm text-[9px] opacity-80">1d [2]</span>
@@ -429,7 +435,8 @@ export default function FlashcardsPlayer({
           <button
             type="button"
             onClick={() => handleRateCard(3)}
-            className="h-11 px-3 rounded-xl bg-sem-blue/15 hover:bg-sem-blue/25 border border-sem-blue/30 text-sem-blue font-label-caps text-[11px] flex flex-col items-center justify-center transition active:scale-[0.97] cursor-pointer"
+            disabled={ratingBusy}
+            className="h-11 px-3 rounded-xl bg-sem-blue/15 hover:bg-sem-blue/25 border border-sem-blue/30 text-sem-blue font-label-caps text-[11px] flex flex-col items-center justify-center transition active:scale-[0.97] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span className="font-bold">GOOD</span>
             <span className="font-code-sm text-[9px] opacity-80">3d [3]</span>
@@ -437,7 +444,8 @@ export default function FlashcardsPlayer({
           <button
             type="button"
             onClick={() => handleRateCard(4)}
-            className="h-11 px-4 rounded-xl bg-primary hover:bg-primary-fixed-dim text-on-primary font-label-caps text-[11px] flex flex-col items-center justify-center shadow-[0_0_20px_rgba(89,216,201,0.25)] transition active:scale-[0.97] cursor-pointer"
+            disabled={ratingBusy}
+            className="h-11 px-4 rounded-xl bg-primary hover:bg-primary-fixed-dim text-on-primary font-label-caps text-[11px] flex flex-col items-center justify-center shadow-[0_0_20px_rgba(89,216,201,0.25)] transition active:scale-[0.97] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span className="font-bold">EASY</span>
             <span className="font-code-sm text-[9px] opacity-90">7d [4]</span>

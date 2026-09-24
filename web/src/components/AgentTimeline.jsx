@@ -168,7 +168,7 @@ export default function AgentTimeline({
                           : 'text-on-surface-variant'
                       }`}
                     >
-                      NODE 0{node.index} • {node.role}
+                      Step {node.index} • {node.role}
                     </span>
                     <span className="font-title-md text-sm text-on-surface font-semibold truncate">
                       {node.name}

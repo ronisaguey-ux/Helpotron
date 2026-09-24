@@ -67,11 +67,11 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
               <span className="text-outline-variant font-code-sm text-xs">/</span>
               <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-sem-green/15 text-sem-green font-chip-status text-[10px] uppercase">
                 <span className="w-1.5 h-1.5 rounded-full bg-sem-green animate-pulse"></span>
-                LIVE METROLOGY
+                Live
               </div>
             </div>
             <h2 className="font-headline-lg-mobile md:font-headline-lg text-title-md md:text-headline-lg text-on-surface font-semibold tracking-tight">
-              Cost Ledger &amp; Spend Velocity
+              Usage &amp; Spending
             </h2>
           </div>
         </div>
@@ -83,7 +83,7 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
         <div className="bg-surface-container-lowest/80 backdrop-blur-xl p-5 rounded-2xl border border-outline-variant/20 shadow-md flex flex-col justify-between">
           <div className="flex items-center justify-between mb-3">
             <span className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider">Current Cycle Spend</span>
-            <span className="font-chip-status text-[10px] text-sem-green bg-sem-green/15 px-2 py-0.5 rounded-lg">LIVE METER</span>
+            <span className="font-chip-status text-[10px] text-sem-green bg-sem-green/15 px-2 py-0.5 rounded-lg">Live</span>
           </div>
           <div>
             <div className="flex items-baseline gap-2">
@@ -148,7 +148,7 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
       <div className="bg-surface-container-lowest/80 backdrop-blur-xl p-6 rounded-3xl border border-outline-variant/20 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="font-title-md text-title-md text-on-surface font-semibold">Spend Velocity &amp; Burn Curve</h3>
+            <h3 className="font-title-md text-title-md text-on-surface font-semibold">Spending over time</h3>
             <p className="font-code-sm text-xs text-on-surface-variant mt-0.5">
               Continuous rolling telemetry across completed model generations and synthesis tasks.
             </p>

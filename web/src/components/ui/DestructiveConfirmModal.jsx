@@ -48,11 +48,11 @@ export default function DestructiveConfirmModal({
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-error" />
             <span className="font-mono text-[10px] font-bold text-error uppercase tracking-wider">
-              CRITICAL GATEWAY
+              Please confirm
             </span>
           </div>
           <span className="font-mono text-[9px] uppercase px-2 py-0.5 rounded bg-surface-container text-on-surface-variant">
-            IMMUTABLE MUTATION
+            Cannot be undone
           </span>
         </div>
 

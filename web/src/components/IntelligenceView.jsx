@@ -12,6 +12,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import api from "../api.js";
+import Skeleton from "./ui/Skeleton.jsx";
 
 /** Builds observations that are literally true of the returned numbers. */
 function deriveInsights(a) {
@@ -87,8 +88,10 @@ function lastSevenDays(recent) {
 function StatusBlock({ loading, error, onRetry }) {
   if (loading) {
     return (
-      <div className="p-8 rounded-2xl bg-surface-container-lowest/80 border border-outline-variant/30 text-center text-xs font-code-sm text-on-surface-variant">
-        Loading telemetry snapshot…
+      <div className="p-8 rounded-2xl bg-surface-container-lowest/80 border border-outline-variant/30 space-y-3">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-4 w-72" />
+        <Skeleton className="h-4 w-56" />
       </div>
     );
   }

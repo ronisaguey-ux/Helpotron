@@ -151,6 +151,7 @@ export function AssignmentCardDashboard({
   // Notices
   const [exportNotice, setExportNotice] = useState('');
   const [bubbleExporting, setBubbleExporting] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -264,6 +265,7 @@ export function AssignmentCardDashboard({
   };
 
   const handleExportAllData = async () => {
+    setExportingAll(true);
     try {
       const data = await api.exportAllUserData();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -278,6 +280,8 @@ export function AssignmentCardDashboard({
     } catch (e) {
       setExportNotice('❌ Failed to export data.');
       setTimeout(() => setExportNotice(''), 4000);
+    } finally {
+      setExportingAll(false);
     }
   };
 
@@ -425,20 +429,18 @@ export function AssignmentCardDashboard({
               <div className="flex flex-col gap-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-title-md text-title-md text-on-surface font-semibold">
-                    Coursework Synchronization Failure
+                    Couldn't load your coursework
                   </h2>
                   <span className="px-2.5 py-0.5 rounded-full bg-error/20 font-chip-status text-[10px] text-error uppercase font-semibold">
-                    FATAL GATEWAY 504
+                    Server timed out
                   </span>
                 </div>
                 <p className="font-code-sm text-xs text-error/90 break-all pt-1">
-                  ERR_TIMEOUT_UPSTREAM_NODE: {fetchError}
+                  {fetchError}
                 </p>
-                <div className="flex items-center gap-3 pt-2 text-on-surface-variant font-code-sm text-xs">
-                  <span>TELEMETRY SYNC INTERRUPTED</span>
-                  <span className="w-1 h-1 rounded-full bg-outline-variant" />
-                  <span>NEVER RENDERING PSEUDO-EMPTY SUBJECTS</span>
-                </div>
+                  <div className="flex items-center gap-3 pt-2 text-on-surface-variant font-code-sm text-xs">
+                    <span>Nothing was changed. Try again in a moment.</span>
+                  </div>
               </div>
             </div>
 
@@ -491,12 +493,13 @@ export function AssignmentCardDashboard({
           <button
             type="button"
             onClick={handleExportAllData}
-            className="h-11 px-4 rounded-xl border border-outline-variant/30 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors flex items-center gap-2 cursor-pointer font-label-caps text-xs uppercase tracking-wider"
+            disabled={exportingAll}
+            className="h-11 px-4 rounded-xl border border-outline-variant/30 text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors flex items-center gap-2 cursor-pointer font-label-caps text-xs uppercase tracking-wider disabled:opacity-60"
             title="Export complete user data archive"
             aria-label="Export complete user data"
           >
-            <Download className="w-4 h-4" />
-            <span className="hidden sm:inline">Export Archive</span>
+            {exportingAll ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            <span className="hidden sm:inline">{exportingAll ? 'Exporting…' : 'Export Archive'}</span>
           </button>
         </div>
       </div>
@@ -740,7 +743,7 @@ export function AssignmentCardDashboard({
                     {inProgressCards.length === 0 ? (
                       <div className="bg-surface-container-low/40 rounded-2xl p-6 border border-dashed border-outline-variant/30 text-center">
                         <p className="font-body-sm text-body-sm text-on-surface-variant">
-                          No active assignments currently in progress.
+                          Nothing in progress right now — kick off an agent thread and it will appear here.
                         </p>
                       </div>
                     ) : (
@@ -775,7 +778,7 @@ export function AssignmentCardDashboard({
                     {pendingCards.length === 0 ? (
                       <div className="bg-surface-container-low/40 rounded-2xl p-6 border border-dashed border-outline-variant/30 text-center">
                         <p className="font-body-sm text-body-sm text-on-surface-variant">
-                          No actions awaiting approval.
+                          Nothing needs your approval — you are all caught up.
                         </p>
                       </div>
                     ) : (

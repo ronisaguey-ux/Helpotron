@@ -76,6 +76,16 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
   const [costMsg, setCostMsg] = useState('');
   const [creditAmountMap, setCreditAmountMap] = useState({});
   const [tokenAmountMap, setTokenAmountMap] = useState({});
+  const [busyAction, setBusyAction] = useState(null);
+
+  const runBusy = async (key, fn) => {
+    setBusyAction(key);
+    try {
+      await fn();
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -747,8 +757,9 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
 
                             <button
                               type="button"
-                              onClick={() => handleUpdateMultiplier(u.public_id, currentMult)}
-                              className="px-2.5 py-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-[var(--radius-sm)] text-[11px] font-semibold transition cursor-pointer ml-1"
+                              onClick={() => runBusy(`mult:${u.public_id}`, () => handleUpdateMultiplier(u.public_id, currentMult))}
+                              disabled={busyAction === `mult:${u.public_id}`}
+                              className="px-2.5 py-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-[var(--radius-sm)] text-[11px] font-semibold transition cursor-pointer ml-1 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               Save
                             </button>
@@ -777,9 +788,10 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                               <div className="flex flex-wrap items-center justify-end gap-1.5 p-2 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] max-w-[380px]">
                                 <button
                                   type="button"
-                                  onClick={() => handleRowKick(u)}
+                                  onClick={() => runBusy(`kick:${u.public_id}`, () => handleRowKick(u))}
+                                  disabled={busyAction === `kick:${u.public_id}`}
                                   title="Terminate all of this user's active sessions"
-                                  className="px-2 py-1 rounded-[var(--radius-sm)] bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 text-[10px] font-semibold transition cursor-pointer"
+                                  className="px-2 py-1 rounded-[var(--radius-sm)] bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 text-[10px] font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   Kick
                                 </button>
@@ -796,9 +808,10 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                   />
                                   <button
                                     type="button"
-                                    onClick={() => handleRowTempBan(u)}
+                                    onClick={() => runBusy(`tempban:${u.public_id}`, () => handleRowTempBan(u))}
+                                    disabled={busyAction === `tempban:${u.public_id}`}
                                     title="Temporarily ban — blocks login/sessions until the clock runs out"
-                                    className="px-2 py-1 rounded-[var(--radius-sm)] bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 text-[10px] font-semibold transition cursor-pointer"
+                                    className="px-2 py-1 rounded-[var(--radius-sm)] bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 text-[10px] font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     Temp Ban
                                   </button>
@@ -806,35 +819,39 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                 {u.banned ? (
                                   <button
                                     type="button"
-                                    onClick={() => handleRowBanToggle(u)}
+                                    onClick={() => runBusy(`ban:${u.public_id}`, () => handleRowBanToggle(u))}
+                                    disabled={busyAction === `ban:${u.public_id}`}
                                     title="Lift the ban — login & sessions allowed again"
-                                    className="px-2 py-1 rounded-[var(--radius-sm)] bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 text-[10px] font-semibold transition cursor-pointer"
+                                    className="px-2 py-1 rounded-[var(--radius-sm)] bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 text-[10px] font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     Unban
                                   </button>
                                 ) : (
                                   <button
                                     type="button"
-                                    onClick={() => handleRowBanToggle(u)}
+                                    onClick={() => runBusy(`ban:${u.public_id}`, () => handleRowBanToggle(u))}
+                                    disabled={busyAction === `ban:${u.public_id}`}
                                     title="Ban — block login & sessions (until unbanned)"
-                                    className="px-2 py-1 rounded-[var(--radius-sm)] bg-rose-500/15 border border-rose-500/30 text-rose-300 hover:bg-rose-500/25 text-[10px] font-semibold transition cursor-pointer"
+                                    className="px-2 py-1 rounded-[var(--radius-sm)] bg-rose-500/15 border border-rose-500/30 text-rose-300 hover:bg-rose-500/25 text-[10px] font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     Ban
                                   </button>
                                 )}
                                 <button
                                   type="button"
-                                  onClick={() => handleRowDelete(u)}
+                                  onClick={() => runBusy(`delete:${u.public_id}`, () => handleRowDelete(u))}
+                                  disabled={busyAction === `delete:${u.public_id}`}
                                   title="Permanently delete this user (confirmation required)"
-                                  className="px-2 py-1 rounded-[var(--radius-sm)] bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-semibold transition cursor-pointer"
+                                  className="px-2 py-1 rounded-[var(--radius-sm)] bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   Delete
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleRowActAs(u)}
+                                  onClick={() => runBusy(`actas:${u.public_id}`, () => handleRowActAs(u))}
+                                  disabled={busyAction === `actas:${u.public_id}`}
                                   title="Impersonate: switch this session to the user's account (reload: the app enters their full account; logout returns to admin)"
-                                  className="px-2 py-1 rounded-[var(--radius-sm)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.35)] text-[var(--accent)] hover:bg-[var(--accent-subtle)]/80 text-[10px] font-semibold transition cursor-pointer"
+                                  className="px-2 py-1 rounded-[var(--radius-sm)] bg-[var(--accent-subtle)] border border-[rgba(139,92,246,0.35)] text-[var(--accent)] hover:bg-[var(--accent-subtle)]/80 text-[10px] font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   Act as
                                 </button>
@@ -882,7 +899,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                               />
                               <button
                                 type="button"
-                                onClick={async () => {
+                                onClick={() => runBusy(`grant:${u.id}`, async () => {
                                   const amt = Number(tokenAmountMap[u.id]);
                                   if (!Number.isInteger(amt) || amt === 0) {
                                     setBulkStatus('Enter a non-zero whole number token amount');
@@ -898,14 +915,15 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                     setBulkStatus(`✗ Grant failed: ${e.message || 'unknown error'}`);
                                   }
                                   fetchUsers();
-                                }}
-                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition cursor-pointer"
+                                })}
+                                disabled={busyAction === `grant:${u.id}`}
+                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 Grant
                               </button>
                               <button
                                 type="button"
-                                onClick={async () => {
+                                onClick={() => runBusy(`remtok:${u.id}`, async () => {
                                   const amt = Math.abs(Number(tokenAmountMap[u.id]));
                                   if (!Number.isInteger(amt) || amt === 0) {
                                     setBulkStatus('Enter a whole number amount to remove');
@@ -921,8 +939,9 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                     setBulkStatus(`✗ Removal failed: ${e.message || 'unknown error'}`);
                                   }
                                   fetchUsers();
-                                }}
-                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-semibold transition cursor-pointer"
+                                })}
+                                disabled={busyAction === `remtok:${u.id}`}
+                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 Remove
                               </button>
@@ -941,7 +960,7 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                               />
                               <button
                                 type="button"
-                                onClick={async () => {
+                                onClick={() => runBusy(`addcred:${u.id}`, async () => {
                                   const amt = Number(creditAmountMap[u.id]);
                                   if (!Number.isInteger(amt) || amt === 0) {
                                     setBulkStatus('Enter a non-zero whole number credit amount');
@@ -955,14 +974,15 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                     setBulkStatus(`✗ Credit change failed: ${e.message || 'unknown error'}`);
                                   }
                                   fetchUsers();
-                                }}
-                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[11px] font-semibold transition cursor-pointer"
+                                })}
+                                disabled={busyAction === `addcred:${u.id}`}
+                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-[11px] font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 Apply
                               </button>
                               <button
                                 type="button"
-                                onClick={async () => {
+                                onClick={() => runBusy(`remcred:${u.id}`, async () => {
                                   const amt = Math.abs(Number(creditAmountMap[u.id]));
                                   if (!Number.isInteger(amt) || amt === 0) {
                                     setBulkStatus('Enter a whole number amount to remove');
@@ -976,8 +996,9 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                                     setBulkStatus(`✗ Credit removal failed: ${e.message || 'unknown error'}`);
                                   }
                                   fetchUsers();
-                                }}
-                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-semibold transition cursor-pointer"
+                                })}
+                                disabled={busyAction === `remcred:${u.id}`}
+                                className="px-2.5 py-1 rounded-[var(--radius-sm)] bg-rose-600/80 hover:bg-rose-600 text-white text-[11px] font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 Remove
                               </button>
@@ -1028,18 +1049,20 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
               {safeAdminMessages.length > 0 && (
                 <button
                   type="button"
-                  onClick={handleClearInbox}
-                  className="px-3 py-1.5 rounded-[var(--radius-sm)] text-xs text-rose-300 hover:text-white bg-rose-500/15 hover:bg-rose-600 border border-rose-500/30 flex items-center gap-1.5 transition cursor-pointer"
+                  onClick={() => runBusy('clear-inbox', handleClearInbox)}
+                  disabled={busyAction === 'clear-inbox'}
+                  className="px-3 py-1.5 rounded-[var(--radius-sm)] text-xs text-rose-300 hover:text-white bg-rose-500/15 hover:bg-rose-600 border border-rose-500/30 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Clear Inbox
                 </button>
               )}
               <button
                 type="button"
-                onClick={fetchAdminMessages}
-                className="px-3 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] bg-white/5 border border-[var(--border-subtle)] flex items-center gap-1.5 transition cursor-pointer"
+                onClick={() => runBusy('refresh-inbox', fetchAdminMessages)}
+                disabled={busyAction === 'refresh-inbox'}
+                className="px-3 py-1.5 rounded-[var(--radius-sm)] text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] bg-white/5 border border-[var(--border-subtle)] flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <RefreshCw className="w-3.5 h-3.5" /> Refresh Inbox
+                <RefreshCw className={`w-3.5 h-3.5 ${busyAction === 'refresh-inbox' ? 'animate-spin' : ''}`} /> Refresh Inbox
               </button>
             </div>
           </div>
@@ -1077,10 +1100,11 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                       </span>
                       <button
                         type="button"
-                        onClick={() => handleDeleteMessage(msg)}
+                        onClick={() => runBusy(`delmsg:${msg.id}`, () => handleDeleteMessage(msg))}
+                        disabled={busyAction === `delmsg:${msg.id}`}
                         title="Delete this message"
                         aria-label={`Delete message ${msg.id}`}
-                        className="p-1.5 rounded-[var(--radius-sm)] text-rose-300 hover:text-white bg-rose-500/15 hover:bg-rose-600 border border-rose-500/30 transition cursor-pointer"
+                        className="p-1.5 rounded-[var(--radius-sm)] text-rose-300 hover:text-white bg-rose-500/15 hover:bg-rose-600 border border-rose-500/30 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1110,8 +1134,9 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                       />
                       <button
                         type="button"
-                        onClick={() => handleSendAdminReply(msg.id)}
-                        className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-[var(--radius-sm)] font-semibold transition cursor-pointer flex items-center gap-1.5 shrink-0"
+                        onClick={() => runBusy(`reply:${msg.id}`, () => handleSendAdminReply(msg.id))}
+                        disabled={busyAction === `reply:${msg.id}`}
+                        className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-[var(--radius-sm)] font-semibold transition cursor-pointer flex items-center gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Send className="w-3.5 h-3.5" />
                         <span>Reply</span>
@@ -1203,8 +1228,8 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                   <div key={item.id} className="group p-3 flex items-center justify-between gap-3">
                     <span className="text-[var(--text-primary)] font-medium truncate">{item.type}: {item.title || item.id}</span>
                     <div className="flex gap-2 shrink-0">
-                      <button type="button" onClick={() => handleModerationAction(item.id, 'approved')} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer">Approve</button>
-                      <button type="button" onClick={() => handleModerationAction(item.id, 'rejected')} className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer">Reject</button>
+                      <button type="button" onClick={() => runBusy(`mod:${item.id}`, () => handleModerationAction(item.id, 'approved'))} disabled={busyAction === `mod:${item.id}`} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">Approve</button>
+                      <button type="button" onClick={() => runBusy(`mod:${item.id}`, () => handleModerationAction(item.id, 'rejected'))} disabled={busyAction === `mod:${item.id}`} className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">Reject</button>
                     </div>
                   </div>
                 ))}
@@ -1308,8 +1333,9 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                         <td className="py-3 text-right">
                           <button
                             type="button"
-                            onClick={() => handleUpdateMultiplier(u.public_id, currentVal)}
-                            className="px-3 py-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer"
+                            onClick={() => runBusy(`mult2:${u.public_id}`, () => handleUpdateMultiplier(u.public_id, currentVal))}
+                            disabled={busyAction === `mult2:${u.public_id}`}
+                            className="px-3 py-1 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-[var(--radius-sm)] text-xs font-semibold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Save
                           </button>
@@ -1387,11 +1413,12 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
             <span className="panel-head__title">System health status</span>
             <button
               type="button"
-              onClick={fetchHealth}
-              className="p-1.5 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-white hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
+              onClick={() => runBusy('health', fetchHealth)}
+              disabled={busyAction === 'health'}
+              className="p-1.5 rounded-[var(--radius-sm)] text-[var(--text-muted)] hover:text-white hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer disabled:opacity-50"
               title="Refresh health"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className={`w-3.5 h-3.5 ${busyAction === 'health' ? 'animate-spin' : ''}`} />
             </button>
           </div>
           <div className="panel-body">
@@ -1429,8 +1456,9 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
                 <p>Health telemetry unavailable. System health data will appear here once the backend responds.</p>
                 <button
                   type="button"
-                  onClick={fetchHealth}
-                  className="mx-auto mt-2 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs bg-white/5 hover:bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition cursor-pointer"
+                  onClick={() => runBusy('health-retry', fetchHealth)}
+                  disabled={busyAction === 'health-retry'}
+                  className="mx-auto mt-2 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs bg-white/5 hover:bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] border border-[var(--border-subtle)] transition cursor-pointer disabled:opacity-50"
                 >
                   Retry
                 </button>

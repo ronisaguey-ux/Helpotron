@@ -313,7 +313,7 @@ export const DEFAULT_SETTINGS = {
     effort: 'balanced', autoRouting: true, creativity: 72, reasoning: 88, conciseness: 61,
     rigor: 94, sourceDepth: 91, originality: 78, temperature: 0.7, tokenBudget: 4096,
     fallbackEnabled: true, subsetting: false,
-    personality: 'Coach', aiName: 'Atlas',
+    personality: 'Coach', aiName: 'Helpotron',
     instructions: 'Explain like you are a patient coach. Check my understanding before moving on.',
   },
   educationalMode: true, // top-level My Agent school-scope gate (backend: agent_prompt.mode_for_node)

@@ -33,6 +33,7 @@ export default function NotificationsView({ onNavigate, user }) {
     telegram: false,
   });
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
 
   const fetchFeed = async () => {
     try {
@@ -66,11 +67,14 @@ export default function NotificationsView({ onNavigate, user }) {
   const markAllRead = async () => {
     const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id);
     if (unreadIds.length === 0) return;
+    setMarkingAll(true);
     try {
       await api.post('/api/notifications/read', { ids: unreadIds });
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch (e) {
       console.warn('[NotificationsView] Mark all read failed:', e);
+    } finally {
+      setMarkingAll(false);
     }
   };
 
@@ -86,18 +90,13 @@ export default function NotificationsView({ onNavigate, user }) {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 font-mono text-[10px] text-primary uppercase tracking-wider mb-1">
-            <span>PLATFORM SYSTEM</span>
-            <span>/</span>
-            <span>TELEMETRY FEED</span>
-          </div>
           <h1 className="text-2xl sm:text-3xl font-bold font-headline-lg text-on-surface tracking-tight">
             Notification Center
           </h1>
         </div>
 
         {unreadCount > 0 && tab !== 'preferences' && (
-          <Button variant="secondary" size="sm" onClick={markAllRead}>
+          <Button variant="secondary" size="sm" onClick={markAllRead} loading={markingAll} loadingText="Marking…">
             <CheckCircle2 className="w-4 h-4 text-primary" /> Mark all as read
           </Button>
         )}

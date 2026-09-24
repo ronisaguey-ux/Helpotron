@@ -413,7 +413,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
                   {selectedChannel === 'phone' ? <Phone className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
                 </div>
                 <div className="min-w-0">
-                  <div className="font-mono text-[9px] uppercase tracking-wider text-on-surface-variant">DISPATCH RECIPIENT</div>
+                  <div className="font-mono text-[9px] uppercase tracking-wider text-on-surface-variant">Send to</div>
                   <div className="text-xs font-semibold text-on-surface truncate">
                     {targetId} via {selectedChannel.toUpperCase()}
                   </div>
@@ -452,9 +452,10 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
                   <button
                     type="button"
                     onClick={() => handleRequestOtp()}
-                    className="text-primary hover:underline cursor-pointer flex items-center gap-1"
+                    disabled={loading}
+                    className="text-primary hover:underline cursor-pointer flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <RefreshCw className="w-3 h-3" /> Resend Code Now
+                    <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Resend Code Now
                   </button>
                 )}
               </div>

@@ -17,6 +17,7 @@ import {
   BookmarkCheck,
   Play,
   Layers,
+  Loader2,
 } from "lucide-react";
 import api from "../api.js";
 import FlashcardsPlayer from "./study/FlashcardsPlayer.jsx";
@@ -60,6 +61,7 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment, i
   const [streakDays, setStreakDays] = useState(0);
   const [expandedMap, setExpandedMap] = useState({});
   const [feedbackNotice, setFeedbackNotice] = useState("");
+  const [busyId, setBusyId] = useState(null);
 
   // Active Study Tool Session State
   const [activeStudyTool, setActiveStudyTool] = useState(null); // { type: "flashcards" | "quiz", material }
@@ -95,17 +97,21 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment, i
   // destroying it, so the copy says so and the button warns before acting.
   const handleDelete = async (m) => {
     if (!window.confirm('Move this to the trash? You can restore it from Settings → Trash for 10 days.')) return;
+    setBusyId(m.id);
     try {
       await api.deleteLibraryMaterial(m.id);
       setMaterials((prev) => prev.filter((item) => item.id !== m.id));
       triggerNotice('Moved to trash — restore it from Settings → Trash.');
     } catch (e) {
       triggerNotice(e?.message || 'Delete failed.');
+    } finally {
+      setBusyId(null);
     }
   };
 
   // Save / Unsave
   const handleToggleSave = async (m) => {
+    setBusyId(m.id);
     try {
       if (m.saved_at) {
         await fetch(`/api/library/materials/${m.id}/unsave`, { method: "DELETE" });
@@ -123,6 +129,8 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment, i
       }
     } catch (e) {
       triggerNotice("Action failed.");
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -288,10 +296,11 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment, i
                         <button
                           type="button"
                           onClick={() => handleToggleSave(m)}
-                          className="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-primary transition cursor-pointer"
+                          disabled={busyId === m.id}
+                          className="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-primary transition cursor-pointer disabled:opacity-60"
                           title={isSaved ? "Remove from saved" : "Save to collection"}
                         >
-                          {isSaved ? <BookmarkCheck className="w-4 h-4 text-primary" /> : <Bookmark className="w-4 h-4" />}
+                          {busyId === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : isSaved ? <BookmarkCheck className="w-4 h-4 text-primary" /> : <Bookmark className="w-4 h-4" />}
                         </button>
                       </div>
 
@@ -400,19 +409,21 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment, i
                           <button
                             type="button"
                             onClick={() => handleToggleSave(m)}
-                            className="min-h-[44px] min-w-[44px] rounded-xl hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-error transition cursor-pointer"
+                            disabled={busyId === m.id}
+                            className="min-h-[44px] min-w-[44px] rounded-xl hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-error transition cursor-pointer disabled:opacity-60"
                             title="Unsave material"
                           >
-                            <BookmarkCheck className="w-4 h-4 text-primary hover:text-error" />
+                            {busyId === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <BookmarkCheck className="w-4 h-4 text-primary hover:text-error" />}
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDelete(m)}
-                            className="min-h-[44px] min-w-[44px] rounded-xl hover:bg-error/15 flex items-center justify-center text-on-surface-variant hover:text-error transition cursor-pointer"
+                            disabled={busyId === m.id}
+                            className="min-h-[44px] min-w-[44px] rounded-xl hover:bg-error/15 flex items-center justify-center text-on-surface-variant hover:text-error transition cursor-pointer disabled:opacity-60"
                             title="Move to trash (recoverable for 10 days)"
                             aria-label={`Delete ${m.kind || 'material'} #${m.id}`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            {busyId === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                           </button>
                         </div>
                       </div>

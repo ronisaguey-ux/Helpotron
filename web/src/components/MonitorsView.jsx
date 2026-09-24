@@ -273,7 +273,7 @@ export default function MonitorsView({ userId = "" }) {
                               : "bg-primary/15 text-primary"
                           }`}
                         >
-                          {isHigh ? "HIGH SEVERITY" : isMed ? "MEDIUM SEVERITY" : "ANOMALY SIGNAL"}
+                          {isHigh ? "HIGH SEVERITY" : isMed ? "MEDIUM SEVERITY" : "LOW SEVERITY"}
                         </span>
                         <span className="font-code-sm text-xs text-on-surface-variant">
                           #{item.id}

@@ -169,6 +169,33 @@ export default function AppShell({
     return () => window.removeEventListener('helpotron:settings-changed', onSettings);
   }, []);
 
+  // Synchronize initial settings from backend if available
+  useEffect(() => {
+    let mounted = true;
+    api.getUserSettings?.()
+      .then((res) => {
+        if (!mounted || !res) return;
+        const s = res.settings || res;
+        if (s && typeof s === 'object') {
+          const local = loadSettings();
+          const merged = {
+            ...local,
+            ...s,
+            ai: {
+              ...(local.ai || {}),
+              ...(s.ai || {}),
+            },
+          };
+          saveSettings(merged);
+          setSettings(merged);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     const merged = { ...settings.appearance };
     if (settings.scoped) {
@@ -276,7 +303,7 @@ export default function AppShell({
                 className="w-full text-xs font-semibold py-2.5 flex items-center justify-center gap-2"
               >
                 <Plus className="w-4 h-4" />
-                <span>NEW STUDY SESSION</span>
+                <span>New Study Session</span>
               </Button>
             )}
           </div>
@@ -336,7 +363,7 @@ export default function AppShell({
               </div>
               <div className="flex items-baseline justify-between font-mono">
                 <div>
-                  <span className="text-[9px] text-on-surface-variant block">TASK_TOKENS</span>
+                  <span className="text-[9px] text-on-surface-variant block">Tokens</span>
                   <span className="text-xs font-semibold text-primary tabular-nums">
                     {user?.unlimited ? '\u221e' : Number(user?.token_balance ?? 0).toLocaleString()}
                   </span>

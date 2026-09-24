@@ -3,4 +3,4 @@ Allow: /
 Disallow: /api/
 Disallow: /admin
 
-Sitemap: https://helpotron.com/sitemap.xml
+Sitemap: https://helpotron.dpdns.org/sitemap.xml
