@@ -250,26 +250,27 @@ async def get_user_detail(public_id: str, request: Request, db: Session = Depend
 @router.post("/user/{public_id}/credits")
 async def adjust_user_credits(
     public_id: str,
-    amount: int = Query(..., description="Positive integer credit adjustment (negative to deduct)"),
+    amount: float = Query(..., description="Credit adjustment: positive to add, negative to deduct, 0 to set to 0"),
     reason: str = Query("admin adjustment"),
     request: Request = None,
     db: Session = Depends(get_db),
 ):
     require_admin(request)
-    if amount == 0:
-        raise HTTPException(status_code=400, detail="Credit adjustment amount must be non-zero")
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
-    # Clamp so a balance can never go negative (operator 08-26).
-    # Manual balance adjustment targets the USAGE currency (tokens).
     from .credits import get_token_balance, set_token_balance
-    set_token_balance(user, max(0.0, get_token_balance(user) + amount))
-    tx = CreditTransaction(user_id=user.id, delta=amount, reason=f"admin: {reason}")
+    if amount == 0:
+        set_token_balance(user, 0.0)
+        tx = CreditTransaction(user_id=user.id, delta=0, reason=f"admin: {reason} (reset to 0)")
+    else:
+        new_bal = max(0.0, get_token_balance(user) + amount)
+        set_token_balance(user, new_bal)
+        tx = CreditTransaction(user_id=user.id, delta=amount, reason=f"admin: {reason}")
     db.add(tx)
     db.commit()
     db.refresh(user)
-    return {"new_balance": user.credits, "public_id": user.public_id, "amount": amount}
+    return {"new_balance": get_token_balance(user), "public_id": user.public_id, "amount": amount}
 
 
 @router.post("/user/{public_id}/welcome-tokens")
@@ -705,6 +706,11 @@ class TokenGrantRequest(BaseModel):
     amount: float
 
 
+class TokenSetRequest(BaseModel):
+    public_id: str
+    amount: float = 0.0
+
+
 @router.post("/tokens/grant")
 async def grant_tokens(req: TokenGrantRequest, request: Request, db: Session = Depends(get_db)):
     """Operator: grant a usage-token balance to a user (tokens = usage budget,
@@ -713,13 +719,27 @@ async def grant_tokens(req: TokenGrantRequest, request: Request, db: Session = D
     user = db.query(User).filter(User.public_id == req.public_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    settings = dict(user.settings or {})
-    bal = float(settings.get("token_balance", 0) or 0)
+    from .credits import get_token_balance, set_token_balance
+    bal = get_token_balance(user)
     # Clamp so a balance can never go negative (operator 08-26).
-    settings["token_balance"] = max(0.0, bal + req.amount)
-    user.settings = settings
+    set_token_balance(user, max(0.0, bal + req.amount))
     db.commit()
-    return {"public_id": user.public_id, "token_balance": settings["token_balance"]}
+    db.refresh(user)
+    return {"public_id": user.public_id, "token_balance": get_token_balance(user)}
+
+
+@router.post("/tokens/set")
+async def set_tokens_endpoint(req: TokenSetRequest, request: Request, db: Session = Depends(get_db)):
+    """Operator: set exact usage-token balance for a user (e.g. 0 to wipe tokens)."""
+    require_admin(request)
+    user = db.query(User).filter(User.public_id == req.public_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    from .credits import get_token_balance, set_token_balance
+    set_token_balance(user, max(0.0, float(req.amount)))
+    db.commit()
+    db.refresh(user)
+    return {"public_id": user.public_id, "token_balance": get_token_balance(user)}
 
 
 @router.post("/tokens/redeem")
