@@ -20,6 +20,8 @@ from server.launch_to_doc import (
     build_launch_plan,
     build_typing_config,
     resolve_preset,
+    SPEED_MIN,
+    SPEED_MAX,
 )
 from server.main import app
 from server.security import create_jwt_token
@@ -69,38 +71,53 @@ def _assignment(owner_id: int, title="Accessible Biology Lab Report",
 def test_config_carries_the_ui_menu_and_defaults():
     cfg = build_launch_config()
     assert cfg["status"] == "success"
-    assert [p["id"] for p in cfg["presets"]] == ["academic", "careful", "fast"]
-    assert cfg["default_preset_id"] == "academic"
+    assert [p["id"] for p in cfg["presets"]] == ["slow", "balanced", "fast"]
+    assert cfg["default_preset_id"] == "balanced"
     # the panel renders its copy from here, so it must actually be present
     assert cfg["ui"]["no_docs_tab_hint"]
-    assert cfg["typing"]["wpm"] == 65
+    # Balanced IS the measured hand: gear 1.0, no rescaling.
+    assert cfg["typing"]["speed"] == 1.0
+    # The cadence is a gear, not a speed. wpm is gone from the contract
+    # deliberately — it implied a precision the model never had.
+    assert "wpm" not in cfg["typing"]
 
 
 def test_every_preset_is_complete():
-    """A preset missing a field would render a broken chip or type at NaN wpm."""
+    """A preset missing a field would render a broken chip or type at NaN gear."""
     for p in CADENCE_PRESETS:
-        for field in ("id", "label", "sub", "title", "wpm", "typo_rate"):
+        for field in ("id", "label", "sub", "title", "speed", "typo_rate"):
             assert field in p, f"{p.get('id')} missing {field}"
-        assert 10 <= p["wpm"] <= 200
+        assert SPEED_MIN <= p["speed"] <= SPEED_MAX
         assert 0.0 <= p["typo_rate"] <= 0.25
+    # Exactly one default, and it is the measured hand.
+    defaults = [p for p in CADENCE_PRESETS if p.get("default")]
+    assert len(defaults) == 1
+    assert defaults[0]["id"] == "balanced" and defaults[0]["speed"] == 1.0
 
 
 def test_unknown_preset_falls_back_to_default_not_error():
     """An old extension sending a retired preset id must still launch."""
-    assert resolve_preset("retired-preset")["id"] == "academic"
-    assert resolve_preset(None)["id"] == "academic"
-    assert resolve_preset("")["id"] == "academic"
+    assert resolve_preset("retired-preset")["id"] == "balanced"
+    assert resolve_preset(None)["id"] == "balanced"
+    assert resolve_preset("")["id"] == "balanced"
+    # The old academic/careful ids are retired ALIASES and map to their nearest
+    # gear, so an installed client that asked for a deliberate pace still gets
+    # one. "slow" is a REAL preset now, not an unknown id.
+    assert resolve_preset("academic")["id"] == "balanced"
+    assert resolve_preset("careful")["id"] == "slow"
+    assert resolve_preset("slow")["id"] == "slow"
+    assert resolve_preset("balanced")["id"] == "balanced"
 
 
 def test_typing_config_is_clamped():
     """The plan is the last thing between a bad number and someone's essay."""
-    assert build_typing_config("academic", {"wpm": 99999})["wpm"] == 200
-    assert build_typing_config("academic", {"wpm": -5})["wpm"] == 10
-    assert build_typing_config("academic", {"typo_rate": 9})["typo_rate"] == 0.25
-    assert build_typing_config("academic", {"typo_rate": -1})["typo_rate"] == 0.0
+    assert build_typing_config("balanced", {"speed": 99999})["speed"] == SPEED_MAX
+    assert build_typing_config("balanced", {"speed": -5})["speed"] == SPEED_MIN
+    assert build_typing_config("balanced", {"typo_rate": 9})["typo_rate"] == 0.25
+    assert build_typing_config("balanced", {"typo_rate": -1})["typo_rate"] == 0.0
     # junk must be ignored, never crash and never leak through
-    assert build_typing_config("academic", {"wpm": "fast"})["wpm"] == 65
-    assert build_typing_config("academic", {"typo_rate": None})["typo_rate"] == 0.018
+    assert build_typing_config("balanced", {"speed": "quick"})["speed"] == 1.0
+    assert build_typing_config("balanced", {"typo_rate": None})["typo_rate"] == 0.101
 
 
 def test_typing_config_asks_for_trusted_keystrokes_by_default():
@@ -111,27 +128,31 @@ def test_typing_config_asks_for_trusted_keystrokes_by_default():
     automation from a person. The plan carries the flag so the extension never
     has to guess, and it can still be turned off."""
     assert build_typing_config()["trusted_keys"] is True
-    assert build_typing_config("academic")["trusted_keys"] is True
+    assert build_typing_config("balanced")["trusted_keys"] is True
     assert build_launch_plan(text="hi")["typing"]["trusted_keys"] is True
     assert build_launch_config()["typing"]["trusted_keys"] is True
-    assert build_typing_config("academic", {"trusted_keys": False})["trusted_keys"] is False
+    assert build_typing_config("balanced", {"trusted_keys": False})["trusted_keys"] is False
 
 
 def test_override_can_never_make_trusted_keys_truthy_from_junk():
     """bool() is the only coercion — any non-empty value means "on", so a
     caller cannot accidentally send a string that leaks through unchecked."""
-    assert build_typing_config("academic", {"trusted_keys": "yes"})["trusted_keys"] is True
-    assert build_typing_config("academic", {"trusted_keys": 0})["trusted_keys"] is False
-    assert build_typing_config("academic", {"trusted_keys": ""})["trusted_keys"] is False
+    assert build_typing_config("balanced", {"trusted_keys": "yes"})["trusted_keys"] is True
+    assert build_typing_config("balanced", {"trusted_keys": 0})["trusted_keys"] is False
+    assert build_typing_config("balanced", {"trusted_keys": ""})["trusted_keys"] is False
 
 
 def test_plan_estimate_uses_the_chosen_cadence():
-    """The panel shows a time estimate before typing; it must follow the cadence,
-    not a hardcoded 65 wpm."""
-    slow = build_launch_plan(text="word " * 130, preset_id="careful")
+    """The panel shows a time estimate before typing; it must follow the gear,
+    not a hardcoded figure. Slow is a >1 multiplier on the measured hand, fast is
+    a <1 one, so the same text must estimate LONGER on slow."""
+    slow = build_launch_plan(text="word " * 130, preset_id="slow")
     fast = build_launch_plan(text="word " * 130, preset_id="fast")
-    assert slow["typing"]["wpm"] == 48 and fast["typing"]["wpm"] == 85
+    assert slow["typing"]["speed"] > 1.0 > fast["typing"]["speed"]
     assert slow["estimated_minutes"] > fast["estimated_minutes"]
+    # Balanced is the measured hand at gear 1.0, so it sits between them.
+    bal = build_launch_plan(text="word " * 130, preset_id="balanced")
+    assert slow["estimated_minutes"] >= bal["estimated_minutes"] >= fast["estimated_minutes"]
 
 
 def test_plan_defaults_title_and_target():
@@ -153,14 +174,15 @@ def test_config_endpoint_serves_the_menu():
     resp = client.get("/api/launch-to-doc/config", headers=headers)
     assert resp.status_code == 200
     data = resp.json()
-    assert [p["id"] for p in data["presets"]] == ["academic", "careful", "fast"]
+    assert [p["id"] for p in data["presets"]] == ["slow", "balanced", "fast"]
+    assert data["default_preset_id"] == "balanced"
 
 
 def test_plan_endpoint_resolves_assignment_text():
     headers, uid = _user("test_ltd_plan_user")
     aid = _assignment(uid)
     resp = client.post("/api/launch-to-doc/plan",
-                       json={"assignment_id": aid, "preset_id": "careful"},
+                       json={"assignment_id": aid, "preset_id": "slow"},
                        headers=headers)
     assert resp.status_code == 200
     plan = resp.json()
@@ -168,7 +190,7 @@ def test_plan_endpoint_resolves_assignment_text():
     assert plan["title"] == "Accessible Biology Lab Report"
     assert "Cellular respiration occurs in three primary stages" in plan["text"]
     assert plan["subject"] == "Biology"
-    assert plan["typing"]["wpm"] == 48           # the requested cadence won
+    assert plan["typing"]["speed"] == 1.28       # the requested gear won
     assert plan["word_count"] > 5
     assert plan["target"]["url"] == "https://docs.new"
 
@@ -195,7 +217,7 @@ def test_plan_endpoint_works_with_no_assignment_at_all():
     plan = resp.json()
     assert plan["text"] == "just some words"
     assert plan["assignment_id"] is None
-    assert plan["typing"]["wpm"] == 65
+    assert plan["typing"]["speed"] == 1.0        # balanced = the measured hand
 
 
 def test_plan_endpoint_404s_for_another_users_assignment():
