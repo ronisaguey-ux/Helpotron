@@ -194,7 +194,6 @@ export default function CreateSubjectDialog({
               >
                 Subject Name & Code
               </label>
-              <span className="font-code-sm text-code-sm text-on-surface-variant/70">CATALOG REF</span>
             </div>
             <div className="relative flex items-center">
               <input

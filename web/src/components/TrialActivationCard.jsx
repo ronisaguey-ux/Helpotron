@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, CreditCard, Lock, ShieldCheck, Sparkles, Loader2 } from 'lucide-react';
 import api from '../api.js';
+import Skeleton from './ui/Skeleton.jsx';
 
 /**
  * TrialActivationCard — Free Trial activation (owner 09-06).
@@ -54,7 +55,23 @@ export default function TrialActivationCard({ userId = '', onActivated = null })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trial]);
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <section className="rounded-3xl bg-surface-container-lowest/80 border border-primary/30 p-6 sm:p-8 space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-7 w-full max-w-md" />
+          <Skeleton className="h-4 w-full max-w-xl" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Skeleton className="h-20" />
+          <Skeleton className="h-20" />
+          <Skeleton className="h-20" />
+        </div>
+        <Skeleton className="h-11 w-56" />
+      </section>
+    );
+  }
   if (!trial || trial.trial_claimed || done) return null;
 
   const onEnable2fa = () => {

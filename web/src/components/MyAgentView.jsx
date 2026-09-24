@@ -122,16 +122,27 @@ export default function MyAgentView({
       })
       .catch(() => {});
 
-    // Load the stored educational-mode preference (server is the source of
-    // truth; local settings mirror it so the flag survives reloads too).
+    // Load stored settings from server (server is the source of truth;
+    // local settings mirror it so preferences, agent name, and flags survive reloads).
     api.getUserSettings?.()
       .then((d) => {
         if (!mounted || !d) return;
-        if (typeof d.educationalMode === 'boolean') {
-          setEducationalMode(d.educationalMode);
-          const local = { ...loadSettings(), educationalMode: d.educationalMode };
-          saveSettings(local);
-          setSettings(local);
+        const s = d.settings || d;
+        if (s && typeof s === 'object') {
+          if (typeof s.educationalMode === 'boolean') {
+            setEducationalMode(s.educationalMode);
+          }
+          const local = loadSettings();
+          const merged = {
+            ...local,
+            ...s,
+            ai: {
+              ...(local.ai || {}),
+              ...(s.ai || {}),
+            },
+          };
+          saveSettings(merged);
+          setSettings(merged);
         }
       })
       .catch(() => {});

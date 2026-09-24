@@ -143,7 +143,7 @@ export default function MobileDrawer({
                     onClose();
                   }}
                 >
-                  NEW STUDY SESSION
+                  New Study Session
                 </Button>
               </div>
 

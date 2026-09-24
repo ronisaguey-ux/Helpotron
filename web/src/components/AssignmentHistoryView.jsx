@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import api from "../api.js";
 import NewAssignmentModal from "./NewAssignmentModal.jsx";
+import ErrorReportButton from "./ui/ErrorReportButton.jsx";
 
 function getSubjectChipStyle(course = "") {
   const c = String(course).toLowerCase();
@@ -273,10 +274,11 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
             <button
               type="button"
               onClick={() => setShowExportMenu(!showExportMenu)}
-              className="h-10 px-4 rounded-xl bg-surface-container-low hover:bg-surface-container text-on-surface border border-outline-variant/30 font-label-caps text-xs flex items-center gap-2 transition cursor-pointer"
+              disabled={exportState === "generating"}
+              className="h-10 px-4 rounded-xl bg-surface-container-low hover:bg-surface-container text-on-surface border border-outline-variant/30 font-label-caps text-xs flex items-center gap-2 transition cursor-pointer disabled:opacity-60"
             >
-              <Download className="w-3.5 h-3.5 text-primary" />
-              <span>Export</span>
+              {exportState === "generating" ? <RefreshCw className="w-3.5 h-3.5 text-primary animate-spin" /> : <Download className="w-3.5 h-3.5 text-primary" />}
+              <span>{exportState === "generating" ? "Exporting…" : "Export"}</span>
             </button>
 
             {showExportMenu && (
@@ -284,9 +286,10 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
                 <button
                   type="button"
                   onClick={handleExportCsv}
-                  className="w-full p-2.5 rounded-xl hover:bg-surface-container text-on-surface text-left font-code-sm text-xs flex items-center gap-2.5 transition cursor-pointer"
+                  disabled={exportState === "generating"}
+                  className="w-full p-2.5 rounded-xl hover:bg-surface-container text-on-surface text-left font-code-sm text-xs flex items-center gap-2.5 transition cursor-pointer disabled:opacity-60"
                 >
-                  <FileSpreadsheet className="w-4 h-4 text-primary" />
+                  {exportState === "generating" ? <RefreshCw className="w-4 h-4 text-primary animate-spin" /> : <FileSpreadsheet className="w-4 h-4 text-primary" />}
                   <div>
                     <span className="block font-medium">CSV Spreadsheet</span>
                     <span className="text-[10px] text-outline block">Formatted with BOM / UTF-8</span>
@@ -295,9 +298,10 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
                 <button
                   type="button"
                   onClick={handleExportJson}
-                  className="w-full p-2.5 rounded-xl hover:bg-surface-container text-on-surface text-left font-code-sm text-xs flex items-center gap-2.5 transition cursor-pointer"
+                  disabled={exportState === "generating"}
+                  className="w-full p-2.5 rounded-xl hover:bg-surface-container text-on-surface text-left font-code-sm text-xs flex items-center gap-2.5 transition cursor-pointer disabled:opacity-60"
                 >
-                  <FileJson className="w-4 h-4 text-secondary" />
+                  {exportState === "generating" ? <RefreshCw className="w-4 h-4 text-secondary animate-spin" /> : <FileJson className="w-4 h-4 text-secondary" />}
                   <div>
                     <span className="block font-medium">Full JSON Archive</span>
                     <span className="text-[10px] text-outline block">Complete user audit trail</span>
@@ -331,14 +335,18 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{fetchError}</span>
           </div>
-          <button
-            type="button"
-            onClick={fetchHistory}
-            className="px-3 py-1.5 rounded-xl bg-error/20 hover:bg-error/30 text-error font-semibold flex items-center gap-1.5 cursor-pointer"
-          >
-            <RotateCw className="w-3.5 h-3.5" />
-            <span>Retry</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={fetchHistory}
+              disabled={loading}
+              className="px-3 py-1.5 rounded-xl bg-error/20 hover:bg-error/30 text-error font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+            >
+              <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>{loading ? 'Retrying…' : 'Retry'}</span>
+            </button>
+            <ErrorReportButton error={{ message: fetchError }} title="Assignment history failed to load" />
+          </div>
         </div>
       )}
 
@@ -439,6 +447,20 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
           Loading portfolio ledger…
         </div>
       ) : filteredList.length === 0 ? (
+        searchQuery ? (
+          <div className="p-12 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 text-center space-y-3">
+            <p className="font-body-sm text-xs text-on-surface-variant">
+              No records match “{searchQuery}”.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="text-primary hover:underline cursor-pointer"
+            >
+              Clear filter
+            </button>
+          </div>
+        ) : (
         <div className="p-12 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 text-center space-y-4">
           <BookOpen className="w-10 h-10 text-primary mx-auto" />
           <h3 className="font-title-md text-base font-semibold text-on-surface">
@@ -456,6 +478,7 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
             <span>Create New Assignment</span>
           </button>
         </div>
+        )
       ) : (
         <>
           {/* Desktop Table (>= 1024px per 3.9.3) */}

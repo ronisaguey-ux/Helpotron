@@ -44,10 +44,12 @@ export default function ControlCenterView({ userId = "" }) {
   const [activeUserMenu, setActiveUserMenu] = useState(null); // user obj
   const [actionType, setActionType] = useState(null); // "plan" | "credits" | "password" | "ban" | "delete" | null
   const [actionValue, setActionValue] = useState("");
+  const [tokenOpMode, setTokenOpMode] = useState("set"); // "set" | "adjust"
   const [actionBusy, setActionBusy] = useState(false);
 
   // Developer accordion open state
   const [devAccordionOpen, setDevAccordionOpen] = useState(false);
+  const [actingAsId, setActingAsId] = useState(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -83,13 +85,15 @@ export default function ControlCenterView({ userId = "" }) {
         await api.adminSetPlan(targetId, actionValue);
         triggerFeedback(`Plan updated to ${actionValue} for ${activeUserMenu.alias || targetId}`);
       } else if (actionType === "credits") {
-        const amt = parseInt(actionValue, 10) || 50000;
-        await api.adminAdjustCredits(targetId, amt, "Admin Control Center adjustment");
-        // 09-06: assignment dump / agent work is gated on settings.token_balance,
-        // not the credits ledger — top up BOTH so a CC grant actually unlocks
-        // features (beta flow: the operator grants tokens by hand).
-        await api.adminGrantTokens(targetId, amt);
-        triggerFeedback(`Added ${amt.toLocaleString()} tokens to ${activeUserMenu.alias || targetId}`);
+        const parsed = parseFloat(String(actionValue || '').trim());
+        const amt = isNaN(parsed) ? 0 : parsed;
+        if (tokenOpMode === "set" || amt === 0) {
+          await api.adminSetTokens(targetId, amt);
+          triggerFeedback(`Set token balance to ${amt.toLocaleString()} for ${activeUserMenu.alias || targetId}`);
+        } else {
+          await api.adminGrantTokens(targetId, amt);
+          triggerFeedback(`${amt >= 0 ? "Added" : "Deducted"} ${Math.abs(amt).toLocaleString()} tokens for ${activeUserMenu.alias || targetId}`);
+        }
       } else if (actionType === "password") {
         if (!actionValue || actionValue.length < 8) {
           triggerFeedback("Password must be at least 8 characters");
@@ -128,6 +132,7 @@ export default function ControlCenterView({ userId = "" }) {
   // Developer act-as-user
   const handleActAsUser = async (targetUser) => {
     const targetId = targetUser.public_id || targetUser.id;
+    setActingAsId(targetId);
     try {
       await api.adminActAsUser(targetId);
       triggerFeedback(`Switched session to act as ${targetUser.alias || targetId}. Refreshing page…`);
@@ -136,6 +141,8 @@ export default function ControlCenterView({ userId = "" }) {
       }, 1200);
     } catch (err) {
       triggerFeedback("Could not assume identity: " + (err?.message || "error"));
+    } finally {
+      setActingAsId(null);
     }
   };
 
@@ -356,8 +363,13 @@ export default function ControlCenterView({ userId = "" }) {
                 Loading user directory…
               </div>
             ) : filteredUsers.length === 0 ? (
-              <div className="p-12 text-center text-xs font-code-sm text-on-surface-variant">
-                No matching identities found.
+              <div className="p-12 text-center space-y-2">
+                <p className="text-xs font-code-sm text-on-surface-variant">
+                  No identities match your search.
+                </p>
+                <button type="button" onClick={() => setSearchQuery('')} className="text-xs text-primary hover:underline cursor-pointer">
+                  Clear search
+                </button>
               </div>
             ) : (
               <>
@@ -556,9 +568,10 @@ export default function ControlCenterView({ userId = "" }) {
                       key={u.public_id || u.id}
                       type="button"
                       onClick={() => handleActAsUser(u)}
-                      className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-primary border border-outline-variant/20 transition cursor-pointer"
+                      disabled={actingAsId === (u.public_id || u.id)}
+                      className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-primary border border-outline-variant/20 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      Verify as {u.alias || u.public_id}
+                      {actingAsId === (u.public_id || u.id) ? 'Switching…' : `Verify as ${u.alias || u.public_id}`}
                     </button>
                   ))}
                 </div>
@@ -621,11 +634,12 @@ export default function ControlCenterView({ userId = "" }) {
                     type="button"
                     onClick={() => {
                       setActionType("credits");
-                      setActionValue("50000");
+                      setTokenOpMode("set");
+                      setActionValue(String(activeUserMenu.tokens ?? activeUserMenu.token_balance ?? 0));
                     }}
                     className="w-full p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high text-on-surface text-left text-xs font-code-sm flex items-center justify-between transition cursor-pointer"
                   >
-                    <span>Adjust Token Balance</span>
+                    <span>Manage / Clear Token Balance</span>
                     <span className="text-outline">→</span>
                   </button>
                   <button
@@ -720,18 +734,59 @@ export default function ControlCenterView({ userId = "" }) {
                 )}
 
                 {actionType === "credits" && (
-                  <div className="space-y-2">
-                    <label className="font-label-caps text-[10px] uppercase text-on-surface-variant">
-                      Token Credit Adjustment (e.g. +50,000)
+                  <div className="space-y-3">
+                    <label className="font-label-caps text-[10px] uppercase text-on-surface-variant font-semibold">
+                      Manage Token Balance
                     </label>
-                    <input
-                      type="number"
-                      step="1000"
-                      value={actionValue}
-                      onChange={(e) => setActionValue(e.target.value)}
-                      placeholder="50000"
-                      className="w-full h-10 px-3.5 rounded-xl bg-surface-container-low text-on-surface border border-outline-variant/30 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setTokenOpMode("set")}
+                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                          tokenOpMode === "set"
+                            ? "bg-primary/10 border-primary text-primary"
+                            : "bg-surface-container-low border-outline-variant/30 text-on-surface-variant"
+                        }`}
+                      >
+                        Set Exact Balance
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTokenOpMode("adjust")}
+                        className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                          tokenOpMode === "adjust"
+                            ? "bg-primary/10 border-primary text-primary"
+                            : "bg-surface-container-low border-outline-variant/30 text-on-surface-variant"
+                        }`}
+                      >
+                        Adjust (+ / -)
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={actionValue}
+                        onChange={(e) => setActionValue(e.target.value)}
+                        placeholder={tokenOpMode === "set" ? "0" : "50000"}
+                        className="w-full h-10 px-3.5 rounded-xl bg-surface-container-low text-on-surface border border-outline-variant/30 text-xs focus:outline-none focus:ring-1 focus:ring-primary font-code-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTokenOpMode("set");
+                          setActionValue("0");
+                        }}
+                        className="px-3 h-10 rounded-xl bg-error/10 border border-error/30 text-error text-xs font-medium hover:bg-error/20 transition cursor-pointer shrink-0"
+                        title="Set tokens to 0"
+                      >
+                        Reset to 0
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-on-surface-variant font-body-sm">
+                      {tokenOpMode === "set"
+                        ? "Sets the user's spendable token balance directly to this exact value."
+                        : "Adds (positive) or deducts (negative) tokens from current balance."}
+                    </p>
                   </div>
                 )}
 

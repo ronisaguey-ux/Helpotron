@@ -30,6 +30,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { AnimatedLogo } from './ui/AnimatedLogo.jsx';
+import Skeleton from './ui/Skeleton.jsx';
 const CookieBanner = React.lazy(() => import('./CookieBanner.jsx'));
 const GuideView = React.lazy(() => import('./GuideView.jsx'));
 const PrivacyPolicyView = React.lazy(() => import('./PrivacyPolicyView.jsx'));
@@ -719,7 +720,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
               </button>
             </div>
             <div className="p-3 sm:p-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
-              <React.Suspense fallback={<div className="p-8 text-center text-xs text-on-surface-variant font-mono animate-pulse">Loading…</div>}>
+              <React.Suspense fallback={<div className="p-8 space-y-4"><Skeleton className="h-5 w-48 mx-auto" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4 mx-auto" /></div>}>
                 <GuideView publicMode onGoTo={(intent) => { closeModal(); if (intent === 'pricing') { navigatePath('/pricing'); } else { openAuth(intent || 'signup'); } }} />
               </React.Suspense>
             </div>
@@ -755,7 +756,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
               </button>
             </div>
             <div className="p-3 sm:p-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
-              <React.Suspense fallback={<div className="p-8 text-center text-xs text-on-surface-variant font-mono animate-pulse">Loading…</div>}>
+              <React.Suspense fallback={<div className="p-8 space-y-4"><Skeleton className="h-5 w-48 mx-auto" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4 mx-auto" /></div>}>
                 <PrivacyPolicyView publicMode={false} onBack={closeModal} onGoTo={(intent) => { closeModal(); openAuth(intent || 'signup'); }} />
               </React.Suspense>
             </div>
@@ -791,7 +792,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
               </button>
             </div>
             <div className="p-3 sm:p-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
-              <React.Suspense fallback={<div className="p-8 text-center text-xs text-on-surface-variant font-mono animate-pulse">Loading…</div>}>
+              <React.Suspense fallback={<div className="p-8 space-y-4"><Skeleton className="h-5 w-48 mx-auto" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4 mx-auto" /></div>}>
                 <TermsOfServiceView publicMode={false} onBack={closeModal} onGoTo={(intent) => { closeModal(); openAuth(intent || 'signup'); }} />
               </React.Suspense>
             </div>
@@ -827,7 +828,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
               </button>
             </div>
             <div className="p-3 sm:p-5 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
-              <React.Suspense fallback={<div className="p-8 text-center text-xs text-on-surface-variant font-mono animate-pulse">Loading…</div>}>
+              <React.Suspense fallback={<div className="p-8 space-y-4"><Skeleton className="h-5 w-48 mx-auto" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4 mx-auto" /></div>}>
                 <ExtensionInstallView publicMode={true} onBack={closeModal} onGoTo={(intent) => { closeModal(); openAuth(intent || 'signup'); }} />
               </React.Suspense>
             </div>

@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   Activity,
   Wrench,
+  Loader2,
 } from 'lucide-react';
 import { AvatarWidget } from './ui/AvatarWidget.jsx';
 import api from '../api.js';
@@ -49,6 +50,7 @@ export default function QuickSettings({
   user,
 }) {
   const containerRef = useRef(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   const set = (path, value) => {
     const next = JSON.parse(JSON.stringify(settings));
@@ -108,20 +110,31 @@ export default function QuickSettings({
             Active
           </span>
         </div>
-        <div className="flex items-baseline justify-between font-mono">
-          <div>
-            <span className="text-[10px] text-on-surface-variant block">CREDITS</span>
-            <span className="text-sm font-semibold text-primary tabular-nums">
-              {Number(user?.token_balance ?? 0).toLocaleString()} tok
-            </span>
+          {/* Two currencies, and they are NOT interchangeable (owner ruling):
+                TOKENS  = `token_balance` — what tasks are paid with, granted by
+                          a plan.
+                CREDITS = `credits` on /api/me — earned only (data-lake entries
+                          and referral codes), never purchasable, spendable only
+                          as a percent discount on an order. The server computes
+                          it in `_wallet_display_credits` (reconciled credits
+                          plus micro-credits at 1000:1).
+              Both blocks previously rendered `token_balance`, so the panel
+              showed one number twice under two different names, and a user with
+              earned credits saw none of them. */}
+          <div className="flex items-baseline justify-between font-mono">
+            <div>
+              <span className="text-[10px] text-on-surface-variant block">CREDITS</span>
+              <span className="text-sm font-semibold text-primary tabular-nums">
+                {Number(user?.credits ?? 0).toLocaleString()}
+              </span>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] text-on-surface-variant block">TOKENS</span>
+              <span className="text-sm font-semibold text-secondary tabular-nums">
+                {user?.unlimited ? '∞' : Number(user?.token_balance ?? 0).toLocaleString()}
+              </span>
+            </div>
           </div>
-          <div className="text-right">
-            <span className="text-[10px] text-on-surface-variant block">TOKENS</span>
-            <span className="text-sm font-semibold text-secondary tabular-nums">
-              {user?.unlimited ? '∞' : Number(user?.token_balance ?? 0).toLocaleString()}
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* Theme Selection */}
@@ -271,10 +284,15 @@ export default function QuickSettings({
         {onLogout && (
           <button
             type="button"
-            onClick={onLogout}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-error hover:bg-error-container/20 transition cursor-pointer min-h-[44px]"
+            onClick={() => {
+              if (signingOut) return;
+              setSigningOut(true);
+              onLogout();
+            }}
+            disabled={signingOut}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-error hover:bg-error-container/20 transition cursor-pointer min-h-[44px] disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <LogOut className="w-4 h-4" /> Sign out
+            {signingOut ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />} {signingOut ? 'Signing out…' : 'Sign out'}
           </button>
         )}
       </div>

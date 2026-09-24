@@ -151,7 +151,7 @@ export default function SessionExpiryModal({
 
           <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-high/80 text-sem-amber font-mono text-[10px] uppercase tracking-wider font-semibold border border-sem-amber/20">
             <span className="w-1.5 h-1.5 rounded-full bg-sem-amber animate-ping" />
-            <span>INACTIVITY THRESHOLD REACHED (24H)</span>
+            <span>Inactive for 24 hours</span>
           </div>
 
           <p className="mt-3.5 font-body-sm text-xs text-on-surface-variant leading-relaxed">

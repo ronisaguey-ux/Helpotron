@@ -23,6 +23,7 @@ export default function ApiKeysPanel() {
   const [copied, setCopied] = useState(false);
   const [label, setLabel] = useState('');
   const [limit, setLimit] = useState('');
+  const [removingId, setRemovingId] = useState(null);
 
   const load = async () => {
     try {
@@ -59,11 +60,14 @@ export default function ApiKeysPanel() {
   };
 
   const remove = async (id) => {
+    setRemovingId(id);
     try {
       const res = await api.deleteApiKey(id);
       setKeys(res?.keys || []);
     } catch (e) {
       setError(e?.message || 'Could not delete that key.');
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -221,10 +225,11 @@ export default function ApiKeysPanel() {
                 <button
                   type="button"
                   onClick={() => remove(k.id)}
+                  disabled={removingId === k.id}
                   title="Delete this key permanently"
-                  className="h-8 px-3 rounded-lg border border-error/30 text-error font-label-caps text-[11px] flex items-center gap-1.5 shrink-0 cursor-pointer hover:bg-error/10"
+                  className="h-8 px-3 rounded-lg border border-error/30 text-error font-label-caps text-[11px] flex items-center gap-1.5 shrink-0 cursor-pointer hover:bg-error/10 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  {removingId === k.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                   Delete
                 </button>
               </div>

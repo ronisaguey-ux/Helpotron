@@ -533,10 +533,11 @@ export function AssignmentDetailView({
         <button
           type="button"
           onClick={handleLaunchToDoc}
-          className="h-11 px-3 rounded-xl bg-secondary/15 text-secondary font-label-caps text-xs uppercase tracking-wider flex items-center justify-center border border-secondary/30 flex-1"
+          disabled={launching}
+          className="h-11 px-3 rounded-xl bg-secondary/15 text-secondary font-label-caps text-xs uppercase tracking-wider flex items-center justify-center border border-secondary/30 flex-1 disabled:opacity-60"
         >
           <Sparkles className="w-4 h-4 mr-1.5" />
-          <span>Launch</span>
+          <span>{launching ? 'Launching…' : 'Launch'}</span>
         </button>
 
         <button

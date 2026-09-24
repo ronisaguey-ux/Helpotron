@@ -35,6 +35,7 @@ export default function AdminToolsView() {
   const [inquiriesLoading, setInquiriesLoading] = useState(true);
   const [replyTextMap, setReplyTextMap] = useState({});
   const [replyingId, setReplyingId] = useState(null);
+  const [deletingInquiryId, setDeletingInquiryId] = useState(null);
   const [replyFeedback, setReplyFeedback] = useState("");
 
   // 5. Agent command console state
@@ -137,11 +138,14 @@ export default function AdminToolsView() {
   };
 
   const handleDeleteInquiry = async (messageId) => {
+    setDeletingInquiryId(messageId);
     try {
       await api.deleteAdminMessage(messageId);
       setInquiries((prev) => prev.filter((m) => m.id !== messageId));
     } catch (e) {
       console.warn("Failed to delete inquiry:", e);
+    } finally {
+      setDeletingInquiryId(null);
     }
   };
 
@@ -243,29 +247,29 @@ export default function AdminToolsView() {
               <div className="flex items-center gap-2">
                 <Server className="w-4 h-4 text-primary" />
                 <h3 className="font-title-md text-sm font-semibold text-on-surface">
-                  Subsystem Engine Nodes
+                  System Services
                 </h3>
               </div>
               <span className="font-chip-status text-[10px] text-sem-green bg-sem-green/10 px-2 py-0.5 rounded-full">
-                REAL TELEMETRY ONLY
+                Live
               </span>
             </div>
 
             {nodesLoading ? (
               <div className="p-6 text-center text-xs font-code-sm text-on-surface-variant">
-                Querying live subsystem telemetry…
+                Loading system status…
               </div>
             ) : nodesError || nodes.length === 0 ? (
               <div className="p-6 rounded-xl bg-surface-container-low/50 border border-outline-variant/20 text-center space-y-2">
                 <p className="font-code-sm text-xs text-on-surface-variant">
-                  No active telemetry signals reported by gateway. (Honest status: 0 mock nodes rendered).
+                  No system services are reporting right now.
                 </p>
                 <button
                   type="button"
                   onClick={loadEngineNodes}
                   className="text-primary hover:underline text-xs font-code-sm"
                 >
-                  Retry Gateway Probe
+                  Retry
                 </button>
               </div>
             ) : (
@@ -475,7 +479,8 @@ export default function AdminToolsView() {
                   key={s}
                   type="button"
                   onClick={() => handleExecuteCommand(s)}
-                  className="px-2.5 py-1 rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface-variant text-[11px] font-code-sm transition cursor-pointer"
+                  disabled={commandBusy}
+                  className="px-2.5 py-1 rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface-variant text-[11px] font-code-sm transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {s}
                 </button>
@@ -594,10 +599,11 @@ export default function AdminToolsView() {
                           <button
                             type="button"
                             onClick={() => handleDeleteInquiry(m.id)}
-                            className="h-8 w-8 rounded-lg hover:bg-error/15 text-on-surface-variant hover:text-error flex items-center justify-center transition cursor-pointer"
+                            disabled={deletingInquiryId === m.id}
+                            className="h-8 w-8 rounded-lg hover:bg-error/15 text-on-surface-variant hover:text-error flex items-center justify-center transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                             title="Dismiss inquiry"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            {deletingInquiryId === m.id ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
                           </button>
                         </div>
                       )}

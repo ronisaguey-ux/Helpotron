@@ -7,7 +7,7 @@
  * the surface that stays fixed while the number of actions grows.
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Pencil, Trash2, Check, X, MessageSquare, Pin, MoreVertical } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Check, X, MessageSquare, Pin, MoreVertical, Loader2 } from 'lucide-react';
 import EffortDial from './EffortDial.jsx';
 
 /**
@@ -59,8 +59,18 @@ export default function ThreadsRail({
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [menuOpenId, setMenuOpenId] = useState(null);
+  const [busyAction, setBusyAction] = useState(null); // 'create' | 'rename:<id>' | 'pin:<id>' | 'delete:<id>'
   const searchInputRef = useRef(null);
   const menuRef = useRef(null);
+
+  const runMutation = async (key, fn) => {
+    setBusyAction(key);
+    try {
+      await fn();
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   // A click anywhere else closes the 3-dot menu. Without this the menu stays
   // open behind whatever the user does next.
@@ -108,10 +118,12 @@ export default function ThreadsRail({
 
   const saveRename = (thread, e) => {
     e?.stopPropagation();
+    let result;
     if (editingTitle.trim()) {
-      onRenameThread(thread.id, editingTitle.trim());
+      result = onRenameThread(thread.id, editingTitle.trim());
     }
     setEditingId(null);
+    return result;
   };
 
   const cancelRename = (e) => {
@@ -138,11 +150,12 @@ export default function ThreadsRail({
             <button
               type="button"
               id="btn-new-topic"
-              onClick={onCreateThread}
+              onClick={() => runMutation('create', onCreateThread)}
+              disabled={busyAction === 'create'}
               title="New chat (⌘N)"
-              className="h-11 px-unit-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/30 text-primary flex items-center gap-micro-2 transition-all shadow-sm active:scale-95 cursor-pointer"
+              className="h-11 px-unit-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/30 text-primary flex items-center gap-micro-2 transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-60"
             >
-              <Plus className="w-4 h-4 text-primary shrink-0" />
+              {busyAction === 'create' ? <Loader2 className="w-4 h-4 text-primary shrink-0 animate-spin" /> : <Plus className="w-4 h-4 text-primary shrink-0" />}
                 <span className="font-label-caps text-label-caps uppercase">New chat</span>
             </button>
           </div>
@@ -166,9 +179,17 @@ export default function ThreadsRail({
           {/* Thread Stack */}
           <div className="flex flex-col gap-micro-2 mt-micro-1 overflow-y-auto max-h-[340px]" role="list">
             {filteredThreads.length === 0 ? (
-              <div className="p-unit-4 text-center rounded-xl bg-surface-container-low/40 border border-outline-variant/15 text-outline font-body-sm">
-                No chats yet
-              </div>
+              filterText ? (
+                <div className="p-unit-4 text-center rounded-xl bg-surface-container-low/40 border border-outline-variant/15 text-outline font-body-sm">
+                  No chats match “{filterText}”.
+                  <button type="button" onClick={() => setFilterText('')} className="block mx-auto mt-2 text-primary hover:underline cursor-pointer">Clear search</button>
+                </div>
+              ) : (
+                <div className="p-unit-4 text-center rounded-xl bg-surface-container-low/40 border border-outline-variant/15 space-y-2">
+                  <p className="font-body-sm text-on-surface-variant">No conversations yet — start one and it will live here.</p>
+                  <button type="button" onClick={() => runMutation('create', onCreateThread)} className="h-9 px-4 rounded-lg bg-primary text-on-primary font-label-caps text-xs uppercase cursor-pointer">Start a conversation</button>
+                </div>
+              )
             ) : (
               filteredThreads.map((thread) => {
                 const isActive = thread.id === activeThreadId;
@@ -204,17 +225,18 @@ export default function ThreadsRail({
                               autoFocus
                               onChange={(e) => setEditingTitle(e.target.value)}
                               onKeyDown={(e) => {
-                                if (e.key === 'Enter') saveRename(thread, e);
+                                if (e.key === 'Enter') runMutation(`rename:${thread.id}`, () => saveRename(thread, e));
                                 if (e.key === 'Escape') cancelRename(e);
                               }}
                               className="bg-surface-container-lowest text-on-surface px-2 py-0.5 rounded text-xs w-full focus:outline-none focus:ring-1 focus:ring-primary"
                             />
                             <button
                               type="button"
-                              onClick={(e) => saveRename(thread, e)}
-                              className="p-1 rounded text-primary hover:bg-surface-container-high"
+                              onClick={(e) => runMutation(`rename:${thread.id}`, () => saveRename(thread, e))}
+                              disabled={busyAction === `rename:${thread.id}`}
+                              className="p-1 rounded text-primary hover:bg-surface-container-high disabled:opacity-60"
                             >
-                              <Check className="w-3 h-3" />
+                              {busyAction === `rename:${thread.id}` ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                             </button>
                             <button
                               type="button"
@@ -275,7 +297,7 @@ export default function ThreadsRail({
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setMenuOpenId(null);
-                                  onPinThread(thread.id, !thread.pinned);
+                                  runMutation(`pin:${thread.id}`, () => onPinThread(thread.id, !thread.pinned));
                                 }}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-left font-body-sm text-xs text-on-surface-variant hover:text-primary hover:bg-surface-container-high transition-colors cursor-pointer"
                               >
@@ -288,7 +310,7 @@ export default function ThreadsRail({
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setMenuOpenId(null);
-                                  onDeleteThread(thread.id);
+                                  runMutation(`delete:${thread.id}`, () => onDeleteThread(thread.id));
                                 }}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-left font-body-sm text-xs text-on-surface-variant hover:text-error hover:bg-error-container/20 transition-colors cursor-pointer"
                               >

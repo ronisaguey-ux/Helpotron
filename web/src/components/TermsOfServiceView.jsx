@@ -587,11 +587,19 @@ export default function TermsOfServiceView({ onBack = null, publicMode = false, 
           </aside>
         </div>
 
-        {/* Footer Mono Legal Line */}
-        <footer className="pt-8 pb-12 border-t border-outline-variant/20 text-center font-mono text-[11px] text-on-surface-variant space-y-1">
-          <div>IMMUTABLE SPECIFICATION // SHA-256: 7F83B165C79A4D1FE8B091B2D9 // ALL RIGHTS RESERVED</div>
-          <div className="text-[10px] text-on-surface-variant/60">Helpotron Autonomous Systems LLC · Operates under Louisiana Jurisdiction</div>
-        </footer>
+          {/* Footer Mono Legal Line.
+              This previously read
+                "IMMUTABLE SPECIFICATION // SHA-256: 7F83B165C79A4D1FE8B091B2D9 // ALL RIGHTS RESERVED"
+              which presented a FABRICATED hash as if it were an integrity
+              commitment over the document. A hash that does not verify is worse
+              than no hash at all in a legal document: it asserts a guarantee
+              that does not exist. Removed rather than replaced — if a real
+              integrity commitment is wanted, it has to be computed from the
+              published text, not typed in. */}
+          <footer className="pt-8 pb-12 border-t border-outline-variant/20 text-center font-mono text-[11px] text-on-surface-variant space-y-1">
+            <div>ALL RIGHTS RESERVED</div>
+            <div className="text-[10px] text-on-surface-variant/60">Helpotron Autonomous Systems LLC · Operates under Louisiana Jurisdiction</div>
+          </footer>
       </div>
     </div>
   );

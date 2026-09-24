@@ -7,7 +7,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   SlidersHorizontal, User as UserIcon, Database, FileText, Send, Trash2, Plus,
   Upload, ChevronDown, ChevronRight, Check, Cpu, Edit3, X, Sparkles, BookOpen,
-  PenTool, HelpCircle, GraduationCap, FileCode, Shield, CheckCircle2
+  PenTool, HelpCircle, GraduationCap, FileCode, Shield, CheckCircle2, Loader2
 } from 'lucide-react';
 import { PRESET_PERSONAS, DEFAULT_IDENTITIES, DEFAULT_SKILLS } from '../lib/agentPresets.js';
 import SettingOverrides from './SettingOverrides.jsx';
@@ -80,6 +80,7 @@ export default function AgentConfigsSidebar({
 
   const fileInputRef = useRef(null);
   const [uploadKind, setUploadKind] = useState('skill');
+  const [busyAction, setBusyAction] = useState(null); // 'skill:<id>' | 'memory-add' | 'memory:<id>' | 'file:<id>' | 'upload'
 
   // Editable agent-name draft. Kept in local state so typing does not fire a
   // settings PATCH per keystroke; committed on blur / Enter.
@@ -95,6 +96,16 @@ export default function AgentConfigsSidebar({
     if (next === (ai?.aiName || '')) return;   // nothing changed — no write
     setAgentNameDraft(next);
     onSaveAgentName(next);
+  };
+
+  // Run an async mutation with a pending state; guards against double-submit.
+  const runMutation = async (key, fn) => {
+    setBusyAction(key);
+    try {
+      await fn();
+    } finally {
+      setBusyAction(null);
+    }
   };
 
   // Merged persona list. PRESET_PERSONAS is empty now (blank slate), so this is
@@ -455,12 +466,13 @@ export default function AgentConfigsSidebar({
                     <div className="flex items-center gap-1.5 shrink-0 ml-3">
                       <button
                         type="button"
-                        onClick={() => onDeleteSkill(skill.id)}
-                        className="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error/10 transition-colors cursor-pointer"
+                        onClick={() => runMutation(`skill:${skill.id}`, () => onDeleteSkill(skill.id))}
+                        disabled={busyAction === `skill:${skill.id}`}
+                        className="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error/10 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                         title={`Delete ${skill.name}`}
                         aria-label={`Delete ${skill.name}`}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        {busyAction === `skill:${skill.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                       </button>
                       <button
                         type="button"
@@ -504,16 +516,16 @@ export default function AgentConfigsSidebar({
               <div className="flex justify-end">
                 <button
                   type="button"
-                  disabled={!memoryText.trim()}
-                  onClick={() => {
+                  disabled={!memoryText.trim() || busyAction === 'memory-add'}
+                  onClick={async () => {
                     if (memoryText.trim()) {
-                      addMemory(memoryText.trim());
+                      await runMutation('memory-add', () => addMemory(memoryText.trim()));
                       setMemoryText('');
                     }
                   }}
                   className="px-unit-3 py-1.5 rounded-lg bg-primary text-on-primary font-label-caps text-label-caps font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  {busyAction === 'memory-add' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                   <span>Save Memory</span>
                 </button>
               </div>
@@ -543,11 +555,12 @@ export default function AgentConfigsSidebar({
                     </div>
                     <button
                       type="button"
-                      onClick={() => deleteMemory(item.id)}
-                      className="p-1 rounded text-outline hover:text-error hover:bg-error-container/20 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+                      onClick={() => runMutation(`memory:${item.id}`, () => deleteMemory(item.id))}
+                      disabled={busyAction === `memory:${item.id}`}
+                      className="p-1 rounded text-outline hover:text-error hover:bg-error-container/20 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer disabled:opacity-60"
                       title="Delete memory"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      {busyAction === `memory:${item.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 ))
@@ -575,16 +588,17 @@ export default function AgentConfigsSidebar({
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) handleUploadFile(f, uploadKind);
+                  if (f) runMutation('upload', () => handleUploadFile(f, uploadKind));
                   e.target.value = '';
                 }}
               />
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="mt-1 px-unit-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-primary border border-outline-variant/25 font-label-caps text-label-caps transition-colors cursor-pointer"
+                disabled={busyAction === 'upload'}
+                className="mt-1 px-unit-3 py-1.5 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-primary border border-outline-variant/25 font-label-caps text-label-caps transition-colors cursor-pointer disabled:opacity-60"
               >
-                Choose File
+                {busyAction === 'upload' ? 'Uploading…' : 'Choose File'}
               </button>
             </div>
 
@@ -613,11 +627,12 @@ export default function AgentConfigsSidebar({
                     </div>
                     <button
                       type="button"
-                      onClick={() => deleteFile(file.id)}
-                      className="p-1 rounded text-outline hover:text-error hover:bg-error-container/20 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+                      onClick={() => runMutation(`file:${file.id}`, () => deleteFile(file.id))}
+                      disabled={busyAction === `file:${file.id}`}
+                      className="p-1 rounded text-outline hover:text-error hover:bg-error-container/20 transition-colors opacity-0 group-hover:opacity-100 cursor-pointer disabled:opacity-60"
                       title="Delete file"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      {busyAction === `file:${file.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                     </button>
                   </div>
                 ))

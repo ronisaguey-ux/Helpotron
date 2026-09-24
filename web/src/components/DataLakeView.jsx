@@ -10,6 +10,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import api from '../api.js';
+import Skeleton from './ui/Skeleton.jsx';
 
 /**
  * DataLakeView — the owner's own words describe this page (2026-09-19):
@@ -53,6 +54,7 @@ export default function DataLakeView({ userId = '' }) {
   const [ok, setOk] = useState('');
   const [deletingId, setDeletingId] = useState(null);
   const fileInputRef = useRef(null);
+  const contentRef = useRef(null);
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -118,6 +120,7 @@ export default function DataLakeView({ userId = '' }) {
     setError('');
     try {
       await api.deleteDataLakeEntry(id);
+      setOk('Entry deleted.');
       await fetchHistory();
     } catch (e) {
       setError(e.message || 'Could not delete that entry.');
@@ -172,6 +175,7 @@ export default function DataLakeView({ userId = '' }) {
           className="w-full h-11 px-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-on-surface text-sm focus:outline-none focus:border-primary transition"
         />
         <textarea
+          ref={contentRef}
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Write whatever is useful — what you found, what you scored, what should change."
@@ -241,16 +245,31 @@ export default function DataLakeView({ userId = '' }) {
         </div>
 
         {loading && history.length === 0 ? (
-          <p className="font-body-sm text-xs text-on-surface-variant">Loading…</p>
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
         ) : history.length === 0 ? (
-          <p className="font-body-sm text-xs text-on-surface-variant">
-            Nothing submitted yet.
-          </p>
+          <div className="rounded-2xl border border-dashed border-outline-variant/30 bg-surface-container-low/40 p-8 text-center space-y-3">
+            <Database className="w-8 h-8 text-primary mx-auto" />
+            <h3 className="font-title-md text-on-surface">Nothing in the lake yet</h3>
+            <p className="font-body-sm text-xs text-on-surface-variant max-w-sm mx-auto">
+              Every entry you submit earns micro-credits you can spend on agent work.
+            </p>
+            <button
+              type="button"
+              onClick={() => contentRef.current?.focus()}
+              className="h-9 px-4 rounded-lg bg-primary text-on-primary font-label-caps text-xs uppercase cursor-pointer"
+            >
+              Write your first entry
+            </button>
+          </div>
         ) : (
           <div className="space-y-1.5">
             {history.map((item) => {
               const credits = item.micro_credits ?? item.credits_awarded ?? item.estimated_credits ?? 0;
-              const id = item.id || item.submission_id;
+                const id = item.submission_id || item.id;
               return (
                 <div
                   key={id}

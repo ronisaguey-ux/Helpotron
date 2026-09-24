@@ -9,8 +9,10 @@ import {
   BellOff,
   X,
   Check,
+  Loader2,
 } from "lucide-react";
 import api from "../../api.js";
+import Skeleton from "../ui/Skeleton.jsx";
 
 /**
  * UserCalendar — a calendar you can actually use (owner 2026-09-19).
@@ -59,6 +61,7 @@ export default function AcademicCalendar({ onSelectAssignment }) {
   const [error, setError] = useState("");
   const [selectedDate, setSelectedDate] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [entryBusyId, setEntryBusyId] = useState(null);
   const [form, setForm] = useState({ title: "", description: "", remind: true });
 
   const viewDate = useMemo(() => {
@@ -168,15 +171,19 @@ export default function AcademicCalendar({ onSelectAssignment }) {
   };
 
   const deleteEntry = async (id) => {
+    setEntryBusyId(id);
     try {
       await api.request(`/api/calendar/entries/${id}`, { method: "DELETE" });
       await loadEntries();
     } catch (e) {
       setError(String((e && e.message) || e));
+    } finally {
+      setEntryBusyId(null);
     }
   };
 
   const toggleRemind = async (entry) => {
+    setEntryBusyId(entry.id);
     try {
       await api.request(`/api/calendar/entries/${entry.id}`, {
         method: "PATCH",
@@ -185,6 +192,8 @@ export default function AcademicCalendar({ onSelectAssignment }) {
       await loadEntries();
     } catch (e) {
       setError(String((e && e.message) || e));
+    } finally {
+      setEntryBusyId(null);
     }
   };
 
@@ -333,20 +342,22 @@ export default function AcademicCalendar({ onSelectAssignment }) {
                       <button
                         type="button"
                         onClick={() => toggleRemind(e)}
+                        disabled={entryBusyId === e.id}
                         title={e.remind ? "Reminder on — click to turn off" : "Reminder off — click to turn on"}
-                        className={`w-9 h-9 rounded-lg flex items-center justify-center transition cursor-pointer ${
+                        className={`w-9 h-9 rounded-lg flex items-center justify-center transition cursor-pointer disabled:opacity-60 ${
                           e.remind ? "text-primary hover:bg-primary/10" : "text-outline hover:bg-surface-container"
                         }`}
                       >
-                        {e.remind ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+                        {entryBusyId === e.id ? <Loader2 className="w-4 h-4 animate-spin" /> : e.remind ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
                       </button>
                       <button
                         type="button"
                         onClick={() => deleteEntry(e.id)}
+                        disabled={entryBusyId === e.id}
                         title="Delete"
-                        className="w-9 h-9 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-error-container/20 transition cursor-pointer"
+                        className="w-9 h-9 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-error-container/20 transition cursor-pointer disabled:opacity-60"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        {entryBusyId === e.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
@@ -403,7 +414,7 @@ export default function AcademicCalendar({ onSelectAssignment }) {
           <span className="font-label-caps text-[11px] uppercase tracking-wider text-on-surface-variant">
             Your notes
           </span>
-          {loading && <span className="font-code-sm text-[10px] text-outline">loading…</span>}
+          {loading && <Skeleton className="h-3 w-16" />}
         </div>
         {entries.length === 0 && !loading ? (
           <p className="font-body-sm text-xs text-on-surface-variant">
