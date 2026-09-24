@@ -34,6 +34,7 @@ helpotron/
 │   ├── main.py            # FastAPI entry point, middleware & lifespan setup
 │   ├── agent_prompt.py    # Strict educational system prompt builder
 │   ├── llm.py             # OpenRouter LLM router, streaming & model policy
+│   ├── api_keys.py        # htk_ API keys: scopes, expiry, revocation
 │   ├── payments.py        # Payment tiers ($10 / $20 / $40) & billing
 │   └── math_executor.py   # Deterministic Python math evaluation sandbox
 ├── extension/             # Chrome Manifest V3 Browser Extension
