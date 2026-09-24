@@ -1111,11 +1111,40 @@ const approvalButtons = [
   ['approvalNeutral', 'neutral', null],
   ['approvalApproveAuto', 'allow', { autoAdd: true }],
 ];
+// The shared approval-card control IDs. Kept as one list because the in-flight guard below
+// has to disable the WHOLE set, and a second hand-maintained copy would drift from the one
+// the buttons are wired from.
+const APPROVAL_BTN_IDS = approvalButtons.map(([id]) => id);
+// Wire the shared approval-card buttons. Named and self-contained so the in-flight guard can
+// be driven directly by a test — the guard's whole job is to disable the OTHER buttons, and a
+// test that can only grep for an identifier cannot see whether it does.
+function wireApprovalButtons() {
 for (const [id, decision, opts] of approvalButtons) {
   const el = document.getElementById(id);
   if (!el) continue; // surface without the shared card (e.g. agent_mode shell)
-  el.addEventListener('click', () => answerFromButton(decision, opts));
+  el.addEventListener('click', () => {
+    // A second click while the first decision is still in flight would answer the SAME
+    // request twice — for an approval that means the agent can be told both allow and
+    // deny. Disable every approval control until the card has advanced, and always
+    // restore them in a finally so a throw cannot leave the card permanently dead.
+    if (el.dataset.approvalInFlight === '1') return;
+    // Disable the WHOLE set, not just this button. The dangerous case is a fast
+    // Approve-then-Reject, which fires two different buttons — guarding only the clicked
+    // one would let it through. Looked up by the shared IDs the card actually uses.
+    const all = APPROVAL_BTN_IDS.map((bid) => document.getElementById(bid)).filter(Boolean);
+    const targets = all.length ? all : [el];
+    targets.forEach((b) => { b.dataset.approvalInFlight = '1'; b.disabled = true; });
+    try {
+      answerFromButton(decision, opts);
+    } finally {
+      setTimeout(() => {
+        targets.forEach((b) => { delete b.dataset.approvalInFlight; b.disabled = false; });
+      }, 250);
+    }
+  });
 }
+}
+wireApprovalButtons();
 
 // ── General popup paint & behavior ───────────────────────────────────────────
 // ── What's new: release notifications (09-03) ────────────────────────────────

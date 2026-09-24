@@ -231,7 +231,6 @@ function collectCourseLinks() {
     // platform.
     const id = await primeServerIdentity();
     const platform = (id && id.platform) || '';
-    if (!platform) return null;
 
     let result = null;
 
@@ -252,11 +251,38 @@ function collectCourseLinks() {
       result = scrapeMoodle();
       break;
     default:
+      // No recognised platform — INCLUDING the case where the server could not
+      // classify the page at all. That case used to `return null` above, which
+      // made `scrapeGeneric()` — the heuristic scraper written for "literally
+      // ANY arbitrary webpage" — unreachable for exactly the pages that need it
+      // most. The popup then reported "Unparseable Website" for anything the
+      // classifier did not recognise; the owner hit this on a Canvas assignment
+      // ("it should be able to parse anything").
+      //
+      // We still never GUESS a platform: an unclassified page is recorded as
+      // 'unknown', so attribution stays honest. What changes is that the page's
+      // own content is no longer thrown away just because we could not name it.
       result = scrapeGeneric();
       break;
   }
 
-    result.platform = platform;
+    // Belt and braces: a KNOWN platform whose scraper returned nothing (a
+    // selector change on Canvas, say) degrades to the generic heuristic rather
+    // than to zero content and an "Unparseable" report.
+    if (!result) result = scrapeGeneric();
+
+    // A thin extraction still gets the page's main content appended, the same
+    // supplement the deep scraper applies. Long enough to be real prose means
+    // the platform scraper did its job and this is skipped.
+    if ((result.prompt || '').trim().length < 200) {
+      const mainEl = document.querySelector('article, main, #main-content, #content, .assignment, .post-content, .user_content');
+      const altText = (mainEl ? htmlToCleanMarkdown(mainEl) : '') || htmlToCleanMarkdown(document.body) || '';
+      if (altText.trim().length > (result.prompt || '').trim().length) {
+        result.prompt = capScrapeText(altText);
+      }
+    }
+
+    result.platform = platform || 'unknown';
     result.url = window.location.href;
     result.scraped_at = new Date().toISOString();
     // LMS identity + topic (08-28): server-side bubble attribution depends on it.
