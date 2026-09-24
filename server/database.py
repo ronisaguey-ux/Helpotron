@@ -884,3 +884,32 @@ class CalendarEntry(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     user = relationship("User", back_populates="calendar_entries")
+
+
+class AdminAction(Base):
+    """Durable record of a privileged administrative action.
+
+    Measured 2026-09-24, before this existed: `set_user_plan` wrote nothing at all,
+    `grant_welcome_tokens` only printed to stdout, and `reset_user_password` wrote
+    nothing — so a plan change, a token grant, a password reset and a ban all left no
+    durable record of who did it, to whom, or when. `scripts/adminctl.py` exposes every
+    one of those verbs behind a single admin JWT, which made it the highest-privilege
+    surface in the product with the weakest trail.
+
+    Columns are deliberately plain. `actor` is the admin's public_id and `target` the
+    affected account's; `action` is a short verb; `detail` is a JSON string of any
+    parameters that change what the action meant (a new plan, a token delta). No
+    foreign keys, because the point of an audit row is that it survives the deletion of
+    the thing it describes — an FK with a cascade would erase the history of an account
+    deletion, which is exactly the event most worth keeping.
+    """
+
+    __tablename__ = "admin_actions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    actor: Mapped[str] = mapped_column(String(128), index=True)
+    target: Mapped[str] = mapped_column(String(128), index=True)
+    action: Mapped[str] = mapped_column(String(64), index=True)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

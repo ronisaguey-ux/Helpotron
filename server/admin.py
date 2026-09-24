@@ -270,6 +270,11 @@ async def adjust_user_credits(
     db.add(tx)
     db.commit()
     db.refresh(user)
+    from .admin_audit import record as _audit
+    _audit(db, actor=getattr(request.state, "public_id", "admin"), target=public_id,
+           action="adjust-credits", detail={"amount": amount, "reason": reason,
+                                            "new_balance": get_token_balance(user)},
+           request=request)
     return {"new_balance": get_token_balance(user), "public_id": user.public_id, "amount": amount}
 
 
@@ -293,7 +298,11 @@ async def grant_welcome_tokens(
     user.settings = settings
     db.commit()
     db.refresh(user)
-    print(f"[helpotron] owner-approved welcome grant: {amount} tokens -> {public_id} ({reason})")
+    from .admin_audit import record as _audit
+    _audit(db, actor=getattr(request.state, "public_id", "admin"), target=public_id,
+           action="grant-welcome-tokens",
+           detail={"amount": amount, "reason": reason, "new_balance": settings["token_balance"]},
+           request=request)
     return {"new_token_balance": settings["token_balance"], "public_id": public_id, "granted": amount}
 
 
@@ -452,7 +461,10 @@ async def confirm_manual_payment(public_id: str, body: ConfirmPaymentIn,
             "granted": tokens, "token_balance": get_token_balance(user)}
 
 
-@router.post("/user/{public_id}/plan")
+# NOTE: this function used to carry @router.post("/user/{public_id}/plan"), which is
+# the SET-PLAN route — it has no `plan` parameter, so the plan was dropped and the
+# request set payment_verified instead. Its own route is
+# /api/admin/user/{public_id}/verify-trial-payment (server/main.py).
 async def verify_trial_payment(public_id: str, request: Request = None, db: Session = Depends(get_db)):
     """Owner 09-06: approve the user's 1-cent trial payment verification.
 
@@ -480,6 +492,7 @@ async def verify_trial_payment(public_id: str, request: Request = None, db: Sess
     return {"status": "success", "public_id": public_id, "payment_verified": True}
 
 
+@router.post("/user/{public_id}/plan")
 async def set_user_plan(public_id: str, plan: str, request: Request, db: Session = Depends(get_db)):
     require_admin(request)
     if plan not in ["none", "basic", "pro", "elite"]:
@@ -487,8 +500,12 @@ async def set_user_plan(public_id: str, plan: str, request: Request, db: Session
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
+    previous = user.plan
     user.plan = plan
     db.commit()
+    from .admin_audit import record as _audit
+    _audit(db, actor=getattr(request.state, "public_id", "admin"), target=public_id,
+           action="set-plan", detail={"from": previous, "to": plan}, request=request)
     return {"plan": plan}
 
 

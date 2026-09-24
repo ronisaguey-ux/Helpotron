@@ -44,8 +44,57 @@ helpotron/
 ├── scrape_sidecar/        # Standalone Playwright URL scraper service
 │   ├── app.py             # FastAPI service for deep web assignment scraping
 │   └── requirements.txt   # Sidecar dependencies (Playwright, ScrapeGraphAI)
+├── pipeline/              # Self-improvement loop: audit → cross-eval → execute
+│   └── run.py             # 3-agent pipeline; state in pipeline/state/*.json
+├── maintenance/           # Static "Temporarily Closed" page + its dev server
+│   └── serve.py           # Serves index.html on MAINTENANCE_PORT (default 5173)
+├── scripts/               # Operator tooling and verification harnesses (see below)
 └── sweep-reports/         # Comprehensive security and vulnerability sweep audits
 ```
+
+### scripts/ — what each tool is for
+
+**Admin / operations** (these act on the live system; treat them as privileged)
+- `adminctl.py` — admin CLI over the `/api/admin/*` API: users, plans, credits,
+  grants, bans, stats. Caches an admin JWT in `~/.config/helpotron_admin.json`.
+  Every mutating action it performs is recorded in the `admin_actions` table.
+- `create_admin.py` — create or reset the admin account. Password comes from
+  `ADMIN_PASSWORD`; if unset it generates a random one and prints it once.
+- `backup_db.sh` — database backup.
+- `start_services.sh` / `start_watermarks.sh` — service startup helpers.
+- `package_extension.sh` — build the extension zip. Asserts parity against
+  `/api/extension/download`, which is the canonical shipped artifact.
+
+**Migrations** (one-time; each is idempotent and backs up first)
+- `migrate_token_unit_100x.py` — rescale stored token balances to 100 tokens = 1 cent.
+  Refuses to run twice via a marker row.
+- `migrate_datalake_salt.py` — pin `DATALAKE_SALT` and re-key every data-lake record
+  that still carries a `raw_user_id`.
+
+**Verification harnesses** (`repro_*`, `probe_*`, `ht_*`, `*_e2e.js`) — each reproduces
+one specific defect or drives one specific flow. They are how a fix is proven, not
+application code.
+- `repro_*` — bug reproductions: `repro_account_settings.js` (profile/avatar),
+  `repro_scroll_op.js` and `repro_scroll_real_e2e.js` (extension scroll),
+  `repro_area_overrides.js` + `repro_settings_scoped.js` (per-area settings),
+  `repro_agent_config_delete.js`, `repro_popup_chat_noauth.js`,
+  `repro_settings_billing_merge.js`, `repro_dashboard_subjects.js`,
+  `repro_monitor_traffic_tab.js`, `repro_agent_multi_action.js`.
+- `probe_*` — one-off diagnostics. `probe_vision_models.py` sends a FIXED local image
+  (`verify-artifacts/typefix-drive-target.png`) to each vision model to check it can see;
+  `probe_drive_chain.py` / `probe_drive_surfaces.py` walk the Google Drive API surface.
+- `*_e2e.js` — end-to-end: `apikey_flow_e2e.js` (API-key auth boundary),
+  `ext_serverside_e2e.js` (the packed extension in a real browser).
+- `ht_capture_all.js`, `ht_clickthrough.js`, `ht_vision_inspect.js` — Helpotron-specific
+  browser capture and vision inspection.
+- `audit_screenshots_cdp.py`, `capture_all_views.py`, `verify_extension.py`,
+  `stitch_inspect.py` — capture and inspection utilities.
+
+**Maintenance / hygiene**
+- `check_copy_hygiene.js`, `check_stale_numbers.js` — guard scripts; non-zero exit fails CI.
+- `graphify_label.py` — mandatory third step after a graphify rebuild (names communities).
+- `apply_audit_fixes*.py`, `commit_audit_fixes.py` — one-off remediation drivers from
+  past audits. Kept for provenance; not part of any running path.
 
 ---
 
@@ -90,7 +139,7 @@ npm run dev
 ```
 
 ### 3. Offline Demo Mode
-Helpotron includes a complete offline Demo Mode. Toggle demo mode in the interface using the `DemoModeToggle` component in the header/sidebar, or by setting `localStorage.setItem("helpotron_demo_mode", "true")`. 
+Helpotron includes a complete offline Demo Mode. Toggle demo mode in the interface using the `DemoModeToggle` component in the header/sidebar, or by setting `localStorage.setItem("helpotron_demo_mode", "true")`.
 - **Frontend Fixtures**: `web/src/demoData.js` provides rich, offline sample assignments, study cards, and mock conversations.
 - **Backend Simulator**: `server/mock_activity_simulator.py` simulates background activity, telemetry, and grading updates without consuming external API credits.
 
