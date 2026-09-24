@@ -45,7 +45,8 @@ helpotron/
 │   ├── background.js      # Service worker & message passing
 │   ├── content.js         # DOM scraping & capture injection
 │   ├── element_registry.js # Live DOM element registry (shared by popup + agent_mode)
-│   └── popup.html / .js   # Extension popup interface & agent status
+│   └── popup.html / .js   # Extension UI: agent chat, approval dock, API-key
+│                          #   account chip, effort controls (4318 lines)
 ├── scrape_sidecar/        # Standalone Playwright URL scraper service
 │   ├── app.py             # FastAPI service for deep web assignment scraping
 │   └── requirements.txt   # Sidecar dependencies (Playwright, ScrapeGraphAI)
