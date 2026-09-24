@@ -1958,14 +1958,32 @@ function init() {
   els.chatSend.addEventListener('click', sendChatMessage);
 
   // Server-approval card buttons (same contract as the popup card).
-  for (const [aid, decision, aopts] of [
+  const agentApprovalBtns = [
     ['approvalApprove', 'allow', null],
     ['approvalReject', 'deny', null],
     ['approvalNeutral', 'neutral', null],
     ['approvalApproveAuto', 'allow', { autoAdd: true }],
-  ]) {
+  ];
+  for (const [aid, decision, aopts] of agentApprovalBtns) {
     const el = document.getElementById(aid);
-    if (el) el.addEventListener('click', () => answerAgentApprovalFromButton(decision, aopts));
+    if (!el) continue;
+    el.addEventListener('click', () => {
+      // Same guard as the popup card: a second click while the first decision is still
+      // in flight would answer the SAME request twice, so an approval could be both
+      // allowed and denied. Disable the whole set — a fast Approve-then-Reject uses two
+      // different buttons — and restore in a finally so a throw cannot wedge the card.
+      if (el.dataset.approvalInFlight === '1') return;
+      const all = agentApprovalBtns.map(([bid]) => document.getElementById(bid)).filter(Boolean);
+      const targets = all.length ? all : [el];
+      targets.forEach((b) => { b.dataset.approvalInFlight = '1'; b.disabled = true; });
+      try {
+        answerAgentApprovalFromButton(decision, aopts);
+      } finally {
+        setTimeout(() => {
+          targets.forEach((b) => { delete b.dataset.approvalInFlight; b.disabled = false; });
+        }, 250);
+      }
+    });
   }
   els.chatInput.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); sendChatMessage(); }
