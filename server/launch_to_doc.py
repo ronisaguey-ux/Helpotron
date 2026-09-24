@@ -35,39 +35,53 @@ DOC_TARGET: Dict[str, Any] = {
     "focus": True,
 }
 
-# The cadence menu. `sub` is the short chip caption, `title` the hover tooltip.
-# These used to be three hardcoded buttons in popup.html.
+# The cadence menu: three broad gears, not an exact speed.
+#
+# It used to offer 48 / 65 / 85 words per minute, which was wrong twice over.
+# Wrong because a number in the UI implies a precision the engine does not have
+# — nobody can feel the difference between 65 and 70 — and wrong because the
+# typing model is no longer parameterised by wpm at all: its timings are the
+# measured values of a real hand, and the gear is a multiplier on top of them.
+#
+# `speed` multiplies every fitted interval. 1.0 IS the measured hand, so
+# "Balanced" means "exactly how this account's owner actually types" rather
+# than an arbitrary middle setting. Nothing here is a claim about wpm.
 CADENCE_PRESETS: List[Dict[str, Any]] = [
     {
-        "id": "academic",
-        "label": "Academic",
-        "sub": "65 wpm",
-        "title": "Academic — 65 words per minute",
-        "wpm": 65,
-        "typo_rate": 0.018,
-        "default": True,
+        "id": "slow",
+        "label": "Slow",
+        "sub": "unhurried",
+        "title": "Slow — deliberate, longer gaps between keys",
+        "speed": 1.28,
+        "typo_rate": 0.101,
+        "default": False,
     },
     {
-        "id": "careful",
-        "label": "Careful",
-        "sub": "48 wpm",
-        "title": "Careful — 48 words per minute",
-        "wpm": 48,
-        "typo_rate": 0.025,
-        "default": False,
+        "id": "balanced",
+        "label": "Balanced",
+        "sub": "natural",
+        "title": "Balanced — the measured natural rhythm for this account",
+        "speed": 1.0,
+        "typo_rate": 0.101,
+        "default": True,
     },
     {
         "id": "fast",
         "label": "Fast",
-        "sub": "85 wpm",
-        "title": "Fast — 85 words per minute",
-        "wpm": 85,
-        "typo_rate": 0.012,
+        "sub": "quick",
+        "title": "Fast — quicker than natural, for a short draft",
+        "speed": 0.82,
+        "typo_rate": 0.101,
         "default": False,
     },
 ]
 
-DEFAULT_PRESET_ID = "academic"
+DEFAULT_PRESET_ID = "balanced"
+
+# The owner's real sustained typing rate, measured from two recorded sessions —
+# 2,104 inserted characters over 789s and 8,799 over 2,273s, which agree at ~46
+# wpm. Used ONLY for the pre-launch time estimate; the engine itself is driven
+# by fitted millisecond bands and a gear multiplier, never by a wpm figure.
 
 # Behaviour that is not user-facing per launch. One source of truth: the extension
 # previously carried its own fallbacks (0.06 typo rate in background.js against
@@ -89,8 +103,12 @@ TYPING_DEFAULTS: Dict[str, Any] = {
     "trusted_keys": True,
 }
 
-# Bounds so a caller-supplied override can never ask for something absurd (a
-# 5000 wpm stream is not typing, it is a paste that looks nothing like a human).
+# Bounds on the gear multiplier. 1.0 is the measured hand; these keep a
+# caller-supplied override from asking for something no hand can do — a 0.1x
+# gear is a blur, a 6x one is a stall, and neither looks like a person.
+MEASURED_WPM = 46.0
+SPEED_MIN, SPEED_MAX = 0.55, 2.2
+# Kept for backwards compatibility with older callers/tests that imported these.
 WPM_MIN, WPM_MAX = 10, 200
 TYPO_RATE_MIN, TYPO_RATE_MAX = 0.0, 0.25
 
@@ -110,6 +128,11 @@ def resolve_preset(preset_id: Optional[str]) -> Dict[str, Any]:
     extension, a stale bookmark) falls back to the default rather than failing a
     launch the user already asked for."""
     wanted = (preset_id or "").strip().lower()
+    # Retired cadence ids, mapped to their nearest gear so an installed client
+    # that still sends "careful" gets a deliberate pace rather than silently
+    # being handed the default. The old scale was 48 / 65 / 85 wpm; the gears
+    # are 1.28 / 1.0 / 0.82, so the correspondence is direct.
+    wanted = {"academic": "balanced", "careful": "slow"}.get(wanted, wanted)
     for preset in CADENCE_PRESETS:
         if preset["id"] == wanted:
             return preset
@@ -135,19 +158,20 @@ def build_typing_config(
     """
     preset = resolve_preset(preset_id)
     cfg: Dict[str, Any] = {
-        "wpm": preset["wpm"],
+        # The gear, and the only speed control the engine reads.
+        "speed": preset["speed"],
         "typo_rate": preset["typo_rate"],
         "preset_id": preset["id"],
         **TYPING_DEFAULTS,
     }
-    for key in ("wpm", "typo_rate", "natural_pauses", "jitter",
+    for key in ("speed", "typo_rate", "natural_pauses", "jitter",
                 "false_start_rate", "target_app", "trusted_keys"):
         if not isinstance(overrides, dict) or key not in overrides:
             continue
         value = overrides[key]
-        if key == "wpm":
+        if key == "speed":
             try:
-                cfg["wpm"] = int(_clamp(float(value), WPM_MIN, WPM_MAX))
+                cfg["speed"] = round(_clamp(float(value), SPEED_MIN, SPEED_MAX), 3)
             except (TypeError, ValueError):
                 pass
         elif key == "typo_rate":
@@ -197,9 +221,14 @@ def build_launch_plan(
         "title": (title or "").strip() or "Assignment Document",
         "text": chosen_text,
         "word_count": word_count,
-        # The extension shows this before a keystroke is sent, so the estimate
-        # rides on the cadence actually chosen rather than a fixed 65 wpm.
-        "estimated_minutes": max(1, round(word_count / float(typing["wpm"]))) if word_count else 0,
+        # The extension shows this before a keystroke is sent. It rides on the
+        # gear actually chosen: MEASURED_WPM is the owner's real sustained rate
+        # (2,104 inserts over 13 min and 8,799 over 38 min, both ≈ 46 wpm), and
+        # the gear divides it.
+        "estimated_minutes": (
+            max(1, round(word_count / (MEASURED_WPM / float(typing["speed"]))))
+            if word_count else 0
+        ),
         "subject": subject or "",
         "target": {**DOC_TARGET, "tab_id": tab_id},
         "typing": typing,
