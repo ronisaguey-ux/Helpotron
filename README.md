@@ -89,6 +89,16 @@ application code.
   browser capture and vision inspection.
 - `audit_screenshots_cdp.py`, `capture_all_views.py`, `verify_extension.py`,
   `stitch_inspect.py` — capture and inspection utilities.
+- `verify_batches/batch_NN_verify.py` — auto-generated, one wrapper per remediation
+  batch. Each runs that batch's verification command; the executor invokes the exact
+  script rather than retyping the command. They use `os._exit()` on purpose: the
+  sandbox `run_bash` has a 60 s tool timeout and lingering TestClient/httpx threads
+  keep the process alive past it, so thread teardown is bypassed.
+
+**scripts/maintenance/** — one-off database column migrations and password utilities
+(`migrate_password.py` adds the password_hash/password_salt columns, `set_password.py`
+sets one, `select_main_hunks.py` picks hunks for a selective commit). Column adds here
+exist because `create_all` will not add a column to a table that already exists.
 
 **Maintenance / hygiene**
 - `check_copy_hygiene.js`, `check_stale_numbers.js` — guard scripts; non-zero exit fails CI.
