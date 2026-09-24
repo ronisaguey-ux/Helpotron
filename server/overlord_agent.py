@@ -13,6 +13,7 @@ Supports:
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import os
@@ -1289,7 +1290,9 @@ print(f"Active files: {os.listdir('.')}")
                 settings["localization"] = loc
             if not applied:
                 return {"action": action_type, "status": "failed", "message": "No recognized settings in that request."}
-            user.settings = settings
+            from sqlalchemy.orm.attributes import flag_modified
+            user.settings = copy.deepcopy(settings)
+            flag_modified(user, "settings")
             db.commit()
             return {
                 "action": action_type,

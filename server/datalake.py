@@ -326,6 +326,35 @@ class DataLakeManager:
             logger.info("Moderation: deleted feedback %s", feedback_id)
         return removed
 
+    def get_microcredit_submission(self, submission_id: str) -> Optional[Dict[str, Any]]:
+        """Returns one micro-credit submission by its `submission_id`, or None.
+
+        The DELETE route needs this because ownership has to be proven against
+        the store that ACTUALLY holds the record. Micro-credit submissions live
+        only in `microcredit_submissions.jsonl` (the submit route never writes a
+        `DataSubmission` row), and their id is a string like `mc_e9f6a3df` — not
+        the numeric row id the old route required. Without a single-record
+        lookup the route had no way to check who owned the entry before
+        deleting it, which is why it was bound to `int` and rejected every real
+        id with a 422 `int_parsing`.
+        """
+        if not self.microcredits_file.exists():
+            return None
+        try:
+            with open(self.microcredits_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if rec.get("submission_id") == submission_id:
+                        return rec
+        except Exception as e:
+            logger.error("Error reading microcredits file: %s", e)
+        return None
+
     def delete_microcredit_submission(self, submission_id: str) -> bool:
         """Deletes one micro-credit submission from the JSONL store (moderation reject, 09-01)."""
         removed = self._rewrite_jsonl_without(self.microcredits_file, "submission_id", submission_id)

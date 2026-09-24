@@ -2576,6 +2576,33 @@ from fastapi.responses import FileResponse
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _WEB_DIST = _REPO_ROOT / "web" / "dist"
 
+
+def resolve_spa_target(full_path: str) -> Path:
+    """Resolve a request path inside web/dist, refusing traversal and dotfiles.
+
+    Module-level and PURE so the guard is directly testable. It previously lived inline in
+    the route handler, which is defined inside a `if _WEB_DIST.exists()` block — so the
+    security test that imported `serve_spa_frontend` could never work, the module failed at
+    import, and the WHOLE suite was interrupted during collection. A regression guard that
+    cannot run protects nothing.
+
+    Raises HTTPException(404) rather than returning a sentinel: every refusal on this path is
+    a 404, and a 404 is what a scanner should see either way.
+    """
+    try:
+        dist_resolved = _WEB_DIST.resolve()
+        target = (_WEB_DIST / full_path).resolve()
+        if not target.is_relative_to(dist_resolved):
+            raise HTTPException(404, "Not found")
+        if any(part.startswith(".") for part in target.relative_to(dist_resolved).parts):
+            raise HTTPException(404, "Not found")
+        return target
+    except HTTPException:
+        raise
+    except Exception:
+        # A path that cannot even be resolved (NUL byte, bad encoding) is a 404, not a 500.
+        raise HTTPException(404, "Not found")
+
 _UPLOADS_DIR = _REPO_ROOT / "uploads"
 _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 (_REPO_ROOT / "exports").mkdir(parents=True, exist_ok=True)
@@ -2606,18 +2633,8 @@ if _WEB_DIST.exists() and (_WEB_DIST / "index.html").exists():
         # Let FastAPI router handle any unhandled api routes with 404
         if full_path.startswith("api"):
             raise HTTPException(404, "API route not found")
-        # Prevent path traversal outside _WEB_DIST or access to dotfiles
-        try:
-            target = (_WEB_DIST / full_path).resolve()
-            dist_resolved = _WEB_DIST.resolve()
-            if not target.is_relative_to(dist_resolved):
-                raise HTTPException(404, "Not found")
-            if any(part.startswith(".") for part in target.relative_to(dist_resolved).parts):
-                raise HTTPException(404, "Not found")
-        except HTTPException:
-            raise
-        except Exception:
-            raise HTTPException(404, "Not found")
+        # Traversal / dotfile refusal lives in resolve_spa_target so it is unit-testable.
+        target = resolve_spa_target(full_path)
 
         if full_path and target.is_file():
             # Immutable content-hashed assets

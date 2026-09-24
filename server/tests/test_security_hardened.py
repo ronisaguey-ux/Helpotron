@@ -19,7 +19,7 @@ from server.canvas_sync import CanvasSyncEngine
 from server.overlord_agent import _validated_argv
 from server.math_executor import run_python_math_bash
 from server.datalake import _anonymize_id
-from server.main import app, serve_spa_frontend
+from server.main import app, resolve_spa_target
 from server.security import SessionStore, create_access_token
 from server.admin import require_admin
 from server.database import User, SessionLocal
@@ -120,14 +120,38 @@ def test_run_python_math_bash_executes_safe_math():
 
 @pytest.mark.asyncio
 async def test_serve_spa_frontend_blocks_path_traversal():
-    """Verify serve_spa_frontend raises 404 on path traversal attempts outside web/dist."""
+    """Verify the SPA path guard raises 404 on traversal attempts outside web/dist.
+
+    Drives `resolve_spa_target`, which is where the guard actually lives now. The route
+    handler used to hold it inline and is defined inside a conditional, so importing it
+    (as this test used to) failed at import time and took the whole suite with it.
+    """
     with pytest.raises(HTTPException) as exc_info:
-        await serve_spa_frontend("../../.env")
+        resolve_spa_target("../../.env")
     assert exc_info.value.status_code == 404
 
     with pytest.raises(HTTPException) as exc_info:
-        await serve_spa_frontend("../../../etc/passwd")
+        resolve_spa_target("../../../etc/passwd")
     assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_spa_path_guard_blocks_dotfiles_and_allows_real_assets():
+    """The guard must refuse dotfiles but still serve an ordinary path.
+
+    The positive case matters: a guard that 404s everything is not security, it is an
+    outage — and only asserting the refusals would have accepted that.
+    """
+    # A dotfile inside dist is refused even though it does not traverse anywhere.
+    with pytest.raises(HTTPException):
+        resolve_spa_target(".env")
+    with pytest.raises(HTTPException):
+        resolve_spa_target("assets/.hidden.js")
+
+    # An ordinary path resolves inside dist and does not raise.
+    resolved = resolve_spa_target("index.html")
+    assert resolved.name == "index.html"
+    assert resolved.is_relative_to(resolve_spa_target("").resolve())
 
 
 # ─── 4. Credit Minting Prevention on POST /api/payments ──────────────────────
