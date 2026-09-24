@@ -38,6 +38,8 @@ helpotron/
 │   ├── error_reports.py   # Sealed user bug reports: mint key, unseal, admin triage
 │   ├── extension_logic.py # Server-side crawl scope, page identity, motion, queue
 │   ├── cost_tracking.py   # Per-model rate table and the API usage ledger
+│   ├── hip_humanizer.py   # Local HIP de-paraphraser client (llama-server :8099)
+│   ├── html_markdown.py   # HTML→Markdown for the extension's page capture
 │   ├── payments.py        # Payment tiers ($10 / $20 / $40) & billing
 │   └── math_executor.py   # Deterministic Python math evaluation sandbox
 ├── extension/             # Chrome Manifest V3 Browser Extension
