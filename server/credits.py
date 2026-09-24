@@ -370,6 +370,28 @@ def debit_tokens_atomic(db: Session, user_id: int, amount: float, allow_negative
     return get_token_balance(row) if row is not None else 0.0
 
 
+def credit_tokens_atomic(db: Session, user_id: int, amount: float) -> float:
+    """Add `amount` tokens in ONE statement, and return the new balance.
+
+    The mirror of debit_tokens_atomic, and it exists for the same reason: `settings` is
+    a JSON blob, so a read-then-write is not atomic and two concurrent refunds can
+    swallow each other. debit_tokens_atomic refuses a non-positive amount by design, so
+    a refund cannot be expressed as a negative debit — it needs this.
+    """
+    amount = float(amount)
+    if amount <= 0:
+        return 0.0
+    db.execute(
+        text("UPDATE users SET settings = json_set(settings, '$.token_balance', "
+             "CAST(COALESCE(json_extract(settings, '$.token_balance'), 0) AS REAL) + :amt) "
+             "WHERE id = :uid"),
+        {"amt": amount, "uid": user_id},
+    )
+    db.commit()
+    row = db.query(User).filter(User.id == user_id).first()
+    return get_token_balance(row) if row is not None else 0.0
+
+
 def is_unmetered(user: User) -> bool:
     """True when usage should not be metered.
 
@@ -573,19 +595,28 @@ def safe_deduct_with_rollback(
     """Deduct TASK TOKENS with a rollback handle. Used by the agent session."""
     if is_unmetered(user):
         return True, None
-    row = db.query(User).filter(User.id == user.id).first() or user
-    balance = get_token_balance(row)
-    if balance < amount:
+    # A read-then-write cannot be atomic on a JSON blob, and with_for_update() is a
+    # NO-OP on SQLite (see debit_tokens_atomic). This function used the read-modify-write
+    # pattern that debit_tokens_atomic exists to replace, so two concurrent agent
+    # sessions could each read the same balance and the second write swallowed the
+    # first — measured elsewhere in this file at "two concurrent 400-token debits
+    # against 1000 left 600, not 200, and both callers were told they succeeded".
+    # The balance check and the debit now happen inside one statement.
+    before = get_token_balance(db.query(User).filter(User.id == user.id).first() or user)
+    if before < amount:
         return False, None
-    set_token_balance(row, balance - amount)
+    new_balance = debit_tokens_atomic(db, user.id, amount, allow_negative=False)
+    if new_balance == before:
+        # The CASE guard in debit_tokens_atomic refused it: a concurrent debit took the
+        # balance below `amount` between our check and the statement.
+        return False, None
     db.add(CreditTransaction(user_id=user.id, delta=-amount, reason=f"safe_deduct:{operation_desc}"))
     db.commit()
 
     def rollback():
-        fresh = db.query(User).filter(User.id == user.id).first() or user
-        set_token_balance(fresh, get_token_balance(fresh) + amount)
         db.add(CreditTransaction(user_id=user.id, delta=amount, reason=f"refund:{operation_desc}"))
         db.commit()
+        credit_tokens_atomic(db, user.id, amount)
         logger.info("Rolled back %s tokens for user %s (%s)", amount, user.id, operation_desc)
 
     return True, rollback
