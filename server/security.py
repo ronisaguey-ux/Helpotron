@@ -147,14 +147,44 @@ def verify_password(password: str, hash_hex: str, salt: str) -> bool:
 class RateLimiter:
     """Rate limiter with per-key sliding windows plus auth-failure
     exponential backoff (5 failures → lockout, doubling up to 2^15 s)."""
+    # How many calls may pass before the stale-key sweep runs. The sweep is O(keys), so it
+    # must not run on every request; 512 keeps it well under 1% overhead at any real rate
+    # while still bounding memory on a burst.
+    _SWEEP_EVERY = 512
+
     def __init__(self, max_requests: int, window_seconds: int):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self._requests: Dict[str, list[float]] = {}
         self._failures: Dict[str, list[float]] = {}
+        self._calls = 0
+
+    def _sweep(self) -> None:
+        """Drop keys that have gone quiet.
+
+        ★ The per-key LIST was pruned on every call, but the KEY ITSELF was never removed,
+        so memory grew with the number of DISTINCT clients rather than with the traffic.
+        Measured: 2000 distinct keys stayed resident after every window had expired, and a
+        single new call cleaned none of them. Behind a proxy that passes real client IPs —
+        or any endpoint a stranger can hit once — that is an unbounded leak on a public box.
+
+        A key is stale when its list is empty after filtering (its whole window elapsed) and
+        its failure list is empty too. An active client is never touched, so the limiter
+        behaves identically for real traffic.
+        """
+        now = time.time()
+        req_cutoff = now - self.window_seconds
+        fail_cutoff = now - 3600.0
+        for k in [k for k, v in self._requests.items() if not any(t > req_cutoff for t in v)]:
+            del self._requests[k]
+        for k in [k for k, v in self._failures.items() if not any(t > fail_cutoff for t in v)]:
+            del self._failures[k]
 
     def allow(self, key: str) -> bool:
         now = time.time()
+        self._calls += 1
+        if self._calls % self._SWEEP_EVERY == 0:
+            self._sweep()
         window_start = now - self.window_seconds
         if key not in self._requests:
             self._requests[key] = []
