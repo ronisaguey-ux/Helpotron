@@ -35,6 +35,7 @@ helpotron/
 │   ├── agent_prompt.py    # Strict educational system prompt builder
 │   ├── llm.py             # OpenRouter LLM router, streaming & model policy
 │   ├── api_keys.py        # htk_ API keys: scopes, expiry, revocation
+│   ├── admin_audit.py     # Append-only admin_action log (actor, target, action, detail)|
 │   ├── error_reports.py   # Sealed user bug reports: mint key, unseal, admin triage
 │   ├── extension_logic.py # Server-side crawl scope, page identity, motion, queue
 │   ├── cost_tracking.py   # Per-model rate table and the API usage ledger
