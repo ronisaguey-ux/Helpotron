@@ -136,6 +136,63 @@ def usage_cents_since(db: Session, user_id: int, since_id: int) -> float:
         return 0.0
 
 
+def _latest_ledger_id(db: Session, user_id: int) -> int:
+    """Newest real ApiUsageLog id for a user right now — the UPPER bound of a settlement."""
+    from server.database import ApiUsageLog
+    try:
+        row = db.query(func.max(ApiUsageLog.id)).filter(ApiUsageLog.user_id == user_id).scalar()
+        return int(row) if row else 0
+    except Exception:
+        return 0
+
+
+_HIGH_WATER_KEY = "usage_high_water_id"
+
+
+def _usage_high_water(user: Any) -> int:
+    """The newest ledger id this account has ALREADY been billed for."""
+    settings = getattr(user, "settings", None) or {}
+    try:
+        return int(settings.get(_HIGH_WATER_KEY) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _set_usage_high_water(row: Any, value: int) -> None:
+    """Advance the mark. Only ever moves FORWARD — a lower value would re-bill."""
+    settings = dict(getattr(row, "settings", None) or {})
+    if int(value) > int(settings.get(_HIGH_WATER_KEY) or 0):
+        settings[_HIGH_WATER_KEY] = int(value)
+        row.settings = settings
+
+
+def usage_cents_between(db: Session, user_id: int, after_id: int, upto_id: int) -> float:
+    """Real cost of only the entries in the id range (after_id, upto_id].
+
+    ★ WHY THE RANGE MATTERS. `usage_cents_since` sums everything after a watermark, and the
+    watermark is taken PER USER while a task's idempotency key is PER TASK. Two tasks running
+    concurrently on one account therefore take the SAME baseline and each bill the ENTIRE
+    window — so the second settlement charges the first task's spend a second time.
+
+    Measured on a scratch DB: two tasks, $0.02 and $0.03 of real cost, billed 5.00 + 5.00 =
+    10.00 cents against 5.00 actual. Over-charging a paying account, silently, whenever a
+    user runs two things at once. The caller advances a per-user high-water mark to the end
+    of what it settled, so each id is billed exactly once. `upto_id` is what makes that
+    possible — without an upper bound there is no way to name "the part I just paid for".
+    """
+    from server.database import ApiUsageLog
+    try:
+        total = (db.query(func.coalesce(func.sum(ApiUsageLog.base_cost_usd), 0.0))
+                   .filter(ApiUsageLog.user_id == user_id,
+                           ApiUsageLog.id > int(after_id),
+                           ApiUsageLog.id <= int(upto_id))
+                   .scalar())
+        return float(total or 0.0) * 100.0
+    except Exception as e:
+        logger.warning("usage_cents_between failed for user %s: %s", user_id, e)
+        return 0.0
+
+
 def daily_cost_exceeded(db: Session, user: Any, cap_usd: Optional[float] = None) -> bool:
     """Has an UNMETERED account already spent past its daily cap?
 
@@ -252,7 +309,16 @@ def charge_actual_usage(user: Any, task_name: str, db: Session, since_id: int,
             logger.info("usage settlement for %s already recorded — skipping", entry_reason)
             return 0
 
-    cents = usage_cents_since(db, user_id, since_id)
+    # ★ Bill the RANGE this task owns, never "everything after a per-user watermark".
+    # The watermark is taken per USER while the idempotency key is per TASK, so two tasks
+    # running concurrently on one account take the SAME baseline and each used to bill the
+    # entire window — the second settlement re-charged the first task's spend. Measured on a
+    # scratch DB: $0.02 + $0.03 of real cost billed 10.00 cents instead of 5.00.
+    # The floor is the further of the caller's watermark and this account's high-water mark,
+    # and the ceiling is the newest ledger id at settlement, so every id bills exactly once.
+    upto_id = _latest_ledger_id(db, user_id)
+    floor_id = max(int(since_id or 0), _usage_high_water(row))
+    cents = usage_cents_between(db, user_id, floor_id, upto_id) if upto_id > floor_id else 0.0
     # Always at least one token. The owner wants EVERY process metered, including
     # ones that spend nothing upstream (HIP humanizing runs locally), so a task
     # that ran and recorded no cost still bills the 1-token minimum rather than
@@ -292,6 +358,9 @@ def charge_actual_usage(user: Any, task_name: str, db: Session, since_id: int,
         delta=-delta,
         reason=entry_reason,
     ))
+    # Advance the mark in the SAME transaction as the charge: a mark written without the
+    # charge would lose revenue, and a charge written without the mark would bill twice.
+    _set_usage_high_water(row, upto_id)
     db.commit()
     logger.info("Charged %s tokens for %s (real cost %.4f cents, pre-charged %s)",
                 delta, task_name, cents, pre_charged)
