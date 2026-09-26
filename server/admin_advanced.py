@@ -81,36 +81,43 @@ class AdminAdvancedService:
 
     def get_system_health(self, db: Session) -> Dict[str, Any]:
         uptime_seconds = time.time() - self._start_time
-        uptime_pct = 99.98  # high-availability SLA
+        uptime_pct = 99.98  # high-availability SLA target
         db_alive = True
         try:
             db.execute(text("SELECT 1"))
         except Exception:
-            pass
+            db_alive = False
 
         return {
-            "uptime_percentage": uptime_pct,
+            "db_alive": db_alive,
+            "status": "healthy" if db_alive else "degraded",
+            "uptime_percentage": uptime_pct if db_alive else 0.0,
             "uptime_formatted": f"{int(uptime_seconds // 3600)}h {int((uptime_seconds % 3600) // 60)}m",
+            "metrics_mode": "placeholder",
             "api_latencies_ms": {
                 "omniroute_proxy": 142,
                 "deepseek_api": 320,
                 "stripe_webhooks": 88,
                 "twilio_sms": 210,
                 "ai_detectors_registry": 290,
+                "_placeholder": True,
             },
             "error_rates": {
                 "last_24h_error_rate_pct": 0.04,
                 "total_requests_24h": 14890,
                 "failed_requests_24h": 6,
+                "_placeholder": True,
             },
-            "recent_incidents": [
-                {
-                    "timestamp": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
-                    "title": "Scheduled Database Migration",
-                    "status": "resolved",
-                    "duration_minutes": 2,
-                }
-            ],
+            "recent_incidents": (
+                [] if db_alive else [
+                    {
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "title": "Database connection failure",
+                        "status": "active",
+                        "duration_minutes": 0,
+                    }
+                ]
+            ),
         }
 
     # ─── 3. Content Moderation Queue ────────────────────────────────────────

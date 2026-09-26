@@ -326,6 +326,21 @@ def charge_actual_usage(user: Any, task_name: str, db: Session, since_id: int,
     actual = calculate_task_token_cost(cents / 100.0)
     delta = actual - max(0, int(pre_charged or 0))
     if delta == 0:
+        # ★ A zero-delta settlement still CONSUMED the ledger range, so the mark must move
+        # even though nothing is charged. Leaving it behind means the next settlement on
+        # this account floors at the old mark and re-bills the ids THIS task already
+        # accounted for — the same double-bill class as the concurrent-tasks fix above.
+        # The idempotency row goes in the same transaction so a re-entered completion
+        # path is recognisable here too, not only on the charged path.
+        if upto_id > _usage_high_water(row):
+            _set_usage_high_water(row, upto_id)
+        if idempotency_key:
+            db.add(CreditTransaction(
+                user_id=user_id,
+                delta=0,
+                reason=entry_reason,
+            ))
+        db.commit()
         return 0
 
     balance = get_token_balance(row)

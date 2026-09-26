@@ -408,6 +408,30 @@
       "done_when": "Startup warns when an overriding subfolder .env is present.",
       "review_verdict": "REAL BUT LATENT \u2014 not currently active. The precedence is as described, but there is NO local roofing-lead-bot/.env on disk, so nothing is being shadowed today. It is a trap waiting for the next person who creates one, not a live misconfiguration.",
       "verify_command_note": "Corrected: the original form was run from the t2b root and fails with ModuleNotFoundError: state_store. The app uses top-level imports, so pytest must run with CWD=roofing-lead-bot/."
+    },
+    {
+      "id": "HELP-HEALTH-UI-01",
+      "class": "CHECKABLE",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "repo": "helpotron",
+      "file": "web/src/components/AdminAdvancedDashboard.jsx",
+      "line_range": "1425-1450",
+      "construct": "hardcoded status fallbacks rendered as live health",
+      "field": "correctness / silent failure",
+      "finding": "The admin health panel renders `healthData.api || 'operational'`, `healthData.database || 'connected'`, `healthData.sandbox || 'active'` and `healthData.latency_ms || 12`. The endpoint returns NONE of those four keys - driven: returned keys are api_latencies_ms, db_alive, error_rates, metrics_mode, recent_incidents, status, uptime_formatted, uptime_percentage. So every one of those four tiles shows a hardcoded fallback and displays it as measured status. A real outage still renders 'operational', 'connected', 'active', '12ms'.",
+      "why_it_matters": "This is the same defect class as HELP-CORR-01 but on the UI side, and it survives agy's step-3 fix to the service - fixing the backend to report db_alive:false does not help because the UI never reads db_alive. The operator's outage display is decorative.",
+      "found_by": "opencode, while verifying agy's step 3 (not in the audit)",
+      "repro": "Drive the service: get_system_health returns no 'api'/'database'/'sandbox'/'latency_ms' key. Read AdminAdvancedDashboard.jsx:1425-1450: all four are read with a fallback. Render the panel with a failing DB and it still reads operational.",
+      "proposed_fix": "Bind the four tiles to what the endpoint actually returns: `api`->`status`, `database`->`db_alive ? 'connected' : 'down'`, and drop or wire `sandbox`/`latency_ms` (latency has real data under api_latencies_ms). If sandbox/latency are not measurable, remove the tiles rather than showing a constant dressed as a measurement.",
+      "test_to_write": {
+        "path": "scripts/repro_admin_health_tiles.js",
+        "must_fail_without_fix": true,
+        "note": "Playwright: stub /api/admin/system-health to return db_alive:false, open the admin dashboard, assert the database tile does NOT read 'connected'. Browser needed."
+      },
+      "verify_command": "cd /home/roni/Roni_workspace/helpotron && DISPLAY=:0 node scripts/repro_admin_health_tiles.js",
+      "done_when": "With db_alive:false from the API the panel shows a down/degraded state, and no tile displays a constant in place of a measurement.",
+      "must_not": "Do not change the endpoint's response shape in the same change - fix the consumer."
     }
   ],
   "refutations": [
@@ -1059,6 +1083,26 @@
       "suite_to_keep_green": "cd /home/roni/Roni_workspace/t2b/roofing-lead-bot && ./.venv/bin/python -m pytest -q",
       "done_when": "With both files present, a warning naming the winner is emitted; with one, none is.",
       "must_not": "Do not reorder env_file \u2014 that changes which file is authoritative."
+    },
+    {
+      "step": 8,
+      "wave": 2,
+      "finding_id": "HELP-HEALTH-UI-01",
+      "severity": "HIGH",
+      "repo": "/home/roni/Roni_workspace/helpotron",
+      "branch": "audit-remediation-20260925",
+      "file": "web/src/components/AdminAdvancedDashboard.jsx",
+      "lines": "1425-1450",
+      "change": "Repoint the four tiles at what the endpoint returns: the api tile reads `status`, the database tile reads `db_alive ? 'connected' : 'down'`. For sandbox and latency_ms, either wire them to real data (latencies exist under api_latencies_ms) or remove the tiles - do not leave a literal behind a `||`.",
+      "why": "Found while verifying step 3, not by the audit. The endpoint never returns api/database/sandbox/latency_ms, so all four tiles render their constants. Step 3 fixes the service but the UI cannot see the fix.",
+      "depends_on": "step 3 (HELP-CORR-01) - same page, same defect class",
+      "test_to_write": {
+        "path": "scripts/repro_admin_health_tiles.js",
+        "must_fail_without_fix": true
+      },
+      "verify_command": "cd /home/roni/Roni_workspace/helpotron && DISPLAY=:0 node scripts/repro_admin_health_tiles.js",
+      "suite_to_keep_green": "cd /home/roni/Roni_workspace/helpotron && ./.venv/bin/python -m pytest server/tests -q   # 864 passed / 1 skipped",
+      "done_when": "With db_alive:false the panel shows a degraded state; no tile shows a literal as a measurement."
     }
   ],
   "not_a_step": [
