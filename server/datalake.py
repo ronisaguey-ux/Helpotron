@@ -37,20 +37,6 @@ def _ensure_directories() -> None:
         d.mkdir(parents=True, exist_ok=True)
 
 
-def scrub_pii(text: str) -> str:
-    """Anonymize emails, phone numbers, SSNs, and student IDs from text (FERPA compliance)."""
-    if not text:
-        return ""
-    # Email scrubbing
-    text = re.sub(r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+', '[ANONYMIZED_EMAIL] [REDACTED_EMAIL]', text)
-    # Phone scrubbing
-    text = re.sub(r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}', '[ANONYMIZED_PHONE] [REDACTED_PHONE]', text)
-    # SSN scrubbing
-    text = re.sub(r'\b\d{3}-\d{2}-\d{4}\b', '[REDACTED_SSN]', text)
-    # Student ID scrubbing
-    text = re.sub(r'(?:ID|id|Student ID|UID)[:\s]*\d{5,10}', '[ANONYMIZED_STUDENT_ID] [REDACTED_STUDENT_ID]', text)
-    return text
-
 
 
 def _anonymize_id(raw_id: Any) -> str:
@@ -71,17 +57,6 @@ _NAME_RE = re.compile(
     r"(\b(?:Submitted by|by|from)\s+)[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2}"
 )
 
-
-def anonymize_student_submission(text: str) -> str:
-    """Strips PII (university emails, student IDs, phone numbers, names) from
-    shared assignment summaries before they are stored in the data lake."""
-    if not text:
-        return ""
-    redacted = _EMAIL_RE.sub("[EMAIL_REDACTED]", text)
-    redacted = _STUDENT_ID_RE.sub("Student ID: [ID_REDACTED]", redacted)
-    redacted = _PHONE_RE.sub("[PHONE_REDACTED]", redacted)
-    redacted = _NAME_RE.sub(r"\1[NAME_REDACTED]", redacted)
-    return redacted
 
 
 class DataLakeManager:

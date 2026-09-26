@@ -526,45 +526,6 @@ def earn_credits(db: Session, user: User, amount: float, reason: str) -> float:
     return amount
 
 
-def charge_with_rollback(
-    user: User,
-    task_name: str,
-    db: Session,
-    description: str = "",
-) -> tuple[bool, Optional[Callable[[], None]]]:
-    cost = TASK_COSTS.get(task_name, 1)
-    if is_unmetered(user):
-        return True, None
-    ledger_user = db.query(User).filter(User.id == user.id).with_for_update().first() or user
-    balance = get_token_balance(ledger_user)
-    if balance < cost:
-        logger.warning(
-            "Insufficient tokens (%.2f) for %s (cost %s)", balance, task_name, cost
-        )
-        # Release the FOR UPDATE lock the select above took on this row; without
-        # it the lock is held until the request's session closes, and a second
-        # concurrent task on the same account blocks behind it.
-        db.rollback()
-        return False, None
-
-    set_token_balance(ledger_user, balance - cost)
-    db.add(CreditTransaction(
-        user_id=user.id,
-        delta=-cost,
-        reason=description or f"charge:{task_name}",
-    ))
-    db.commit()
-    logger.info("Charged %s tokens for %s. New balance: %s", cost, task_name, balance - cost)
-
-    def rollback() -> None:
-        fresh = db.query(User).filter(User.id == user.id).first() or user
-        set_token_balance(fresh, get_token_balance(fresh) + cost)
-        db.add(CreditTransaction(user_id=user.id, delta=cost, reason=f"refund:{task_name}"))
-        db.commit()
-        logger.info("Refunded %s tokens for failed %s", cost, task_name)
-
-    return True, rollback
-
 class InsufficientCreditsError(Exception):
     pass
 
@@ -738,19 +699,3 @@ def record_data_submission(db: Session, user: User, payload: dict) -> dict:
     db.commit()
     logger.info('Recorded data submission for user %s (discount 1.0%%)', user.id)
     return {"discount_balance": 1.0, "next_purchase_discount": 1.0}
-
-def deduct_credits_atomic(user_id: str, amount: int, description: str, db: Session, idempotency_key: str = None) -> bool:
-    return charge(user_id, "assignment_solve", db, cost_override=amount, reason=description, idempotency_key=idempotency_key)
-
-def get_user_credits(db: Session, user_id: str) -> float:
-    """Earned discount credits (display). Token balance: get_token_balance()."""
-    user = db.query(User).filter(User.id == user_id).first()
-    return effective_credits_balance(db, user) if user else 0.0
-
-def add_credits_to_user(db: Session, user_id: str, amount: float, description: str = "Credit addition") -> bool:
-    """Grant EARNED discount credits (referral/datalake/admin). Never usage."""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return False
-    earn_credits(db, user, float(amount), description)
-    return True
