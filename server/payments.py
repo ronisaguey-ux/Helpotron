@@ -197,6 +197,22 @@ def handle_stripe_webhook(payload: bytes, sig_header: str) -> dict:
     except stripe.error.SignatureVerificationError as e:
         raise ValueError(f"Invalid signature: {e}")
 
+    # ★★★ NORMALISE TO A PLAIN DICT — this is load-bearing, not tidiness.
+    # `construct_event` returns a `stripe.Event`, and in stripe-python 15.x that is
+    # a StripeObject with NO `.get()` — calling it raises
+    #   AttributeError: 'get' is a dict method, but a Event is not a dict.
+    # Every branch below reads via `.get(...)`, so a REAL, correctly-signed webhook
+    # crashed on its first line and the route (which only catches ValueError)
+    # returned a 500. Stripe would retry, the customer would be charged, and NO
+    # tokens would ever be granted. Confirmed by driving a genuinely signed event
+    # through this function — it died at `event.get("id")` before doing anything.
+    #
+    # Signature verification has already happened above, so converting here cannot
+    # weaken it. `to_dict()` returns plain nested dicts, which is what the rest of
+    # this handler was written against.
+    if hasattr(event, "to_dict"):
+        event = event.to_dict()
+
     from .database import SessionLocal, StripeEvent
 
     db = SessionLocal()
