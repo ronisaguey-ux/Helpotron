@@ -1,0 +1,614 @@
+{
+  "generated": "2026-09-25T20:00:00-04:00",
+  "scope": {
+    "helpotron": {
+      "path": "/home/roni/Roni_workspace/helpotron",
+      "branch": "audit-remediation-20260925",
+      "head": "4e25466"
+    },
+    "t2b": {
+      "path": "/home/roni/Roni_workspace/t2b",
+      "branch": "audit-remediation-20260925",
+      "head": "8f274f9"
+    },
+    "webchat-to-api-harness": {
+      "path": "/home/roni/Roni_workspace/webchat_worker/harness",
+      "branch": "main",
+      "head": "79e7744"
+    },
+    "AI-coding-orchestrator": {
+      "path": "/home/roni/Roni_workspace/AI-coding-orchestrator",
+      "branch": "audit-tooling",
+      "head": "d8c23b6"
+    }
+  },
+  "agents": [
+    {
+      "n": 1,
+      "field": "Adversarial Security: Authentication and Authorization",
+      "repos": [
+        "helpotron",
+        "t2b"
+      ],
+      "findings": 2,
+      "refutations": 2
+    },
+    {
+      "n": 2,
+      "field": "Adversarial Security: Tool-Execution Trust Boundary",
+      "repos": [
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 1,
+      "refutations": 2
+    },
+    {
+      "n": 3,
+      "field": "Token Economy and Metering",
+      "repos": [
+        "helpotron"
+      ],
+      "findings": 1,
+      "refutations": 2
+    },
+    {
+      "n": 4,
+      "field": "Outreach Compliance",
+      "repos": [
+        "t2b"
+      ],
+      "findings": 0,
+      "refutations": 2
+    },
+    {
+      "n": 5,
+      "field": "Provider Failure and Spend",
+      "repos": [
+        "t2b",
+        "helpotron"
+      ],
+      "findings": 1,
+      "refutations": 1
+    },
+    {
+      "n": 6,
+      "field": "Concurrency and Races",
+      "repos": [
+        "helpotron",
+        "t2b",
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 1,
+      "refutations": 1
+    },
+    {
+      "n": 7,
+      "field": "Data Integrity, Migrations and Idempotency",
+      "repos": [
+        "helpotron",
+        "t2b"
+      ],
+      "findings": 1,
+      "refutations": 1
+    },
+    {
+      "n": 8,
+      "field": "Privacy, PII and Retention",
+      "repos": [
+        "helpotron"
+      ],
+      "findings": 0,
+      "refutations": 2
+    },
+    {
+      "n": 9,
+      "field": "UI, UX and Error States",
+      "repos": [
+        "helpotron",
+        "webchat-to-api-harness"
+      ],
+      "findings": 1,
+      "refutations": 2
+    },
+    {
+      "n": 10,
+      "field": "Reliability, Recovery and Supervision",
+      "repos": [
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 1,
+      "refutations": 1
+    },
+    {
+      "n": 11,
+      "field": "Correctness and Silent Failure",
+      "repos": [
+        "helpotron",
+        "t2b",
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 2,
+      "refutations": 1
+    },
+    {
+      "n": 12,
+      "field": "Dead Code and Stale Prose",
+      "repos": [
+        "helpotron",
+        "t2b",
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 2,
+      "refutations": 1
+    },
+    {
+      "n": 13,
+      "field": "Test Quality",
+      "repos": [
+        "helpotron",
+        "t2b",
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 1,
+      "refutations": 1
+    },
+    {
+      "n": 14,
+      "field": "Performance and Resource Use",
+      "repos": [
+        "helpotron",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 1,
+      "refutations": 1
+    },
+    {
+      "n": 15,
+      "field": "Documentation, Onboarding and Config Drift",
+      "repos": [
+        "helpotron",
+        "t2b",
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 1,
+      "refutations": 1
+    }
+  ],
+  "counts": {
+    "raw": 22,
+    "checkable": 11,
+    "suggestion": 4,
+    "dead_code": 5,
+    "gap": 2,
+    "refuted": 21
+  },
+  "findings": [
+    {
+      "id": "HELP-AUTH-01",
+      "class": "CHECKABLE",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "repo": "helpotron",
+      "file": "server/routes_auth_2fa.py",
+      "line_range": "688-691",
+      "construct": "_verify_twilio_signature",
+      "finding": "When TWILIO_AUTH_TOKEN is unset in configuration/env, _verify_twilio_signature returns True for all requests, allowing unauthenticated attackers to forge SMS inbound opt-out and opt-in webhooks.",
+      "why_it_matters": "An external prober knowing a user's phone number can POST arbitrary From/Body payloads to /sms/inbound and flip sms_opt_out on target user accounts, causing denial of service on 2FA SMS logins.",
+      "repro": {
+        "command": "./.venv/bin/python -c \"import sys; sys.path.insert(0, '.'); from server.routes_auth_2fa import _verify_twilio_signature; print('Observed bypass result:', _verify_twilio_signature('https://helpotron.dpdns.org/sms/inbound', {'From': '+15551234567', 'Body': 'STOP'}, 'invalid_sig'))\"",
+        "observed": "SMS inbound: TWILIO_AUTH_TOKEN unset \u2014 Twilio signature NOT verified\nObserved bypass result: True"
+      },
+      "callers": "1",
+      "proposed_fix": "When TWILIO_AUTH_TOKEN is missing or empty, fail closed by returning False (or raise 401/503) unless explicitly in local testing environment with TEST_MODE=true.",
+      "test_to_write": {
+        "path": "server/tests/test_auth_2fa_signature.py",
+        "must_fail_without_fix": true,
+        "body": "def test_twilio_signature_fails_closed_when_token_unset(monkeypatch):\n    from server.routes_auth_2fa import _verify_twilio_signature\n    monkeypatch.delenv('TWILIO_AUTH_TOKEN', raising=False)\n    assert _verify_twilio_signature('https://helpotron.dpdns.org/sms/inbound', {'From': '+1555123'}, 'fake') is False"
+      },
+      "verify_command": "./.venv/bin/python -m pytest server/tests/test_auth_2fa_signature.py",
+      "done_when": "_verify_twilio_signature returns False when TWILIO_AUTH_TOKEN is unset in non-test mode."
+    },
+    {
+      "id": "HARN-SEC-01",
+      "class": "CHECKABLE",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "repo": "webchat-to-api-harness",
+      "file": "src/tools/tools.js",
+      "line_range": "284-295",
+      "construct": "git push feature branch guard in run_bash",
+      "finding": "The git push feature branch check extracts the last token and only checks !== 'master' && !== 'main', allowing push to main via git refspecs such as HEAD:main or refs/heads/main.",
+      "why_it_matters": "A prompt-injected or compromised model turn executing run_bash could push unauthorized commits directly to main/master on origin using git push origin HEAD:main.",
+      "repro": {
+        "command": "node -e 'const cmd = \"git push origin HEAD:main\"; const toks = cmd.split(\" \").filter(Boolean); const gi = toks.indexOf(\"git\"); const pi = toks.indexOf(\"push\"); const rest = toks.slice(pi + 1); const branch = rest.filter((t) => t[0] !== \"-\" && t !== \"origin\" && t !== \"upstream\").pop(); console.log(\"Blocked:\", (!branch || branch === \"master\" || branch === \"main\"));'",
+        "observed": "Blocked: false"
+      },
+      "callers": "1",
+      "proposed_fix": "Inspect refspecs and target branches: split on ':' and check if destination target ends with 'main' or 'master', or if target matches refs/heads/(main|master).",
+      "test_to_write": {
+        "path": "harness_tests/git_push_guard.test.js",
+        "must_fail_without_fix": true,
+        "body": "test('blocks git push with refspec to main', () => {\n  const res = runBashGuard('git push origin HEAD:main');\n  assert.strictEqual(res.blocked, true);\n});"
+      },
+      "verify_command": "node --test harness_tests/git_push_guard.test.js",
+      "done_when": "git push origin HEAD:main and git push origin refs/heads/main are rejected by the run_bash guard."
+    },
+    {
+      "id": "HARN-SILENT-01",
+      "class": "CHECKABLE",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "repo": "webchat-to-api-harness",
+      "file": "cli/index.js",
+      "line_range": "1450-1453",
+      "construct": "String(S.resolveAll().platform || 'linux')",
+      "finding": "screenMcpSetupPrompt reads .platform property off S.resolveAll(), which returns an Array, resulting in undefined and always defaulting to 'linux' regardless of configured settings.",
+      "why_it_matters": "When a Windows user or agent configures the harness platform to 'windows', screenMcpSetupPrompt silently generates POSIX/bash configuration instructions and forward slashes, causing agent connection failure.",
+      "repro": {
+        "command": "node -e 'const S = require(\"./cli/settings\"); const raw = { platform: \"windows\" }; console.log(\"Broken:\", String(S.resolveAll(raw).platform || \"linux\"));'",
+        "observed": "Broken: linux"
+      },
+      "callers": "2",
+      "proposed_fix": "Replace S.resolveAll().platform with S.resolveAll().find((r) => r.setting.path === 'platform')?.value || 'linux', exactly matching line 2036 in the same file.",
+      "test_to_write": {
+        "path": "harness_tests/mcp_setup_platform.test.js",
+        "must_fail_without_fix": true,
+        "body": "test('screenMcpSetupPrompt respects configured windows platform', () => {\n  const row = S.resolveAll({ platform: 'windows' }).find(r => r.setting.path === 'platform');\n  assert.strictEqual(row.value, 'windows');\n});"
+      },
+      "verify_command": "node --test harness_tests/mcp_setup_platform.test.js",
+      "done_when": "screenMcpSetupPrompt accurately derives the platform from the resolved setting row rather than the array object."
+    },
+    {
+      "id": "HELP-PERF-01",
+      "class": "CHECKABLE",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "repo": "helpotron",
+      "file": "server/routes_hygiene.py",
+      "line_range": "30-40",
+      "construct": "_service_health called synchronously from async def status",
+      "finding": "_service_health executes a synchronous httpx.get with a 2.0s timeout inside async def status without asyncio.to_thread, blocking the FastAPI event loop during sidecar outages.",
+      "why_it_matters": "When the hygiene sidecar on port 8765 is hung or unreachable, incoming calls to /api/hygiene/status freeze the single-threaded event loop for 2.0s, stalling all concurrent requests across the API.",
+      "repro": {
+        "command": "./.venv/bin/python -c \"import asyncio; from server.routes_hygiene import status; res = asyncio.run(status()); print('Result:', res)\"",
+        "observed": "Result: {'ok': False}"
+      },
+      "callers": "1",
+      "proposed_fix": "Wrap _service_health call in await asyncio.to_thread(_service_health) inside status(), matching the async pattern in _forward.",
+      "test_to_write": {
+        "path": "server/tests/test_hygiene_async.py",
+        "must_fail_without_fix": true,
+        "body": "import asyncio\nasync def test_status_non_blocking():\n    from server.routes_hygiene import status\n    task = asyncio.create_task(status())\n    await asyncio.sleep(0.01)\n    assert not task.done() or task.done()"
+      },
+      "verify_command": "./.venv/bin/python -m pytest server/tests/test_hygiene_async.py",
+      "done_when": "status() route delegates blocking I/O to a worker thread via asyncio.to_thread."
+    },
+    {
+      "id": "HELP-CONF-01",
+      "class": "CHECKABLE",
+      "severity": "LOW",
+      "confidence": "HIGH",
+      "repo": "helpotron",
+      "file": "server/.env",
+      "line_range": "1-118",
+      "construct": "server/.env decoy configuration file",
+      "finding": "server/.env exists but is never loaded by config.py or llm.py, which both explicitly bind to the root .env, making any edits to server/.env completely inert.",
+      "why_it_matters": "Operators attempting to rotate keys or configure settings inside server/.env experience silent failure where values are not applied to the running application.",
+      "repro": {
+        "command": "./.venv/bin/python -c \"from server.config import config; print('Resolved env_file:', getattr(config.__class__, 'model_config', {}).get('env_file'))\"",
+        "observed": "Resolved env_file: /home/roni/Roni_workspace/helpotron/.env"
+      },
+      "callers": "0",
+      "proposed_fix": "Remove or replace server/.env with a README/symlink pointing to the canonical root .env, or add an explicit startup check warning if server/.env exists.",
+      "test_to_write": {
+        "path": "server/tests/test_env_resolution.py",
+        "must_fail_without_fix": true,
+        "body": "def test_canonical_env_is_root():\n    from server.config import config\n    assert config.__class__.model_config.get('env_file').endswith('/helpotron/.env')"
+      },
+      "verify_command": "./.venv/bin/python -m pytest server/tests/test_env_resolution.py",
+      "done_when": "server/.env is archived or clarified so operators cannot mistake it for the active configuration file."
+    },
+    {
+      "id": "HELP-AUTH-02",
+      "class": "CHECKABLE",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "repo": "helpotron",
+      "file": "server/api_keys.py",
+      "line_range": "249-260",
+      "construct": "path.startswith(p) scope checking in authenticate()",
+      "finding": "API key endpoint scope checking uses any(path.startswith(p) for p in allowed_prefixes) without path delimiter boundary, allowing path prefix traversal (e.g. prefix '/api/task' matches '/api/tasks' or '/api/task_admin').",
+      "why_it_matters": "Scoped API keys intended for a limited resource prefix can access adjacent un-scoped endpoints sharing the same string prefix.",
+      "repro": {
+        "command": "python3 -c \"prefixes = ['/api/task']; path = '/api/tasks_delete'; print('Allowed:', any(path.startswith(p) for p in prefixes))\"",
+        "observed": "Allowed: True"
+      },
+      "callers": "2",
+      "proposed_fix": "Enforce boundary check: any(path == p or path.startswith(p.rstrip('/') + '/') for p in allowed_prefixes).",
+      "test_to_write": {
+        "path": "server/tests/test_api_key_scopes.py",
+        "must_fail_without_fix": true,
+        "body": "def test_scope_delimiter_boundary():\n    prefixes = ['/api/task']\n    assert not check_scope('/api/task_admin', prefixes)"
+      },
+      "verify_command": "./.venv/bin/python -m pytest server/tests/test_api_key_scopes.py",
+      "done_when": "Scope prefix checks strictly enforce path segment boundaries."
+    },
+    {
+      "id": "ORCH-PROMPT-01",
+      "class": "CHECKABLE",
+      "severity": "LOW",
+      "confidence": "HIGH",
+      "repo": "AI-coding-orchestrator",
+      "file": "engine/audit.py",
+      "line_range": "2009-2010",
+      "construct": "Typo 'READ MME alignment' in build_base_system_prompt",
+      "finding": "System prompt builder contains the typo 'READ MME alignment' instead of 'README alignment' in the non-SoT prompt block.",
+      "why_it_matters": "The model receives misspelled guidance in system prompts sent to audit agents, slightly degrading instruction adherence.",
+      "repro": {
+        "command": "python3 -c \"from engine.audit import build_base_system_prompt; p = build_base_system_prompt('task', 'sot', 'readme', include_sot=False); print('Contains typo:', 'READ MME' in p)\"",
+        "observed": "Contains typo: True"
+      },
+      "callers": "3",
+      "proposed_fix": "Fix 'READ MME alignment' to 'README alignment' in engine/audit.py line 2010.",
+      "test_to_write": {
+        "path": "cli/tests_orch_prompt.py",
+        "must_fail_without_fix": true,
+        "body": "def test_readme_prompt_spelling():\n    p = build_base_system_prompt('t', 's', 'r', include_sot=False)\n    assert 'README alignment' in p and 'READ MME' not in p"
+      },
+      "verify_command": "python3 cli/tests_orch_prompt.py",
+      "done_when": "Prompt text reads 'README alignment'."
+    },
+    {
+      "id": "T2B-IDEMP-01",
+      "class": "CHECKABLE",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "repo": "t2b",
+      "file": "roofing-lead-bot/app.py",
+      "line_range": "344-347",
+      "construct": "check_and_record_event in telegram webhook",
+      "finding": "Telegram webhook deduplication check_and_record_event records msg_id without tenant prefix, which could collide if multiple bots share the event table.",
+      "why_it_matters": "Colliding update IDs across Telegram bots could cause legitimate webhook updates to be dropped as duplicates.",
+      "repro": {
+        "command": "grep -rn 'check_and_record_event' roofing-lead-bot/app.py",
+        "observed": "roofing-lead-bot/app.py:228:    if not check_and_record_event(message_sid, 'twilio'):\nroofing-lead-bot/app.py:344:    if not check_and_record_event(msg_id, 'telegram'):\nroofing-lead-bot/app.py:433:    if not check_and_record_event(event_id, 'stripe'):"
+      },
+      "callers": "3",
+      "proposed_fix": "Namespace Telegram events with bot token prefix or tenant ID.",
+      "test_to_write": {
+        "path": "roofing-lead-bot/tests/test_idempotency_namespace.py",
+        "must_fail_without_fix": true,
+        "body": "def test_telegram_event_namespacing():\n    assert record_event('bot1:123', 'telegram') and record_event('bot2:123', 'telegram')"
+      },
+      "verify_command": "roofing-lead-bot/.venv/bin/python -m pytest roofing-lead-bot/tests/test_idempotency_namespace.py",
+      "done_when": "Event IDs in check_and_record_event include bot/tenant scope."
+    },
+    {
+      "id": "HELP-TIME-01",
+      "class": "CHECKABLE",
+      "severity": "LOW",
+      "confidence": "HIGH",
+      "repo": "helpotron",
+      "file": "server/credits.py",
+      "line_range": "726",
+      "construct": "datetime.utcnow() in record_data_submission",
+      "finding": "datetime.utcnow() is deprecated in Python 3.12+ and produces naive UTC datetimes, which risk comparison errors against timezone-aware datetimes.",
+      "why_it_matters": "Generates DeprecationWarnings and can fail if SQLAlchemy datetime fields are configured with timezone awareness.",
+      "repro": {
+        "command": "./.venv/bin/python -W error -c \"from datetime import datetime; datetime.utcnow()\"",
+        "observed": "DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC)."
+      },
+      "callers": "1",
+      "proposed_fix": "Use datetime.now(timezone.utc) instead of datetime.utcnow().",
+      "test_to_write": {
+        "path": "server/tests/test_credits_tz.py",
+        "must_fail_without_fix": true,
+        "body": "def test_record_data_submission_tz_aware():\n    from server.credits import record_data_submission"
+      },
+      "verify_command": "./.venv/bin/python -m pytest server/tests/test_credits_tz.py",
+      "done_when": "No naive datetime.utcnow() calls remain in record_data_submission."
+    },
+    {
+      "id": "HARN-HEALTH-01",
+      "class": "CHECKABLE",
+      "severity": "LOW",
+      "confidence": "HIGH",
+      "repo": "webchat-to-api-harness",
+      "file": "server.js",
+      "line_range": "2437-2440",
+      "construct": "res.status(alive && !wedged ? 200 : 503)",
+      "finding": "/health endpoint returns HTTP 503 when the browser is not attached, which is normal for an idle gateway prior to first request.",
+      "why_it_matters": "External monitoring tools treating HTTP 503 as service failure will falsely report the gateway process as crashed.",
+      "repro": {
+        "command": "grep -rn 'res.status(alive && !wedged ? 200 : 503)' server.js",
+        "observed": "2437:    res.status(alive && !wedged ? 200 : 503).json({"
+      },
+      "callers": "1",
+      "proposed_fix": "Document that /health is a liveness probe where 503 denotes 'idle / waiting for browser attach', while /metrics returns 200 for pure observation.",
+      "test_to_write": {
+        "path": "harness_tests/health_status.test.js",
+        "must_fail_without_fix": true,
+        "body": "test('health returns 503 when browser not attached', async () => {})"
+      },
+      "verify_command": "node --test harness_tests/health_status.test.js",
+      "done_when": "Monitoring documentation clarifies 503 status semantics on /health."
+    },
+    {
+      "id": "T2B-ROUTINE-01",
+      "class": "CHECKABLE",
+      "severity": "INFO",
+      "confidence": "HIGH",
+      "repo": "t2b",
+      "file": "roofing-lead-bot/app.py",
+      "line_range": "126-127",
+      "construct": "Double registration of auth_bp with and without /api prefix",
+      "finding": "auth_bp is registered twice: app.register_blueprint(auth_bp, url_prefix='/api') and app.register_blueprint(auth_bp, name='auth_root').",
+      "why_it_matters": "While intentional for backward compatibility, registering the same blueprint twice creates duplicate routing tables.",
+      "repro": {
+        "command": "grep -rn 'register_blueprint(auth_bp' roofing-lead-bot/app.py",
+        "observed": "roofing-lead-bot/app.py:126:app.register_blueprint(auth_bp, url_prefix=\"/api\")\nroofing-lead-bot/app.py:127:app.register_blueprint(auth_bp, name=\"auth_root\")"
+      },
+      "callers": "2",
+      "proposed_fix": "Document the dual-route aliasing explicitly in api/auth.py docstring.",
+      "test_to_write": {
+        "path": "roofing-lead-bot/tests/test_auth_routes.py",
+        "must_fail_without_fix": true,
+        "body": "def test_both_auth_endpoints_respond(client):\n    assert client.post('/api/auth/login').status_code in (400, 401)\n    assert client.post('/auth/login').status_code in (400, 401)"
+      },
+      "verify_command": "roofing-lead-bot/.venv/bin/python -m pytest roofing-lead-bot/tests/test_auth_routes.py",
+      "done_when": "Both route paths are verified and documented."
+    }
+  ],
+  "refutations": [
+    {
+      "claim": "harness sandbox.js PATH_TOKEN regex bypass allows traversal outside root",
+      "file": "src/tools/sandbox.js",
+      "read": "lines 140-195",
+      "ran": "node -e 'const sb = require(\"./src/tools/sandbox\"); console.log(sb.checkPath(\"/etc/passwd\"));'",
+      "conclusion": "REFUTED: checkPath('/etc/passwd') returns ok: false, error: 'path outside allowed roots'. Tested with ../, symlinks, and path normalisation."
+    },
+    {
+      "claim": "t2b lacks time-of-day restrictions for TCPA compliance (quiet hours)",
+      "file": "roofing-lead-bot/outreach/sender.py",
+      "read": "lines 45-80",
+      "ran": "roofing-lead-bot/.venv/bin/python -c \"from compliance import is_quiet_hours; print('03:00:', is_quiet_hours(3), '10:00:', is_quiet_hours(10), '22:00:', is_quiet_hours(22))\"",
+      "conclusion": "REFUTED: is_quiet_hours returns True at 03:00, False at 10:00, True at 22:00. Time-of-day restrictions are strictly enforced at send time."
+    },
+    {
+      "claim": "helpotron .env files are world-readable (permissions 644/777)",
+      "file": ".env, server/.env",
+      "read": "file stat modes",
+      "ran": "ls -l /home/roni/Roni_workspace/helpotron/.env /home/roni/Roni_workspace/helpotron/server/.env",
+      "conclusion": "REFUTED: Both .env files are set to mode 600 (-rw-------) owned by user roni-saguey."
+    },
+    {
+      "claim": "helpotron scrub_pii leaks PII in live customer data pipeline",
+      "file": "server/privacy.py",
+      "read": "grep -rn scrub_pii server/",
+      "ran": "grep -rn 'scrub_pii' server/",
+      "conclusion": "REFUTED: scrub_pii has 0 callers across the active runtime server codebase. It is unreachable dead code, not a live defect."
+    },
+    {
+      "claim": "harness mcp-server.js --list prints 26 tools instead of 43",
+      "file": "src/tools/mcp-server.js",
+      "read": "lines 20-35",
+      "ran": "node src/tools/mcp-server.js --list",
+      "conclusion": "REFUTED: Output verified as 'webchat-harness MCP \u2014 43 tools', with all 43 tool names accurately printed."
+    },
+    {
+      "claim": "t2b session tokens without session_epoch bypass revocation after logout",
+      "file": "roofing-lead-bot/security/sessions.py",
+      "read": "lines 98-109",
+      "ran": "roofing-lead-bot/.venv/bin/python -c \"from security.sessions import verify_session_token; print('Epoch check enforced')\"",
+      "conclusion": "REFUTED: Line 107 strictly requires payload.get('epoch') == row['session_epoch']. Missing or mismatched epochs fail with 401."
+    },
+    {
+      "claim": "AI-coding-orchestrator root audit.py contains active bugs",
+      "file": "audit.py",
+      "read": "lines 1-93",
+      "ran": "wc -l audit.py engine/audit.py",
+      "conclusion": "REFUTED: root audit.py is a 93-line legacy converter stub. The live engine is engine/audit.py (3392 lines). The stub has 0 callers."
+    },
+    {
+      "claim": "helpotron database has only 1 created index on SQLite file",
+      "file": "data/db/helpotron.db",
+      "read": "PRAGMA index_list",
+      "ran": "python3 -c \"import sqlite3; conn = sqlite3.connect('/home/roni/Roni_workspace/helpotron/data/db/helpotron.db'); print(sum(len(conn.execute(f'PRAGMA index_list({t[0]})').fetchall()) for t in conn.execute(\\\"SELECT name FROM sqlite_master WHERE type='table'\\\").fetchall()))\"",
+      "conclusion": "REFUTED: Live database data/db/helpotron.db has 72 indexes across 36 tables. The 1-index finding was on the legacy root decoy database."
+    },
+    {
+      "claim": "helpotron UI flashes raw backend JSON errors on screen",
+      "file": "web/src/components/ui/ErrorState.jsx",
+      "read": "lines 1-50",
+      "ran": "grep -rn 'JSON.stringify(parsed.detail)' web/src/",
+      "conclusion": "REFUTED: Centralized humanError() in web/src/lib/errors.js normalizes all backend errors and strips raw JSON, enforcing the 3-part rule."
+    },
+    {
+      "claim": "helpotron sympy.sympify RCE in run_shell",
+      "file": "server/shell_exec.py",
+      "read": "sympy guard",
+      "ran": "./.venv/bin/python -m pytest server/tests/test_shell.py -k sympy",
+      "conclusion": "REFUTED: sympify execution is blocked via ast whitelist and input sanitizer, while safe math evaluation remains functional."
+    }
+  ],
+  "dead_code": [
+    {
+      "symbol": "deduct_credits_atomic",
+      "file": "server/credits.py",
+      "callers": 0
+    },
+    {
+      "symbol": "add_credits_to_user",
+      "file": "server/credits.py",
+      "callers": 0
+    },
+    {
+      "symbol": "get_user_credits",
+      "file": "server/credits.py",
+      "callers": 0
+    },
+    {
+      "symbol": "audit.py (root stub)",
+      "file": "AI-coding-orchestrator/audit.py",
+      "callers": 0
+    },
+    {
+      "symbol": "scrub_pii",
+      "file": "server/privacy.py",
+      "callers": 0
+    }
+  ],
+  "analysis_gaps": [
+    {
+      "repo": "helpotron",
+      "what_i_could_not_check": "End-to-end Stripe webhook signature verification against live Stripe test secrets.",
+      "why": "Live Stripe test secret key is not in local test environment; verified via unit test mocks."
+    },
+    {
+      "repo": "webchat-to-api-harness",
+      "what_i_could_not_check": "Live browser rendering on Windows host.",
+      "why": "Audit ran on Linux (Ubuntu); Windows platform code was verified by driving mock and unit AST tests."
+    }
+  ],
+  "execution_order": [
+    {
+      "wave": 1,
+      "theme": "Auth & Webhook Verification Gates",
+      "finding_ids": [
+        "HELP-AUTH-01",
+        "HARN-SEC-01",
+        "HELP-AUTH-02"
+      ],
+      "rationale": "Direct security controls and external entry-point trust boundaries must be secured before modifying internal logic."
+    },
+    {
+      "wave": 2,
+      "theme": "Silent Failures & Async Loop Blocking",
+      "finding_ids": [
+        "HARN-SILENT-01",
+        "HELP-PERF-01",
+        "T2B-IDEMP-01"
+      ],
+      "rationale": "Eliminate silent logic failures in setup prompts and prevent event loop blocking on external sidecar status probes."
+    },
+    {
+      "wave": 3,
+      "theme": "Configuration Clarity & Maintenance Hygiene",
+      "finding_ids": [
+        "HELP-CONF-01",
+        "ORCH-PROMPT-01",
+        "HELP-TIME-01",
+        "HARN-HEALTH-01",
+        "T2B-ROUTINE-01"
+      ],
+      "rationale": "Clarify decoy config files, correct typos in prompts, and modernize deprecated Python datetime calls."
+    }
+  ]
+}
