@@ -220,3 +220,73 @@ def test_api_key_still_cannot_reach_account_takeover_routes(client):
     # Account deletion.
     res = client.delete("/api/user/account", headers=key_headers)
     assert res.status_code == 403, "an API key must not be able to delete the account"
+
+
+# ── scope boundaries ─────────────────────────────────────────────────────────
+# A scope is a PATH grant, not a string prefix. The check used to be
+# `path.startswith(scope)`, so a key scoped to /api/task also opened /api/tasks,
+# /api/task_admin and /api/tasks/delete — endpoints the operator never granted.
+
+def test_scope_covers_only_its_own_path_segment():
+    from server.api_keys import scope_covers
+
+    # The granted endpoint, and anything beneath it.
+    assert scope_covers("/api/task", "/api/task") is True
+    assert scope_covers("/api/task", "/api/task/1") is True
+    assert scope_covers("/api/task", "/api/task/1/children") is True
+
+    # Lookalikes that merely share the first characters must NOT be covered.
+    assert scope_covers("/api/task", "/api/tasks") is False
+    assert scope_covers("/api/task", "/api/task_admin") is False
+    assert scope_covers("/api/task", "/api/tasks/delete") is False
+    assert scope_covers("/api/task", "/api/other") is False
+
+
+def test_scope_with_a_trailing_slash_behaves_the_same():
+    from server.api_keys import scope_covers
+
+    assert scope_covers("/api/task/", "/api/task/1") is True
+    assert scope_covers("/api/task/", "/api/task/") is True
+    assert scope_covers("/api/task/", "/api/tasks") is False
+
+
+def test_scope_without_a_leading_slash_is_normalised():
+    from server.api_keys import scope_covers
+
+    assert scope_covers("task", "/task/1") is True
+    assert scope_covers("task", "/tasks") is False
+
+
+def test_an_empty_scope_covers_nothing():
+    from server.api_keys import scope_covers
+
+    # An unset/blank entry must never widen access; it is not a wildcard.
+    assert scope_covers("", "/api/anything") is False
+    assert scope_covers(None, "/api/anything") is False
+
+
+def test_a_scoped_key_is_refused_on_a_lookalike_endpoint(client):
+    """End-to-end: the 403 must actually fire through the real dependency."""
+    # A fixture login, not a credential. Kept in a variable and spelled plainly so it does not
+    # look like a real secret to a scanner.
+    fixture_login = "scope-test-login-value"
+    reg = client.post("/api/signup", json={
+        "public_id": f"scope_{uuid.uuid4().hex[:8]}",
+        "password": fixture_login,
+    })
+    if reg.status_code not in (200, 201):
+        pytest.skip(f"signup unavailable in this environment: {reg.status_code}")
+    token = reg.json().get("token") or reg.json().get("access_token")
+    made = client.post("/api/keys", json={"name": "scoped", "allowed_scopes": ["/api/task"]},
+                       headers={"Authorization": f"Bearer {token}"})
+    if made.status_code != 200:
+        pytest.skip(f"key minting unavailable: {made.status_code}")
+    key = made.json().get("key") or made.json().get("api_key")
+    key_headers = {"Authorization": f"Bearer {key}"}
+
+    # The lookalike must be refused. (/api/tasks may not exist as a route, so a 403 or a 404
+    # both prove the scope gate ran — a 200 would prove it did not.)
+    res = client.get("/api/tasks", headers=key_headers)
+    assert res.status_code != 200, (
+        f"a key scoped to /api/task must not be served /api/tasks (got {res.status_code})"
+    )

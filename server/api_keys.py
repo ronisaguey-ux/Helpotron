@@ -219,6 +219,33 @@ def touch_last_used(db: Session, key: ApiKey) -> None:
         except Exception:
             pass
 
+def scope_covers(scope: str, path: str) -> bool:
+    """Does one scope string cover this request path?
+
+    A plain ``path.startswith(scope)`` is a string match, not a PATH match: a key scoped to
+    ``/api/task`` also opened ``/api/tasks``, ``/api/task_admin`` and ``/api/tasks/delete`` —
+    endpoints the operator never granted. A scope must end at a path boundary.
+
+    The boundary is the segment separator, so a scope covers the endpoint itself and anything
+    BENEATH it, and nothing that merely shares its first characters:
+
+        /api/task      covers /api/task, /api/task/1       denies /api/tasks, /api/task_admin
+        /api/task/     covers /api/task/1, /api/task/      denies /api/tasks
+    """
+    if not scope:
+        return False
+    s = str(scope).strip()
+    if not s.startswith("/"):
+        s = "/" + s
+    if path == s:
+        return True
+    return path.startswith(s.rstrip("/") + "/")
+
+
+def _scope_allows(allowed_prefixes, path: str) -> bool:
+    return any(scope_covers(p, path) for p in allowed_prefixes)
+
+
 def authenticate(db: Session, bearer: str, request: Any = None):
     """Resolve a Bearer API key to its owning User, or raise.
 
@@ -255,7 +282,7 @@ def authenticate(db: Session, bearer: str, request: Any = None):
                 allowed_prefixes = scopes
             elif isinstance(scopes, dict):
                 allowed_prefixes = scopes.get("endpoints") or scopes.get("scopes") or list(scopes.keys())
-            if allowed_prefixes and not any(path.startswith(p) for p in allowed_prefixes):
+            if allowed_prefixes and not _scope_allows(allowed_prefixes, path):
                 logger.warning("API key %s rejected for path %s outside scopes %s", key_row.key_prefix, path, allowed_prefixes)
                 raise HTTPException(403, "API key not authorized for this endpoint scope")
     user = db.query(User).filter(User.id == key_row.user_id).first()
