@@ -679,16 +679,36 @@ def _verify_twilio_signature(request_url: str, form_params: Dict[str, str], sign
     """Tightly verified per Twilio docs: HMAC-SHA1 over (full URL + all form
     params sorted by key), base64, compared against X-Twilio-Signature.
 
-    Requires the account auth token (TWILIO_AUTH_TOKEN). That key is NOT in
-    .env today (the account uses API-key auth), so without it we cannot verify
-    and accept anyway with a loud warning — anyone who spoofs From/Body could
-    otherwise toggle opt-outs. Add TWILIO_AUTH_TOKEN to .env to enable strict
-    verification.
+    ★ FAILS CLOSED. It used to return True when TWILIO_AUTH_TOKEN was unset, which turned an
+    unverifiable request into a trusted one: anyone who knew a target's phone number could POST
+    ``Body=STOP`` to /sms/inbound and flip ``sms_opt_out`` on that account, blocking their 2FA.
+
+    Twilio signs inbound webhooks with the account AUTH TOKEN, so an install configured with
+    only the API key pair (as this one is — TWILIO_AUTH_TOKEN is genuinely unset) genuinely
+    cannot verify them. The honest response to "I cannot verify this" is to refuse it.
+
+    An install that needs the inbound webhook to run unverified can say so explicitly:
+
+        TWILIO_ALLOW_UNVERIFIED_INBOUND=1
+
+    That is deliberately a separate, loud, opt-in switch rather than a silent fallback, so the
+    insecure state is always a decision rather than an accident.
     """
     token = getattr(config, "twilio_auth_token", "") or os.getenv("TWILIO_AUTH_TOKEN", "")
     if not token:
-        logger_2fa.warning("SMS inbound: TWILIO_AUTH_TOKEN unset — Twilio signature NOT verified")
-        return True
+        if os.getenv("TWILIO_ALLOW_UNVERIFIED_INBOUND", "").lower() in ("1", "true", "yes", "on"):
+            logger_2fa.error(
+                "SMS inbound: TWILIO_AUTH_TOKEN unset and TWILIO_ALLOW_UNVERIFIED_INBOUND is on "
+                "— accepting an UNVERIFIED opt-out request. Anyone can flip this account's SMS "
+                "opt-out. Set TWILIO_AUTH_TOKEN to close this."
+            )
+            return True
+        logger_2fa.error(
+            "SMS inbound REJECTED: TWILIO_AUTH_TOKEN is unset, so the Twilio signature cannot be "
+            "verified. Add it to .env to accept inbound SMS opt-outs (set "
+            "TWILIO_ALLOW_UNVERIFIED_INBOUND=1 to accept them unverified instead)."
+        )
+        return False
     payload = request_url + "".join(f"{k}{v}" for k, v in sorted(form_params.items()))
     expected = base64.b64encode(
         hmac.new(token.encode("utf-8"), payload.encode("utf-8"), hashlib.sha1).digest()

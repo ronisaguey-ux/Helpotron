@@ -37,7 +37,11 @@ def _service_health() -> dict:
 
 @router.get("/status")
 async def status(current_user: User | None = Depends(get_current_user_optional)):
-    return _service_health()
+    # Same defect as _forward had, at a second call site — a sync httpx call inside an
+    # `async def`. A 2 s timeout is shorter than 240 s, but it is still a blocking call on the
+    # event loop, so a wedged sidecar stalls every concurrent request for 2 s per probe. The
+    # first fix covered _forward and missed this one; run it in a worker thread too.
+    return await asyncio.to_thread(_service_health)
 
 
 async def _forward(file: UploadFile, endpoint: str) -> dict:
