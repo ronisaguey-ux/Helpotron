@@ -25,7 +25,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -76,7 +76,7 @@ def generate_key(db: Session, user, label: str = "",
         usage_limit_tokens=(float(usage_limit_tokens) if usage_limit_tokens else None),
         rate_limit_per_min=(int(rate_limit_per_min) if rate_limit_per_min else None),
         allowed_scopes=allowed_scopes if allowed_scopes is not None else {},
-        expires_at=(datetime.utcnow() + timedelta(days=int(expires_in_days))
+        expires_at=(datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=int(expires_in_days))
                     if expires_in_days else None),
     )
     db.add(row)
@@ -181,7 +181,7 @@ def check_api_key(db: Session, presented: str) -> Tuple[Optional[ApiKey], Option
         return None, "mismatch"
     if row.revoked_at is not None:
         return None, "revoked"
-    if row.expires_at is not None and row.expires_at < datetime.utcnow():
+    if row.expires_at is not None and row.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         return None, "expired"
     return row, None
 
@@ -190,7 +190,7 @@ def record_usage(db: Session, key: ApiKey, tokens: float) -> None:
     """Add measured usage to a key's counter and stamp last use. Never raises."""
     try:
         key.usage_used_tokens = float(key.usage_used_tokens or 0.0) + float(tokens or 0.0)
-        key.last_used_at = datetime.utcnow()
+        key.last_used_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
     except Exception as e:
         logger.warning("could not record API key usage: %s", e)
@@ -211,7 +211,7 @@ def limit_exceeded(key: ApiKey) -> Optional[str]:
 def touch_last_used(db: Session, key: ApiKey) -> None:
     """Stamp last_used_at without committing usage, for read-only calls."""
     try:
-        key.last_used_at = datetime.utcnow()
+        key.last_used_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.commit()
     except Exception:
         try:

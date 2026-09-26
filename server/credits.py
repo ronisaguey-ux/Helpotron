@@ -722,8 +722,8 @@ def top_up(db_or_user_id: Any, user_or_amount: Any, amount_or_reason: Any = "top
         add_tokens(db, user, amount, reason=reason)
 
 def record_data_submission(db: Session, user: User, payload: dict) -> dict:
-    from datetime import datetime, timedelta
-    since = datetime.utcnow() - timedelta(hours=24)
+    from datetime import datetime, timedelta, timezone
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
     recent = db.query(DataSubmission).filter(
         DataSubmission.user_id == user.id,
         DataSubmission.created_at >= since
