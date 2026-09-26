@@ -1,6 +1,6 @@
 # CROSS-REPO SWARM AUDIT — 15 agents, 4 repositories
 
-**Deliverable:** one consolidated plan, `plans/SWARM-AUDIT-<date>.json`, plus a per-finding
+**Deliverable:** one consolidated plan, `plans/SWARM-AUDIT-<date>-round2.json`, plus a per-finding
 appendix. You present it and **STOP**. You do not implement anything in this pass.
 
 **Scope:** `AI-coding-orchestrator` · `t2b` · `helpotron` · `webchat-to-api-harness`.
@@ -770,7 +770,10 @@ wrong, you must **reproduce it and paste the output** — a fresh assertion is n
 | `change_settings` in both CRITICAL and ROUTINE permission sets | **Inert.** `ROUTINE_ACTION_TYPES` is **defined and never read anywhere**. `evaluate_action_permission` tests `is_critical` and returns before routine is consulted. |
 | `humanize_text` needs no approval in ANY mode incl. MANUAL | Driven for all three modes: **manual → refused** ("Manual mode requires explicit approval for all actions"), auto → allowed, yolo → allowed. |
 | helpotron `credits.py` 'free': 15000 contradicts README 'trial' | The README already documents the trial grant. The tier **key** and the marketing **name** differ, which is not a defect. |
-| helpotron `scrub_pii` / `anonymize_student_submission` inconsistency leaks PII | **TRUE about the code, useless as a defect** — `grep -rn` returns **zero callers** for both. See §1.3. (Both were also measured: `scrub_pii` emits two markers with the second never replaced; the other misses an SSN.) |
+| helpotron `scrub_pii` / `anonymize_student_submission` inconsistency leaks PII | **TRUE about the code, useless as a defect** — `grep -rn` returns **zero callers** for both. See §1.3. **Both are now DELETED** (§7.1, `71648b0`), so this is closed in both directions: do not report the inconsistency and do not report their absence. They were also measured: `scrub_pii` emitted two markers with the second never replaced; the other missed an SSN. |
+| t2b duplicate `auth_bp` registration (`app.py:126-127`) | **Not a defect, and not the vulnerability the wording implies.** Driven through `app.url_map`: every auth endpoint is live on BOTH `/api/auth/*` and `/auth/*`. It is **not a rate-limit bypass** — the limiter keys on **`login:{ip}:{email}`** (`api/auth.py:140`), not on the route. Both surfaces are genuinely used by the frontend (12 hits on `/auth/request-otp`, 4 on `/api/auth/register`, …) and `ac17b74` added the unprefixed one deliberately. The real defect is only that the router table carries two names for one blueprint. **Left alone on purpose: removing it would break two test files** (`test_security_remediation.py`, `test_otp_abuse.py`) whose assertions are about rate limiting and OTP abuse. |
+| "`datetime.utcnow()` is deprecated — replace it with `datetime.now(timezone.utc)`" | **The obvious fix is a LIVE OUTAGE here.** These values are written to and compared against plain `DateTime` columns, and SQLite hands them back **naive**, so the aware form raises `TypeError: can't compare offset-naive and offset-aware datetimes` — measured (`naive < aware`). It would 500 every API-key check carrying an expiry. The correct equivalent keeps it naive and matches what `credits.py` already did: **`datetime.now(timezone.utc).replace(tzinfo=None)`**. Fixed for real in `d73947e`. ⚠️ An aware datetime used as a **SQL bind parameter** (`monitors.py`, `security.py` — which works) is not the same thing and must NOT be flagged; a guard that fails on working code is an outage dressed as diligence. |
+| helpotron "the DB has almost no indexes, the models declare 70" | **Refuted.** The **live** DB has **72 indexes across 36 tables**; the "1 index" reading came from the stale root decoy DB. |
 | `gdocs_exporter.py` has a hardcoded Google OAuth client id/secret | `grep` for OAuth → **0 matches** in the file. |
 | `export.py` uses HMAC-SHA256 with a hardcoded secret `'export-signing-key'` | **0 repo-wide matches.** |
 | `credits.py:85` generates predictable referral codes with `random.random()` | The referral route uses `secrets.token_hex(20)`; `credits.py` does not import `random` at all. |
@@ -806,6 +809,65 @@ encounter one of these, note it as **verified fixed** with the evidence, not as 
 - **orchestrator:** the model-allowlist lapse under load; the A–Z tie-break choosing a stub model;
   the probe timeout (45s → `AUDIT_PROBE_TIMEOUT`, 240s); target-typo resolving to the orchestrator's
   own directory; unbuffered stdout; the exclusion list disagreeing with the engine.
+
+### 7.1 Fixed SINCE the last audit — these are the newest and the most likely to be re-reported
+
+The previous audit ran, its findings were worked, and **eleven more defects were fixed and pushed.**
+They are listed here with their commits so you can verify the fix rather than take this document's
+word for it. Reporting any of these as a live defect means the report is out of date.
+
+**helpotron** (`audit-remediation-20260925`):
+- `44e9fab` — **inbound SMS fails closed.** `_verify_twilio_signature` returned `True` when
+  `TWILIO_AUTH_TOKEN` was unset, so anyone who knew a target's phone number could POST `Body=STOP`
+  to `/api/auth/sms/inbound` and flip `sms_opt_out`, blocking their 2FA. It now refuses.
+  **This is a deliberate live behaviour change: inbound opt-outs are refused until the owner adds
+  `TWILIO_AUTH_TOKEN`.** An explicit `TWILIO_ALLOW_UNVERIFIED_INBOUND=1` re-enables the old path.
+  Do not report the refusal as a bug — it is the fix.
+- `44e9fab` — **the event loop block at its SECOND call site.** The 2026-09-18 fix wrapped the 240 s
+  POST in `_forward` and missed `_service_health`, which `/api/hygiene/status` calls directly.
+- `99b42f3` — **an API-key scope is a path grant, not a string prefix.** `path.startswith(scope)`
+  meant a key scoped to `/api/task` also opened `/api/tasks`, `/api/task_admin` and
+  `/api/tasks/delete`. Now `scope_covers()` requires a segment boundary.
+- `d73947e` — **`datetime.utcnow()` removed, 7 sites.** The obvious replacement
+  (`datetime.now(timezone.utc)`) is a **live outage** here: these values are compared against plain
+  `DateTime` columns and SQLite returns them naive, so it raises
+  `TypeError: can't compare offset-naive and offset-aware datetimes`. The correct form is
+  `datetime.now(timezone.utc).replace(tzinfo=None)`. See §6 — do not "fix" this back.
+- `71648b0` — **six unreachable functions deleted** (`charge_with_rollback`, `deduct_credits_atomic`,
+  `get_user_credits`, `add_credits_to_user` in `credits.py`; `scrub_pii`,
+  `anonymize_student_submission` in `datalake.py`). They are gone; do not report them, and do not
+  report their *absence* as a gap either. ⚠️ `main.py:1585` still defines its own `async def
+  get_user_credits` — a **route handler** sharing the name. That one is live.
+
+**t2b** (`audit-remediation-20260925`):
+- `d36d155` — **the Telegram idempotency key is scoped by chat.** It was
+  `str(message_id or f"tg_{chat_id}_{hash}")`, which drops the chat whenever a `message_id` is
+  present — and a Telegram `message_id` is a **per-chat sequential integer**, so two conversations
+  both sending their 5th message derived the key `"5"` and the second was silently dropped. Now
+  `tg_<chat_id>_<message_id or hash>`.
+
+**webchat-to-api-harness** (`main`):
+- `1e078f5` — `cdpAlive()` called **any** port that answered a browser. It and `cdpTargets()` read the
+  same port and disagreed inside one frame. It now requires the body to identify CDP.
+- `8bcba9b` — `browserRunning()` accepted any live pid; liveness is not identity. It now requires
+  `chrome` + `--remote-debugging-port` in **argv**.
+- `74153a6` + `b9235de` — `stopGateway()`/`stopHub()` claimed `stopped:true` immediately after
+  SIGTERM. They now wait, escalate to SIGKILL, and on a real failure **keep the pidfile** so the
+  process stays reachable. Both share one `terminateAndConfirm()`. Note `isAlive()` counts **zombies**
+  as alive — `processExited()` is the correct question.
+- `6fa8230` — **`resolveAll(raw, …)` took `raw` with no default**, so `resolveAll()` resolved against
+  `undefined` and every **file-backed** setting fell through to its default (measured: 45 → 17
+  settings). Its own comment claimed the opposite. The same commit fixed the **git push guard**,
+  which compared a branch *word* to `main`/`master` and therefore allowed `HEAD:main`,
+  `refs/heads/main`, `+main` (a force push) and `feature/x:main`.
+- `35c10fd` — the README now documents that `/health` returns **503 when the browser is not
+  attached, which means UP**, and that `/metrics` is always 200.
+
+**AI-coding-orchestrator** (`audit-tooling`):
+- `0cf464c` — the `READ MME alignment` typo in the no-SoT prompt block.
+- `8a2e0e3` — the **root `audit.py` stub was deleted** (a 92-line one-shot for a report that no
+  longer exists; it could not run). The live engine is `engine/audit.py`. The README pointed at the
+  deleted file and has been corrected. **Do not go looking for a root `audit.py`.**
 
 ---
 
@@ -886,7 +948,7 @@ the suite it names, yourself.
 ## 10. Deliverable
 
 ### 10.1 One plan file
-`~/Roni_workspace/helpotron/plans/SWARM-AUDIT-<YYYY-MM-DD>.json`
+`~/Roni_workspace/helpotron/plans/SWARM-AUDIT-<YYYY-MM-DD>-round2.json`
 
 ```json
 {
@@ -926,7 +988,7 @@ the suite it names, yourself.
 ```
 
 ### 10.2 A human-readable report
-`~/Roni_workspace/helpotron/plans/SWARM-AUDIT-<date>.md` — ranked by consequence, one section per
+`~/Roni_workspace/helpotron/plans/SWARM-AUDIT-<date>-round2.md` — ranked by consequence, one section per
 agent, with the refutations and the dead code in their own sections. **Lead with what is actually
 wrong**, not with methodology.
 
