@@ -170,6 +170,43 @@ fifteen times.
 The probes under each agent are **starting points, not a checklist**. They point at places already
 known to contain real defects.
 
+### 3.0 THE FIELD MATRIX — audit every applicable field, and ONLY the applicable ones
+
+Fifteen fields. **A field marked `—` for a repo is out of scope there and must produce ZERO
+findings for that repo.** This is not decoration: UI/UX findings on a Python audit engine, or
+"outreach compliance" findings on a browser harness, are findings about a system that does not
+exist — and a report that invents them is worse than one that is short. Where a field does not
+apply, say so explicitly in your output (`"n/a"`) rather than staying silent, so the reader can
+tell "not applicable" from "we did not look".
+
+| # | Field | helpotron | t2b | harness | orchestrator |
+|---|---|---|---|---|---|
+| 1 | **Security** — authentication & authorization | ✓ | ✓ | — | — |
+| 2 | **Security** — tool-execution trust boundary | — | — | ✓ | ✓ |
+| 3 | **Economics** — token economy & metering | ✓ | — | — | — |
+| 4 | **Compliance** — outreach (TCPA/DNC/quiet hours) | — | ✓ | — | — |
+| 5 | **Economics** — provider failure & spend | ✓ | ✓ | — | — |
+| 6 | **Concurrency** — races & atomicity | ✓ | ✓ | ✓ | ✓ |
+| 7 | **Data integrity** — migrations & idempotency | ✓ | ✓ | — | — |
+| 8 | **Privacy** — PII & retention | ✓ | — | — | — |
+| 9 | **UI / UX** — error states, empty states, honesty of display | ✓ | — | ✓ (the CLI) | — |
+| 10 | **Reliability** — recovery & supervision | — | — | ✓ | ✓ |
+| 11 | **Correctness** — silent failure & false success ★ highest-yield | ✓ | ✓ | ✓ | ✓ |
+| 12 | **Hygiene** — dead code & stale prose | ✓ | ✓ | ✓ | ✓ |
+| 13 | **Testing** — test quality & non-vacuity | ✓ | ✓ | ✓ | ✓ |
+| 14 | **Efficiency** — performance & resource use | ✓ | — | — | ✓ |
+| 15 | **Docs / onboarding** — documentation & config drift | ✓ | ✓ | ✓ | ✓ |
+
+**★ FIELD 11 IS THE HIGHEST-YIELD FIELD ON THESE REPOS AND SHOULD BE WORKED HARDEST.** The class is
+"a control that reports success and does nothing": a status flag read from a file instead of probed,
+a function that returns `True` on the error path, a parse failure swallowed by a bare `catch`, a
+save that writes where nothing reads. It has produced real, shipped bugs in **every** round so far,
+in all four repos, including three in one afternoon. When you are unsure where to dig next, dig
+here. Ask of every function: *if this silently failed, what would the caller see?*
+
+**Every finding must carry its `field`** (see §10.1) so coverage is countable. A finding whose
+field you cannot name is usually two findings, or none.
+
 ---
 
 **AGENT 1 — Adversarial Security: authentication and authorization**
@@ -966,6 +1003,7 @@ the suite it names, yourself.
       "file": "<path relative to the repo root>",
       "line_range": "<start-end | N/A>",
       "construct": "<the exact function / expression / literal you are claiming>",
+      "field": "<ONE of the 15 fields in §3.0, named verbatim — this is how coverage is counted>",
       "finding": "<one sentence>",
       "why_it_matters": "<the consequence, in plain language>",
       "repro": { "command": "<the exact command you ran>", "observed": "<its real output>" },
@@ -978,6 +1016,10 @@ the suite it names, yourself.
   ],
   "refutations": [
     { "claim": "...", "file": "...", "read": "<lines>", "ran": "<command + output>", "conclusion": "..." }
+  ],
+  "field_coverage": [
+    { "field": "<one of the 15>", "repo": "<repo>", "status": "findings | clean | n/a",
+      "note": "<for 'clean', what you actually looked at; for 'n/a', why the field does not apply>" }
   ],
   "dead_code": [ { "symbol": "...", "file": "...", "callers": 0 } ],
   "analysis_gaps": [ { "repo": "...", "what_i_could_not_check": "...", "why": "..." } ],
@@ -993,6 +1035,9 @@ agent, with the refutations and the dead code in their own sections. **Lead with
 wrong**, not with methodology.
 
 ### 10.3 What must be true of the plan
+- **Every `field` in §3.0 that applies to a repo is accounted for**: either it produced findings, or
+  it appears in `field_coverage` as `"n/a"`. A field silently skipped is indistinguishable from a
+  field that was never looked at, which is the whole failure §3.0 exists to prevent.
 - Every `CHECKABLE` finding has a real `file`, a real `line_range`, a named construct, a repro with
   real output, and a caller count.
 - Every `CRITICAL` is reachable now, by an actor who exists, on the live system — or is explicitly
