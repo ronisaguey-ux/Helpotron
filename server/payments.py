@@ -80,10 +80,31 @@ def create_checkout_session(db: Session, user: User, plan: str, is_annual: bool 
 
     customer_id = user.stripe_customer_id
     if not customer_id:
-        customer = stripe.Customer.create(
-            email=user.public_id,
-            metadata={"public_id": user.public_id},
-        )
+        # ★ `public_id` is a LOGIN IDENTIFIER, not an email address. This used to pass
+        # it as the Stripe customer's email, and Stripe rejects a malformed address
+        # outright: `InvalidRequestError: Invalid email address: RoniDev`. Measured
+        # against the live account — and ZERO of the 16 real accounts have an
+        # email-shaped public_id, so this threw before any user could reach a payment
+        # page. The whole paid path was unreachable at its first step.
+        #
+        # Use the real address from the settings record (the same resolver 2FA and
+        # recovery use), and OMIT the field when there is not one — a Stripe customer
+        # does not require an email, so a missing address must not block a sale.
+        customer_params = {"metadata": {"public_id": user.public_id}}
+        try:
+            from .recovery import user_contact
+            contact_email = (user_contact(user, "email") or "").strip()
+        except Exception:  # pragma: no cover — a resolver failure must not block checkout
+            contact_email = ""
+        if "@" in contact_email and "." in contact_email.split("@")[-1]:
+            customer_params["email"] = contact_email
+        else:
+            logger.info(
+                "No contact email on file for %s — creating the Stripe customer without one "
+                "(Stripe does not require it, and a sale must not depend on it).",
+                user.public_id,
+            )
+        customer = stripe.Customer.create(**customer_params)
         customer_id = customer.id
         user.stripe_customer_id = customer_id
         db.commit()
