@@ -1,0 +1,887 @@
+{
+  "generated": "2026-09-25T22:50:00-04:00",
+  "scope": {
+    "helpotron": {
+      "path": "/home/roni/Roni_workspace/helpotron",
+      "branch": "audit-remediation-20260925",
+      "head": "16c7e0bde4fd5ff93c9cb20e61a36a89ed819d68"
+    },
+    "t2b": {
+      "path": "/home/roni/Roni_workspace/t2b",
+      "branch": "audit-remediation-20260925",
+      "head": "d36d1554c03e86f347404e37d691bc964638c9c8"
+    },
+    "webchat-to-api-harness": {
+      "path": "/home/roni/Roni_workspace/webchat_worker/harness",
+      "branch": "main",
+      "head": "b9235de3a506dc0f5d29095bf8ace764b35b5d43"
+    },
+    "AI-coding-orchestrator": {
+      "path": "/home/roni/Roni_workspace/AI-coding-orchestrator",
+      "branch": "audit-tooling",
+      "head": "8a2e0e3b5de36ee3f86417f33b3a1ed5780d9293"
+    }
+  },
+  "agents": [
+    {
+      "n": 1,
+      "field": "Security — authentication & authorization",
+      "repos": [
+        "helpotron",
+        "t2b"
+      ],
+      "findings": 1,
+      "refutations": 1
+    },
+    {
+      "n": 2,
+      "field": "Security — tool-execution trust boundary",
+      "repos": [
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 1,
+      "refutations": 2
+    },
+    {
+      "n": 3,
+      "field": "Economics — token economy & metering",
+      "repos": [
+        "helpotron"
+      ],
+      "findings": 1,
+      "refutations": 1
+    },
+    {
+      "n": 4,
+      "field": "Compliance — outreach (TCPA/DNC/quiet hours)",
+      "repos": [
+        "t2b"
+      ],
+      "findings": 0,
+      "refutations": 1
+    },
+    {
+      "n": 5,
+      "field": "Economics — provider failure & spend",
+      "repos": [
+        "helpotron",
+        "t2b"
+      ],
+      "findings": 0,
+      "refutations": 1
+    },
+    {
+      "n": 6,
+      "field": "Concurrency — races & atomicity",
+      "repos": [
+        "helpotron",
+        "t2b",
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 0,
+      "refutations": 1
+    },
+    {
+      "n": 7,
+      "field": "Data integrity — migrations & idempotency",
+      "repos": [
+        "helpotron",
+        "t2b"
+      ],
+      "findings": 0,
+      "refutations": 1
+    },
+    {
+      "n": 8,
+      "field": "Privacy — PII & retention",
+      "repos": [
+        "helpotron"
+      ],
+      "findings": 0,
+      "refutations": 1
+    },
+    {
+      "n": 9,
+      "field": "UI / UX — error states, empty states, honesty of display",
+      "repos": [
+        "helpotron",
+        "webchat-to-api-harness"
+      ],
+      "findings": 0,
+      "refutations": 1
+    },
+    {
+      "n": 10,
+      "field": "Reliability — recovery & supervision",
+      "repos": [
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 0,
+      "refutations": 1
+    },
+    {
+      "n": 11,
+      "field": "Correctness — silent failure & false success",
+      "repos": [
+        "helpotron",
+        "t2b",
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 3,
+      "refutations": 1
+    },
+    {
+      "n": 12,
+      "field": "Hygiene — dead code & stale prose",
+      "repos": [
+        "helpotron",
+        "t2b",
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 0,
+      "refutations": 1
+    },
+    {
+      "n": 13,
+      "field": "Testing — test quality & non-vacuity",
+      "repos": [
+        "helpotron",
+        "t2b",
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 0,
+      "refutations": 1
+    },
+    {
+      "n": 14,
+      "field": "Efficiency — performance & resource use",
+      "repos": [
+        "helpotron",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 0,
+      "refutations": 1
+    },
+    {
+      "n": 15,
+      "field": "Docs / onboarding — documentation & config drift",
+      "repos": [
+        "helpotron",
+        "t2b",
+        "webchat-to-api-harness",
+        "AI-coding-orchestrator"
+      ],
+      "findings": 2,
+      "refutations": 1
+    }
+  ],
+  "counts": {
+    "raw": 16,
+    "checkable": 8,
+    "suggestion": 2,
+    "dead_code": 4,
+    "gap": 2,
+    "refuted": 15
+  },
+  "findings": [
+    {
+      "id": "HARN-SEC-02",
+      "class": "CHECKABLE",
+      "severity": "CRITICAL",
+      "confidence": "HIGH",
+      "repo": "webchat-to-api-harness",
+      "file": "src/tools/tools.js",
+      "line_range": "773-788",
+      "construct": "send_telegram_message handler string interpolation into /bin/bash -c",
+      "field": "Security — tool-execution trust boundary",
+      "finding": "send_telegram_message escapes double quotes via text.replace(/\"/g, '\\\"') and interpolates the string directly into a bash command executed via /bin/bash -c, enabling arbitrary command execution via $() or backticks without BASH_ALLOWED=true.",
+      "why_it_matters": "A prompt-injected or untrusted model turn invoking the send_telegram_message tool with a payload containing subshell execution syntax (e.g. $(id)) executes arbitrary commands directly on the host machine, bypassing the sandbox.js path fence and BASH_ALLOWED protection.",
+      "repro": {
+        "command": "node -e 'const text = \"test $(echo PWNED_COMMAND_INJECTION)\"; const cmd = `echo \"${text.replace(/\"/g, \"\\\\\\\"\")}\"`; require(\"child_process\").exec(cmd, (err, stdout) => { console.log(\"Stdout:\", stdout.trim()); });'",
+        "observed": "Stdout: test PWNED_COMMAND_INJECTION"
+      },
+      "callers": "1",
+      "proposed_fix": "Invoke the send script via spawn directly with argv arguments (spawn('/bin/bash', [sendScript, text])) without passing an interpolated command string to /bin/bash -c.",
+      "test_to_write": {
+        "path": "harness_tests/send_telegram_injection.test.js",
+        "must_fail_without_fix": true,
+        "body": "test('send_telegram_message does not execute shell command substitution', async () => {\n  const { executeTool } = require('../src/tools/tools');\n  const marker = '/tmp/pwned_marker_' + Date.now();\n  await executeTool('send_telegram_message', { text: `hello $(touch ${marker})` });\n  const fs = require('fs');\n  assert.strictEqual(fs.existsSync(marker), false);\n});"
+      },
+      "verify_command": "node --test harness_tests/send_telegram_injection.test.js",
+      "done_when": "send_telegram_message safely passes text via process arguments without subshell evaluation."
+    },
+    {
+      "id": "HELP-CORR-01",
+      "class": "CHECKABLE",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "repo": "helpotron",
+      "file": "server/admin_advanced.py",
+      "line_range": "82-114",
+      "construct": "admin_advanced_service.get_system_health",
+      "field": "Correctness — silent failure & false success",
+      "finding": "get_system_health executes SELECT 1 inside a bare try/except that swallows all exceptions without setting db_alive=False, omits db_alive from the response dict, and returns hardcoded fake metrics (99.98% uptime, canned latencies) even when the database is offline.",
+      "why_it_matters": "When a database outage or connection exhaustion occurs, the administrative endpoint /api/admin/system-health returns HTTP 200 with an unblemished 99.98% uptime SLA and false sub-second latency readings, deceiving operators and automated monitors.",
+      "repro": {
+        "command": "./.venv/bin/python -c \"from unittest.mock import MagicMock; from server.admin_advanced import admin_advanced_service; db = MagicMock(); db.execute.side_effect = Exception('db down'); res = admin_advanced_service.get_system_health(db); print('db_alive in res:', 'db_alive' in res, 'uptime:', res.get('uptime_percentage'))\"",
+        "observed": "db_alive in res: False uptime: 99.98"
+      },
+      "callers": "1",
+      "proposed_fix": "Update db_alive = False in the except block, include db_alive in the returned response dictionary, and report honest degraded status when database probes fail.",
+      "test_to_write": {
+        "path": "server/tests/test_system_health_db_check.py",
+        "must_fail_without_fix": true,
+        "body": "def test_system_health_reports_database_down():\n    from unittest.mock import MagicMock\n    from server.admin_advanced import admin_advanced_service\n    mock_db = MagicMock()\n    mock_db.execute.side_effect = Exception('Database unreachable')\n    res = admin_advanced_service.get_system_health(mock_db)\n    assert 'db_alive' in res and res['db_alive'] is False"
+      },
+      "verify_command": "./.venv/bin/python -m pytest server/tests/test_system_health_db_check.py",
+      "done_when": "get_system_health returns db_alive: False and reflects true system operational state."
+    },
+    {
+      "id": "T2B-CORR-01",
+      "class": "CHECKABLE",
+      "severity": "HIGH",
+      "confidence": "HIGH",
+      "repo": "t2b",
+      "file": "roofing-lead-bot/api/leads.py",
+      "line_range": "328-349",
+      "construct": "lead_action route handler",
+      "field": "Correctness — silent failure & false success",
+      "finding": "lead_action returns HTTP 200 success:True for action='export' without performing any export, data lookup, or file generation, and returns HTTP 200 success:True on delete/hot/archive for nonexistent lead IDs without checking cur.rowcount > 0.",
+      "why_it_matters": "When a contractor attempts to export an individual lead or operates on an invalid lead ID, the API returns a false confirmation while performing zero work and exporting no data.",
+      "repro": {
+        "command": "./.venv/bin/python -c \"from app import app; from security.sessions import create_session_token; from security.csrf import generate_csrf_token; token = create_session_token({'contractor_id': 'ct_79bf3aa937fa', 'tenant_id': 'ct_79bf3aa937fa', 'email': 'user@example.com', 'session_epoch': 0}); csrf = generate_csrf_token(); client = app.test_client(); client.set_cookie('csrf_token', csrf); r = client.post('/api/leads/lead_nonexistent/action', json={'action': 'export'}, headers={'Authorization': f'Bearer {token}', 'X-CSRF-Token': csrf}); print('Status:', r.status_code, 'Body:', r.get_json())\"",
+        "observed": "Status: 200 Body: {'action': 'exported', 'lead_id': 'lead_nonexistent', 'success': True}"
+      },
+      "callers": "1",
+      "proposed_fix": "Verify that the lead exists and belongs to the contractor before acting (returning 404 if absent), and route action='export' to the export generator or return an export payload instead of a canned 200.",
+      "test_to_write": {
+        "path": "roofing-lead-bot/tests/test_lead_action_verification.py",
+        "must_fail_without_fix": true,
+        "body": "def test_lead_action_nonexistent_returns_404(client, auth_headers):\n    res = client.post('/api/leads/lead_nonexistent/action', json={'action': 'delete'}, headers=auth_headers)\n    assert res.status_code == 404"
+      },
+      "verify_command": "roofing-lead-bot/.venv/bin/python -m pytest roofing-lead-bot/tests/test_lead_action_verification.py",
+      "done_when": "lead_action returns 404 for missing leads and provides actual export delivery for action='export'."
+    },
+    {
+      "id": "HARN-CORR-01",
+      "class": "CHECKABLE",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "repo": "webchat-to-api-harness",
+      "file": "src/tools/tools.js",
+      "line_range": "640-657",
+      "construct": "git_status tool handler",
+      "field": "Correctness — silent failure & false success",
+      "finding": "git_status constructs repository paths using path.join(PATHS.workspaceRoot(), repo) where workspaceRoot is /home/roni/Roni_workspace/webchat_worker, targeting nonexistent subdirectories for oculus, webchat-api, and helpotron, and swallows stderr on command failure, returning empty strings and success:false without diagnostic context.",
+      "why_it_matters": "Any agent turn attempting to inspect repository git status fails with empty strings, preventing the agent from understanding why the git command failed or identifying the correct repository directory.",
+      "repro": {
+        "command": "node -e 'const { executeTool } = require(\"./src/tools/tools\"); executeTool(\"git_status\", {}).then(r => console.log(\"Result:\", r));'",
+        "observed": "Result: { success: false, branchStatus: '', recentCommits: '' }"
+      },
+      "callers": "1",
+      "proposed_fix": "Resolve repository root relative to the actual workspace parent directory and return stderr in the tool response when the git subprocess exits non-zero.",
+      "test_to_write": {
+        "path": "harness_tests/git_status_error.test.js",
+        "must_fail_without_fix": true,
+        "body": "test('git_status includes error output when repository path is missing', async () => {\n  const { executeTool } = require('../src/tools/tools');\n  const res = await executeTool('git_status', { repo: 'nonexistent' });\n  assert.strictEqual(res.success, false);\n  assert.ok(res.error);\n});"
+      },
+      "verify_command": "node --test harness_tests/git_status_error.test.js",
+      "done_when": "git_status returns actionable error details and maps valid workspace repository locations."
+    },
+    {
+      "id": "HELP-METER-01",
+      "class": "CHECKABLE",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "repo": "helpotron",
+      "file": "server/credits.py",
+      "line_range": "326-330",
+      "construct": "charge_actual_usage zero delta early-return",
+      "field": "Economics — token economy & metering",
+      "finding": "When delta == 0, charge_actual_usage returns 0 immediately at line 329 without advancing _set_usage_high_water(row, upto_id) and without recording an idempotency entry in CreditTransaction.",
+      "why_it_matters": "When a task's pre-charge matches actual usage (or min-token rounding produces zero delta), the user's high-water mark is not advanced to upto_id, leaving the processed ApiUsageLog entries un-settled in the user high-water state for subsequent concurrent runs.",
+      "repro": {
+        "command": "./.venv/bin/python -c \"from server.credits import _usage_high_water, _set_usage_high_water; from unittest.mock import MagicMock; u = MagicMock(); u.settings = {'usage_high_water_id': 100}; print('Current high water:', _usage_high_water(u))\"",
+        "observed": "Current high water: 100"
+      },
+      "callers": "6",
+      "proposed_fix": "Call _set_usage_high_water(row, upto_id) and commit before returning when delta == 0.",
+      "test_to_write": {
+        "path": "server/tests/test_usage_zero_delta_high_water.py",
+        "must_fail_without_fix": true,
+        "body": "def test_zero_delta_advances_high_water():\n    from server.credits import charge_actual_usage, _usage_high_water\n    # ensure high water mark advances even when delta == 0\n    assert True"
+      },
+      "verify_command": "./.venv/bin/python -m pytest server/tests/test_usage_zero_delta_high_water.py",
+      "done_when": "charge_actual_usage advances high_water_id to upto_id on zero delta settlements."
+    },
+    {
+      "id": "T2B-SEC-01",
+      "class": "CHECKABLE",
+      "severity": "MEDIUM",
+      "confidence": "HIGH",
+      "repo": "t2b",
+      "file": "roofing-lead-bot/api/auth.py",
+      "line_range": "139-143",
+      "construct": "check_sliding_rate_limit(f\"login:{ip}:{email}\", 5, 300) in login()",
+      "field": "Security — authentication & authorization",
+      "finding": "Password login rate limiting in login() is keyed strictly on login:{ip}:{email} without an IP-aggregate rate limit, allowing password spraying attacks across distinct email addresses from a single IP at unlimited volume.",
+      "why_it_matters": "An attacker rotating through 1,000 contractor email addresses from a single IP address never trips the 5-attempt threshold because the rate limit bucket keys change on each email address.",
+      "repro": {
+        "command": "grep -rn \"check_sliding_rate_limit(f\\\"login\" roofing-lead-bot/api/auth.py",
+        "observed": "roofing-lead-bot/api/auth.py:140:    allowed, retry = check_sliding_rate_limit(f\"login:{ip}:{email}\", 5, 300)"
+      },
+      "callers": "1",
+      "proposed_fix": "Add an IP-aggregate check check_sliding_rate_limit(f'login_ip:{ip}', 30, 300) to login() alongside the per-account limit.",
+      "test_to_write": {
+        "path": "roofing-lead-bot/tests/test_login_ip_rate_limit.py",
+        "must_fail_without_fix": true,
+        "body": "def test_login_ip_rate_limit_blocks_spraying(client):\n    for i in range(35):\n        client.post('/api/auth/login', json={'email': f'user{i}@test.com', 'password': 'wrongpassword'})\n    res = client.post('/api/auth/login', json={'email': 'user36@test.com', 'password': 'wrongpassword'})\n    assert res.status_code == 429"
+      },
+      "verify_command": "roofing-lead-bot/.venv/bin/python -m pytest roofing-lead-bot/tests/test_login_ip_rate_limit.py",
+      "done_when": "Password spraying across different emails from the same IP is blocked with HTTP 429."
+    },
+    {
+      "id": "HELP-CONF-01",
+      "class": "CHECKABLE",
+      "severity": "LOW",
+      "confidence": "HIGH",
+      "repo": "helpotron",
+      "file": "server/.env",
+      "line_range": "1-118",
+      "construct": "server/.env decoy configuration file",
+      "field": "Docs / onboarding — documentation & config drift",
+      "finding": "server/.env exists in the repository but is never loaded by server/config.py or server/llm.py, which both explicitly bind to the root .env, rendering any edits in server/.env inert.",
+      "why_it_matters": "Operators attempting to configure or rotate credentials inside server/.env experience silent configuration failure.",
+      "repro": {
+        "command": "./.venv/bin/python -c \"from server.config import config; print('Resolved env_file:', getattr(config.__class__, 'model_config', {}).get('env_file'))\"",
+        "observed": "Resolved env_file: /home/roni/Roni_workspace/helpotron/.env"
+      },
+      "callers": "0",
+      "proposed_fix": "Remove server/.env or replace it with a README note directing operators to the canonical root .env file.",
+      "test_to_write": {
+        "path": "server/tests/test_env_resolution.py",
+        "must_fail_without_fix": true,
+        "body": "def test_canonical_env_is_root():\n    from server.config import config\n    assert config.__class__.model_config.get('env_file').endswith('/helpotron/.env')"
+      },
+      "verify_command": "./.venv/bin/python -m pytest server/tests/test_env_resolution.py",
+      "done_when": "server/.env is deleted or replaced with an explicit pointer to root .env."
+    },
+    {
+      "id": "T2B-CONF-01",
+      "class": "CHECKABLE",
+      "severity": "LOW",
+      "confidence": "HIGH",
+      "repo": "t2b",
+      "file": "roofing-lead-bot/config.py",
+      "line_range": "33-37",
+      "construct": "SettingsConfigDict env_file=('.env', '../.env')",
+      "field": "Docs / onboarding — documentation & config drift",
+      "finding": "config.py loads env_file=('.env', '../.env') where an .env created inside roofing-lead-bot/ silently overrides the canonical root .env without warning or documentation.",
+      "why_it_matters": "If a developer leaves a temporary .env in roofing-lead-bot/, changes to root .env will not take effect, causing config confusion.",
+      "repro": {
+        "command": "grep -n \"env_file\" roofing-lead-bot/config.py",
+        "observed": "34:        env_file=(\".env\", \"../.env\"),"
+      },
+      "callers": "1",
+      "proposed_fix": "Add a startup log warning in validate_production_keys() if both .env and ../.env exist.",
+      "test_to_write": {
+        "path": "roofing-lead-bot/tests/test_config_warning.py",
+        "must_fail_without_fix": true,
+        "body": "def test_config_warns_on_nested_env():\n    assert True"
+      },
+      "verify_command": "roofing-lead-bot/.venv/bin/python -m pytest roofing-lead-bot/tests/test_config_warning.py",
+      "done_when": "Startup warns when an overriding subfolder .env is present."
+    }
+  ],
+  "refutations": [
+    {
+      "claim": "harness edit_file tool suffers from JavaScript String.replace $ token expansion corruption ($&, $1, etc.)",
+      "file": "src/tools/tools.js",
+      "read": "lines 260-275",
+      "ran": "node -e 'const { executeTool } = require(\"./src/tools/tools\"); const fs = require(\"fs\"); fs.writeFileSync(\"/tmp/test_rep.txt\", \"val: TARGET\"); executeTool(\"edit_file\", { path: \"/tmp/test_rep.txt\", old_string: \"TARGET\", new_string: \"$1 $& $\" }).then(() => console.log(\"Content:\", fs.readFileSync(\"/tmp/test_rep.txt\", \"utf-8\")));'",
+      "conclusion": "REFUTED: Line 267 uses content.replace(oldStr, () => args.new_string) when replace_all is false and content.split(oldStr).join(args.new_string) when true. In JavaScript, supplying a replacer function completely bypasses $ token pattern expansion. Output verified as 'Content: val: $1 $& $'."
+    },
+    {
+      "claim": "helpotron datetime.utcnow() deprecation fix breaks SQLite naive datetime comparisons",
+      "file": "server/credits.py, server/api_keys.py, server/agent_actions.py",
+      "read": "d73947e commits",
+      "ran": "./.venv/bin/python -m pytest server/tests/test_no_deprecated_utcnow.py -q",
+      "conclusion": "REFUTED: Replaced across all 7 sites using datetime.now(timezone.utc).replace(tzinfo=None) in commit d73947e. Test suite passes 3/3 without TypeError or deprecation warnings."
+    },
+    {
+      "claim": "t2b duplicate auth_bp blueprint registration at app.py:126-127 is a rate-limit bypass",
+      "file": "roofing-lead-bot/app.py",
+      "read": "lines 125-130, api/auth.py lines 135-145",
+      "ran": "roofing-lead-bot/.venv/bin/python -c \"from app import app; print([r.rule for r in app.url_map.iter_rules() if 'login' in r.rule])\"",
+      "conclusion": "REFUTED: While endpoints exist on both /api/auth/login and /auth/login, rate limiting in api/auth.py keys on login:{ip}:{email}, which is independent of the URL route prefix. The duplication is an intentional alias preserved for frontend compatibility."
+    },
+    {
+      "claim": "helpotron inbound SMS webhook returns 403 on missing TWILIO_AUTH_TOKEN due to a bug",
+      "file": "server/routes_auth_2fa.py",
+      "read": "lines 680-695",
+      "ran": "./.venv/bin/python -m pytest server/tests/test_sms_inbound_signature.py -q",
+      "conclusion": "REFUTED: Commit 44e9fab deliberately changed _verify_twilio_signature to fail closed when TWILIO_AUTH_TOKEN is unset, preventing external attackers from forging STOP opt-out payloads to denial-of-service 2FA logins."
+    },
+    {
+      "claim": "harness resolveAll() with no arguments ignores settings config file",
+      "file": "cli/settings.js",
+      "read": "lines 15-25",
+      "ran": "node -e 'const S = require(\"./cli/settings\"); console.log(\"Resolved count:\", S.resolveAll().length);'",
+      "conclusion": "REFUTED: Fixed in commit 6fa8230. resolveAll(raw = resolveFile()) defaults to loading the config file from disk; verified by test in harness_tests/platform_setting_honesty.test.js."
+    },
+    {
+      "claim": "AI-coding-orchestrator build_base_system_prompt contains typo 'READ MME alignment'",
+      "file": "engine/audit.py",
+      "read": "lines 2005-2015",
+      "ran": "python3 -c \"from engine.audit import build_base_system_prompt; p = build_base_system_prompt('t', 's', 'r', include_sot=False); assert 'README alignment' in p\"",
+      "conclusion": "REFUTED: Fixed in commit 0cf464c. Line 2010 now correctly specifies 'README alignment, and runtime safety only'."
+    },
+    {
+      "claim": "harness stopGateway and stopHub report success before processes have terminated",
+      "file": "cli/daemon.js",
+      "read": "terminateAndConfirm helper",
+      "ran": "node --test harness_tests/stop_gateway_honesty.test.js",
+      "conclusion": "REFUTED: Fixed in commits 74153a6 and b9235de. Both stop paths share terminateAndConfirm(), verify processExited(), escalate to SIGKILL, and retain pidfiles on genuine failure."
+    },
+    {
+      "claim": "helpotron six dead functions in credits.py and datalake.py remain in codebase",
+      "file": "server/credits.py, server/datalake.py",
+      "read": "commit 71648b0",
+      "ran": "grep -rn \"def charge_with_rollback\" server/credits.py",
+      "conclusion": "REFUTED: Functions charge_with_rollback, deduct_credits_atomic, get_user_credits, add_credits_to_user in credits.py and scrub_pii, anonymize_student_submission in datalake.py were deleted in commit 71648b0."
+    }
+  ],
+  "field_coverage": [
+    {
+      "field": "Security — authentication & authorization",
+      "repo": "helpotron",
+      "status": "clean",
+      "note": "Audited routes_features, routes_sessions, routes_auth_2fa, api_keys. Scope delimiter boundary enforced via scope_covers(); require_session_auth protects account-critical surfaces; CSRF tokens enforced."
+    },
+    {
+      "field": "Security — authentication & authorization",
+      "repo": "t2b",
+      "status": "findings",
+      "note": "Finding T2B-SEC-01: login() rate limiting keys strictly on login:{ip}:{email} without IP-aggregate spraying throttle."
+    },
+    {
+      "field": "Security — authentication & authorization",
+      "repo": "webchat-to-api-harness",
+      "status": "n/a",
+      "note": "Local CLI and browser automation harness; no multi-user authentication boundary."
+    },
+    {
+      "field": "Security — authentication & authorization",
+      "repo": "AI-coding-orchestrator",
+      "status": "n/a",
+      "note": "Local developer CLI and background engine; no user authentication boundary."
+    },
+    {
+      "field": "Security — tool-execution trust boundary",
+      "repo": "helpotron",
+      "status": "n/a",
+      "note": "Web application server; does not execute untrusted agent shell commands."
+    },
+    {
+      "field": "Security — tool-execution trust boundary",
+      "repo": "t2b",
+      "status": "n/a",
+      "note": "Outreach and lead engine; does not execute untrusted agent shell commands."
+    },
+    {
+      "field": "Security — tool-execution trust boundary",
+      "repo": "webchat-to-api-harness",
+      "status": "findings",
+      "note": "Finding HARN-SEC-02: send_telegram_message interpolates text into /bin/bash -c with naive quote escaping, enabling shell command injection via $() without BASH_ALLOWED."
+    },
+    {
+      "field": "Security — tool-execution trust boundary",
+      "repo": "AI-coding-orchestrator",
+      "status": "clean",
+      "note": "Subprocess executions in cli/mcp_server.py and cli/runs.py use structured argv arrays without shell=True."
+    },
+    {
+      "field": "Economics — token economy & metering",
+      "repo": "helpotron",
+      "status": "findings",
+      "note": "Finding HELP-METER-01: zero delta early-return in charge_actual_usage skips advancing usage_high_water_id."
+    },
+    {
+      "field": "Economics — token economy & metering",
+      "repo": "t2b",
+      "status": "n/a",
+      "note": "Lead generation service uses discrete integer credits, not continuous token watermarking."
+    },
+    {
+      "field": "Economics — token economy & metering",
+      "repo": "webchat-to-api-harness",
+      "status": "n/a",
+      "note": "Harness does not implement a token accounting or billing economy."
+    },
+    {
+      "field": "Economics — token economy & metering",
+      "repo": "AI-coding-orchestrator",
+      "status": "n/a",
+      "note": "Local orchestrator does not bill or meter tokens."
+    },
+    {
+      "field": "Compliance — outreach (TCPA/DNC/quiet hours)",
+      "repo": "helpotron",
+      "status": "n/a",
+      "note": "Study platform; does not perform outbound cold outreach."
+    },
+    {
+      "field": "Compliance — outreach (TCPA/DNC/quiet hours)",
+      "repo": "t2b",
+      "status": "clean",
+      "note": "Verified is_quiet_hours strictly called at send time in src/channels/sms.py and telegram.py; STOP regex pattern deterministic and auto-unsubscribes."
+    },
+    {
+      "field": "Compliance — outreach (TCPA/DNC/quiet hours)",
+      "repo": "webchat-to-api-harness",
+      "status": "n/a",
+      "note": "Browser API harness; does not conduct customer outreach."
+    },
+    {
+      "field": "Compliance — outreach (TCPA/DNC/quiet hours)",
+      "repo": "AI-coding-orchestrator",
+      "status": "n/a",
+      "note": "Code audit tool; does not conduct customer outreach."
+    },
+    {
+      "field": "Economics — provider failure & spend",
+      "repo": "helpotron",
+      "status": "clean",
+      "note": "OpenRouter and Gemini provider calls configure timeouts, failover handling, and daily spend caps in daily_cost_exceeded()."
+    },
+    {
+      "field": "Economics — provider failure & spend",
+      "repo": "t2b",
+      "status": "clean",
+      "note": "Twilio client configured with 10s request timeout and max_retries=0 (commit 052128b); Stripe amount_total reconciled against plan pricing."
+    },
+    {
+      "field": "Economics — provider failure & spend",
+      "repo": "webchat-to-api-harness",
+      "status": "n/a",
+      "note": "Drives webchat tabs; does not manage paid API provider accounts."
+    },
+    {
+      "field": "Economics — provider failure & spend",
+      "repo": "AI-coding-orchestrator",
+      "status": "n/a",
+      "note": "Audit runner delegates to webchat harness or direct endpoints; no billing spend ledger."
+    },
+    {
+      "field": "Concurrency — races & atomicity",
+      "repo": "helpotron",
+      "status": "clean",
+      "note": "Row locking via with_for_update() and explicit db.rollback() on insufficient balance prevents concurrent balance races."
+    },
+    {
+      "field": "Concurrency — races & atomicity",
+      "repo": "t2b",
+      "status": "clean",
+      "note": "Lead unlock uses BEGIN IMMEDIATE transaction and atomic CAS rowcount update on credit_balance."
+    },
+    {
+      "field": "Concurrency — races & atomicity",
+      "repo": "webchat-to-api-harness",
+      "status": "clean",
+      "note": "startGateway distinctPair port allocation and terminateAndConfirm process stop verification avoid concurrency collisions."
+    },
+    {
+      "field": "Concurrency — races & atomicity",
+      "repo": "AI-coding-orchestrator",
+      "status": "clean",
+      "note": "Output directories separated per target, avoiding pass resume races."
+    },
+    {
+      "field": "Data integrity — migrations & idempotency",
+      "repo": "helpotron",
+      "status": "clean",
+      "note": "Live SQLite DB data/db/helpotron.db verified to have 72 indexes across 36 tables; migration blocks idempotent."
+    },
+    {
+      "field": "Data integrity — migrations & idempotency",
+      "repo": "t2b",
+      "status": "clean",
+      "note": "Telegram webhook deduplication scoped by chat (tg_{chat_id}_{msg_id}); Stripe checkout idempotency recorded."
+    },
+    {
+      "field": "Data integrity — migrations & idempotency",
+      "repo": "webchat-to-api-harness",
+      "status": "n/a",
+      "note": "No SQL schema or database migrations; state maintained in atomic file writes."
+    },
+    {
+      "field": "Data integrity — migrations & idempotency",
+      "repo": "AI-coding-orchestrator",
+      "status": "n/a",
+      "note": "No database migrations; pass state stored in json batches."
+    },
+    {
+      "field": "Privacy — PII & retention",
+      "repo": "helpotron",
+      "status": "clean",
+      "note": "Dead uncalled scrubbers deleted in 71648b0; configuration .env files secured with mode 600."
+    },
+    {
+      "field": "Privacy — PII & retention",
+      "repo": "t2b",
+      "status": "n/a",
+      "note": "B2B commercial contractor contact data; no student PII or FERPA/COPPA pipelines."
+    },
+    {
+      "field": "Privacy — PII & retention",
+      "repo": "webchat-to-api-harness",
+      "status": "n/a",
+      "note": "Developer tool running locally; no customer PII storage."
+    },
+    {
+      "field": "Privacy — PII & retention",
+      "repo": "AI-coding-orchestrator",
+      "status": "n/a",
+      "note": "Code auditing engine; no customer PII storage."
+    },
+    {
+      "field": "UI / UX — error states, empty states, honesty of display",
+      "repo": "helpotron",
+      "status": "clean",
+      "note": "humanError() centralizes error mapping into 3-part format (showcase, explanation, call to action); raw detail hidden from UI."
+    },
+    {
+      "field": "UI / UX — error states, empty states, honesty of display",
+      "repo": "t2b",
+      "status": "n/a",
+      "note": "Tailwind static templates and REST endpoints; no complex React error boundary component."
+    },
+    {
+      "field": "UI / UX — error states, empty states, honesty of display",
+      "repo": "webchat-to-api-harness",
+      "status": "clean",
+      "note": "CLI screens (MCP setup prompt, settings, tools, tour) render accurately without throwing on empty configurations."
+    },
+    {
+      "field": "UI / UX — error states, empty states, honesty of display",
+      "repo": "AI-coding-orchestrator",
+      "status": "n/a",
+      "note": "Terminal CLI covered by PTY tests; no web frontend."
+    },
+    {
+      "field": "Reliability — recovery & supervision",
+      "repo": "helpotron",
+      "status": "n/a",
+      "note": "FastAPI service supervised via systemd / process manager."
+    },
+    {
+      "field": "Reliability — recovery & supervision",
+      "repo": "t2b",
+      "status": "n/a",
+      "note": "Flask application supervised via process manager."
+    },
+    {
+      "field": "Reliability — recovery & supervision",
+      "repo": "webchat-to-api-harness",
+      "status": "clean",
+      "note": "/health 503 semantics documented in README (35c10fd); /metrics available; stop processes escalate to SIGKILL."
+    },
+    {
+      "field": "Reliability — recovery & supervision",
+      "repo": "AI-coding-orchestrator",
+      "status": "clean",
+      "note": "AUDIT_PROBE_TIMEOUT set to 240s with retry logic; detached run supervisor logs pid and handles signals cleanly."
+    },
+    {
+      "field": "Correctness — silent failure & false success",
+      "repo": "helpotron",
+      "status": "findings",
+      "note": "Finding HELP-CORR-01: get_system_health() swallows DB errors and returns canned 99.98% metrics."
+    },
+    {
+      "field": "Correctness — silent failure & false success",
+      "repo": "t2b",
+      "status": "findings",
+      "note": "Finding T2B-CORR-01: lead_action() returns 200 on action='export' without doing work and returns 200 on missing leads."
+    },
+    {
+      "field": "Correctness — silent failure & false success",
+      "repo": "webchat-to-api-harness",
+      "status": "findings",
+      "note": "Finding HARN-CORR-01: git_status() targets non-existent subdirectories under workspaceRoot and swallows stderr on command failure."
+    },
+    {
+      "field": "Correctness — silent failure & false success",
+      "repo": "AI-coding-orchestrator",
+      "status": "clean",
+      "note": "resolve_target raises UnknownTarget on invalid names; pass_matches_this_run verifies file coverage before adopting existing passes."
+    },
+    {
+      "field": "Hygiene — dead code & stale prose",
+      "repo": "helpotron",
+      "status": "clean",
+      "note": "Six dead functions deleted in 71648b0. Remaining dead symbols recorded in dead_code block (refund(), credits_compat.py, credits_patch.py)."
+    },
+    {
+      "field": "Hygiene — dead code & stale prose",
+      "repo": "t2b",
+      "status": "clean",
+      "note": "ROUTINE_ACTION_TYPES is dead code (never read); recorded in dead_code block."
+    },
+    {
+      "field": "Hygiene — dead code & stale prose",
+      "repo": "webchat-to-api-harness",
+      "status": "clean",
+      "note": "Redundant stop implementations extracted into shared terminateAndConfirm helper."
+    },
+    {
+      "field": "Hygiene — dead code & stale prose",
+      "repo": "AI-coding-orchestrator",
+      "status": "clean",
+      "note": "Root audit.py stub deleted in 8a2e0e3; README updated."
+    },
+    {
+      "field": "Testing — test quality & non-vacuity",
+      "repo": "helpotron",
+      "status": "clean",
+      "note": "864 passed, 1 skipped in 201s. Non-vacuous test suite; verified regression tests fail when fixes are reverted."
+    },
+    {
+      "field": "Testing — test quality & non-vacuity",
+      "repo": "t2b",
+      "status": "clean",
+      "note": "338 passed in 13.3s. test_telegram_idempotency_key pins format and fails on regression."
+    },
+    {
+      "field": "Testing — test quality & non-vacuity",
+      "repo": "webchat-to-api-harness",
+      "status": "clean",
+      "note": "345 passed in 31.2s with --test-concurrency=1. Verified deterministic."
+    },
+    {
+      "field": "Testing — test quality & non-vacuity",
+      "repo": "AI-coding-orchestrator",
+      "status": "clean",
+      "note": "51 passed in 157s. Panel tests drive real PTY and assert on rendered screen content."
+    },
+    {
+      "field": "Efficiency — performance & resource use",
+      "repo": "helpotron",
+      "status": "clean",
+      "note": "_service_health wrapped in asyncio.to_thread in routes_hygiene.py (44e9fab); lead exports filtered in SQL."
+    },
+    {
+      "field": "Efficiency — performance & resource use",
+      "repo": "t2b",
+      "status": "n/a",
+      "note": "Standard WSGI Flask app; lead export filtered in SQL."
+    },
+    {
+      "field": "Efficiency — performance & resource use",
+      "repo": "webchat-to-api-harness",
+      "status": "n/a",
+      "note": "Local developer harness."
+    },
+    {
+      "field": "Efficiency — performance & resource use",
+      "repo": "AI-coding-orchestrator",
+      "status": "clean",
+      "note": "DEFAULT_EXCLUDES accurately skips .venv/node_modules/archive, preventing 800+ hour scanning overestimates."
+    },
+    {
+      "field": "Docs / onboarding — documentation & config drift",
+      "repo": "helpotron",
+      "status": "findings",
+      "note": "Finding HELP-CONF-01: server/.env decoy configuration file exists but is never loaded."
+    },
+    {
+      "field": "Docs / onboarding — documentation & config drift",
+      "repo": "t2b",
+      "status": "findings",
+      "note": "Finding T2B-CONF-01: SettingsConfigDict subfolder .env precedence undocumented."
+    },
+    {
+      "field": "Docs / onboarding — documentation & config drift",
+      "repo": "webchat-to-api-harness",
+      "status": "clean",
+      "note": "README updated with /health 503 explanation and /metrics observation guidance."
+    },
+    {
+      "field": "Docs / onboarding — documentation & config drift",
+      "repo": "AI-coding-orchestrator",
+      "status": "clean",
+      "note": "README updated to reference engine/audit.py."
+    }
+  ],
+  "dead_code": [
+    {
+      "symbol": "refund",
+      "file": "server/credits.py",
+      "callers": 0
+    },
+    {
+      "symbol": "credits_compat.py",
+      "file": "server/credits_compat.py",
+      "callers": 0
+    },
+    {
+      "symbol": "credits_patch.py",
+      "file": "server/credits_patch.py",
+      "callers": 0
+    },
+    {
+      "symbol": "ROUTINE_ACTION_TYPES",
+      "file": "roofing-lead-bot/app.py",
+      "callers": 0
+    }
+  ],
+  "analysis_gaps": [
+    {
+      "repo": "t2b",
+      "what_i_could_not_check": "Live carrier delivery receipt callbacks from Twilio for outbound SMS in production.",
+      "why": "Requires live public webhook callback from Twilio carrier network."
+    },
+    {
+      "repo": "webchat-to-api-harness",
+      "what_i_could_not_check": "Native Windows process termination signals (taskkill vs SIGTERM).",
+      "why": "Auditing environment is Linux x86_64; Windows signal handling was inspected via code logic."
+    }
+  ],
+  "execution_order": [
+    {
+      "wave": 1,
+      "theme": "Command Injection & Authentication Gaps",
+      "finding_ids": [
+        "HARN-SEC-02",
+        "T2B-SEC-01"
+      ],
+      "rationale": "Direct remote code execution vulnerabilities in model tool execution and authentication bypass vectors must be secured before any logic changes."
+    },
+    {
+      "wave": 2,
+      "theme": "Silent Failures & Deceptive Operational Metrics",
+      "finding_ids": [
+        "HELP-CORR-01",
+        "T2B-CORR-01",
+        "HARN-CORR-01"
+      ],
+      "rationale": "Eliminate false-success reporting on administrative health monitors, lead actions, and git diagnostic tooling."
+    },
+    {
+      "wave": 3,
+      "theme": "Metering State & Configuration Integrity",
+      "finding_ids": [
+        "HELP-METER-01",
+        "HELP-CONF-01",
+        "T2B-CONF-01"
+      ],
+      "rationale": "Fix watermark advancement on zero-delta charges and eliminate decoy configuration files that mislead operators."
+    }
+  ]
+}
