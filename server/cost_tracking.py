@@ -163,7 +163,7 @@ class CostEngine:
         summary / per_model / top_users keys so older consumers keep working.
         """
         from sqlalchemy import func
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         rows = db.query(ApiUsageLog).all()
         total_base = sum(r.base_cost_usd for r in rows)
         total_charged = sum(r.charged_cost_usd for r in rows)
@@ -193,7 +193,7 @@ class CostEngine:
         ]
 
         # Last-7-days usage trends (frontend: trends[] = {date, day_name, calls, cost_usd})
-        since = datetime.utcnow() - timedelta(days=7)
+        since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)
         by_day: Dict[str, Dict[str, float]] = {}
         for r in rows:
             if not r.created_at or r.created_at < since:

@@ -8,7 +8,7 @@ the subject so the agent treats the content as unseen going forward.
 Undo rules are idempotent and user-scoped. This module is imported lazily
 from overlord_agent (avoiding a circular import).
 """
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .database import AgentAction, Assignment
 
@@ -125,6 +125,6 @@ def undo_agent_action(db, user, action: AgentAction) -> dict:
         return {"ok": False, "message": f"no undo implemented for '{kind}'"}
 
     action.status = "undone"
-    action.undone_at = datetime.utcnow()
+    action.undone_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.commit()
     return {"ok": True, "message": f"rolled back {kind}"}
