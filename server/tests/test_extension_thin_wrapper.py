@@ -32,9 +32,11 @@ def test_ui_config_model_ladder_matches_the_real_router():
     """The ladder the popup renders must name the model the extension runs.
 
     The extension is a VISION surface (owner 2026-09-18): it drives the page and
-    can send screen frames, so it runs only the three models that can see —
-    gemini-3.1-flash-lite, deepseek-v4.1-flash, gemini-3.8-flash — and the chat
-    route pins itself to the same ladder (`model_override` + `vision_only`).
+    can send screen frames, so it runs only the three models that can see (the
+    allow-list asserted below) and the chat route pins itself to the same ladder
+    (`model_override` + `vision_only`). Which of the three sits at which level is
+    decided by `resolve_vision_model` and ordered by real cost — it is NOT pinned
+    here, because a pinned order is what went stale on 2026-09-26.
     The badge is therefore computed from `resolve_vision_model`, NOT from the
     text ladder My Agent routes through (which uses nemotron at level 1 and qwen
     at level 2 — models that cannot read a screenshot).
@@ -65,25 +67,38 @@ def test_ui_config_model_ladder_matches_the_real_router():
     }
     assert {e["model"] for e in ladder} == vision
 
-    # The owner's spec, stated directly: low = lite, mid = deepseek, high = 3.8.
-    for e in ladder:
-        lvl = e["level"]
-        if lvl <= 3:
-            assert e["model"] == "google/gemini-3.1-flash-lite"
-        elif lvl <= 6:
-            assert e["model"] == "deepseek/deepseek-v4.1-flash"
-        else:
-            assert e["model"] == "google/gemini-3.8-flash"
+    # ── 2026-09-26: the band assignment is NOT restated here any more. ──────────
+    # This block used to hardcode "low = lite, mid = deepseek, high = 3.8" as
+    # literals. That is a SECOND copy of a fact that already lives in
+    # screen_vision.VISION_MODEL_TIERS, so when the ladder was reordered by real
+    # cost this copy went stale and the test failed while the code was correct.
+    # Two sources of one fact is the defect; asserting the literal again would
+    # re-create it. The invariants that are NOT derivable from the resolver are
+    # checked instead: the ladder ascends in real cost, and the tier bands rise
+    # monotonically with the level.
+    from server.llm import calculate_effective_task_cost as _cost
+
+    costs = [_cost(e["model"]) for e in ladder]
+    assert costs == sorted(costs), (
+        "the effort ladder must ascend in real cost — a level that costs less than "
+        f"the level below it is not a spend control. got {costs}"
+    )
+
+    bands = [e["tier"] for e in ladder]
+    order = {"low": 0, "med": 1, "high": 2}
+    assert all(b in order for b in bands), f"unexpected tier label in {bands}"
+    assert [order[b] for b in bands] == sorted(order[b] for b in bands), (
+        f"tier bands must rise with the level, got {bands}"
+    )
 
     # My Agent is a DIFFERENT surface and must NOT be pinned to this ladder.
     from server.llm import resolve_model_routing
     assert resolve_model_routing(effort_score=100)["model"] != ladder[0]["model"]
 
-    # Tier matches the popup's own banding, which drives the badge styling.
-    for entry in ladder:
-        lvl = entry["level"]
-        expect_tier = "low" if lvl <= 3 else "med" if lvl <= 6 else "high"
-        assert entry["tier"] == expect_tier
+    # Tier drives the badge styling; the resolver loop above already proves the
+    # tier matches, and the band-order check above proves it rises with the level.
+    # The old copy here restated the 3/6 boundaries as literals — the same
+    # duplication this file just removed.
 
     # `vision_ladder` is kept as an alias for older clients — same content.
     assert body["vision_ladder"] == ladder

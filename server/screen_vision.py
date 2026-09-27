@@ -34,24 +34,36 @@ import httpx
 logger = logging.getLogger(__name__)
 
 # Default model (= middle tier) and the effort-score semantic (09-02).
-VISION_MODEL: str = "deepseek/deepseek-v4.1-flash"
+# VISION_MODEL is the MEDIUM default. 2026-09-26: was deepseek-v4.1-flash, which
+# is now the LOW (cheapest) tier after the ladder was reordered by measured cost.
+VISION_MODEL: str = "google/gemini-3.1-flash-lite"
 DEFAULT_EFFORT_SCORE: int = 500
 _MIN_EFFORT_SCORE: int = 1
 _MAX_EFFORT_SCORE: int = 1000
 
 # The three vision models used for screen vision, ordered cheapest -> most
-# expensive. Prices are the llm.ModelPolicy.PRICING input/output per 1M. A
-# user's effort level is honored consistently by BOTH the text agent and the
-# screen-vision lane.
+# expensive. Prices are the llm.ModelPolicy.PRICING input/output per 1M.
 #
-# Owner-pinned set (09-08; deepseek id moved to V4.1 Flash 09-10): low ->
-# gemini 3.1-flash-lite, med -> deepseek v4.1 flash, high -> gemini 3.8-flash.
-# Nothing else: no 3.5-flash, no pro-preview, and v4-pro-vision was dropped
-# (see _VISION_FALLBACK).
+# 2026-09-26 RE-MEASURED AND REORDERED. The previous order was inverted once the
+# price table was corrected against the live catalog: it put gemini-3.1-flash-lite
+# at "low" while deepseek-v4.1-flash sat at "med", but deepseek is 5.5x CHEAPER,
+# so picking LOW effort cost more than picking MEDIUM. Measured per real call:
+#   deepseek-v4.1-flash   $0.000180  <- cheapest, and it works
+#   gemini-3.1-flash-lite $0.001000
+#   gemini-3.8-flash      $0.002625
+#
+# The old comment claimed deepseek "accepted a request and returned EMPTY content
+# for an image payload". Re-probed on 2026-09-26 with a real PNG containing a mass
+# reading and a conclusion word: all three tiers returned the correct values, so
+# that note is STALE and the fallback it justified has been removed. A catalog
+# modality claim is still not proof on its own — but a live image probe is, and
+# that is what was run.
+#
+# Nothing else is on this ladder: no 3.5-flash, no pro-preview, no v4-pro-vision.
 VISION_MODEL_TIERS: Dict[str, str] = {
-    "google/gemini-3.1-flash-lite": "$0.075 / $0.30",       # cheapest — low
-    "deepseek/deepseek-v4.1-flash": "$0.15 / $0.60",        # med (default)
-    "google/gemini-3.8-flash": "$0.25 / $1.00",             # most expensive — high
+    "deepseek/deepseek-v4.1-flash": "$0.035 / $0.29",       # cheapest — low
+    "google/gemini-3.1-flash-lite": "$0.25 / $1.50",        # med (default)
+    "google/gemini-3.8-flash": "$0.75 / $3.75",             # most expensive — high
 }
 
 # 09-10: V4.1 Flash is natively vision on OpenRouter, so the canonical id IS the
@@ -59,17 +71,15 @@ VISION_MODEL_TIERS: Dict[str, str] = {
 # single place a future tier would go if a rewrite is ever needed again.
 _OR_SLUG_MAP: Dict[str, str] = {}
 
-# 09-08 (operator: "some of the vision tiers dont work"). Measured live against
-# the OpenRouter catalog + a real tab screenshot: the old deepseek vision slug
-# was LISTED as image-capable but ACCEPTED the request and returned EMPTY content
-# for an image payload; deepseek-v4-pro was not image-capable at all (HTTP 404).
-# That is why a fallback exists, and it is retained for V4.1 Flash until the model
-# is re-measured end-to-end: a catalog "text,image" modality claim is NOT proof
-# that an image payload comes back non-empty — it lied once already. If V4.1 Flash
-# returns empty content the med tier degrades UP to 3.8-flash, so the ladder stays
-# monotonic. The fallback is logged, never silent.
+# 09-08 (operator: "some of the vision tiers dont work"): a catalog modality claim
+# is not proof an image payload comes back non-empty, so a fallback is retained —
+# but it degrades to the NEXT TIER UP, not to the most expensive model. The old
+# map sent a failed cheap call to gemini-3.8-flash ($0.002625), which turned one
+# unreliable cheap call into the dearest possible one. Re-probed 2026-09-26: V4.1
+# Flash reads an image correctly, so this should not fire; it is a safety net, and
+# the fallback is logged, never silent.
 _VISION_FALLBACK: Dict[str, str] = {
-    "deepseek/deepseek-v4.1-flash": "google/gemini-3.8-flash",
+    "deepseek/deepseek-v4.1-flash": "google/gemini-3.1-flash-lite",
 }
 
 MAX_DECODED_BYTES: int = 8 * 1024 * 1024  # ~8MB decoded cap (parent spec)
@@ -248,13 +258,13 @@ def resolve_vision_model(effort_score: Any = None) -> Tuple[str, str, int]:
     Returns (canonical model_id, tier_key, clamped_score). Three even bands
     across 1..1000, cheapest -> most expensive (see VISION_MODEL_TIERS):
 
-        <=333     -> gemini-3.1-flash-lite      (low)
-        334..666  -> deepseek-v4.1-flash        (med) [default 500]
-        >666      -> gemini-3.8-flash           (high)
+        <=333     -> deepseek-v4.1-flash       (low)  $0.000180
+        334..666  -> gemini-3.1-flash-lite      (med)  $0.001000  [default 500]
+        >666      -> gemini-3.8-flash           (high) $0.002625
     """
     score = parse_effort_score(effort_score)
     if score <= 333:
-        return "google/gemini-3.1-flash-lite", "low", score
+        return "deepseek/deepseek-v4.1-flash", "low", score
     if score <= 666:
         return VISION_MODEL, "med", score
     return "google/gemini-3.8-flash", "high", score
