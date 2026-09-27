@@ -93,14 +93,20 @@ class ModelPolicy:
 
     PRICING = {
         # live OpenRouter pricing per 1M tokens
+        # VERIFIED against GET https://openrouter.ai/api/v1/models on 2026-09-26.
+        # 4 of these 5 were stale by 2x-5x, in BOTH directions, which corrupted the
+        # billing fallback AND the routing cost comparison. Re-verify before trusting:
+        # OpenRouter prices move, and a wrong table is worse than none.
+        # NOTE image_input / audio_input are USD-per-image / per-minute here while
+        # OpenRouter quotes per-token, so those two remain approximations.
         "nvidia/nemotron-3-nano-30b-a3b": {"input": 0.05, "output": 0.20, "modalities": ["text"], "reliability": 0.97},
-        "qwen/qwen-2.5-72b-instruct": {"input": 0.09, "output": 0.18, "modalities": ["text"], "reliability": 0.99},
-        "google/gemini-3.1-flash-lite": {"input": 0.075, "output": 0.30, "image_input": 0.0003, "audio_input": 0.002, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
+        "qwen/qwen-2.5-72b-instruct": {"input": 0.36, "output": 0.4, "modalities": ["text"], "reliability": 0.99},
+        "google/gemini-3.1-flash-lite": {"input": 0.25, "output": 1.5, "image_input": 0.0003, "audio_input": 0.002, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
         # 09-10: V4.1 Flash is natively vision on OpenRouter (text+image, 1M ctx), so
         # the old "-exp" wire-slug hack and the separate pro-vision row are both gone.
         # OpenRouter bills images as prompt tokens for this model — no image_input key.
-        "deepseek/deepseek-v4.1-flash": {"input": 0.15, "output": 0.60, "modalities": ["text", "vision"], "reliability": 0.99},
-        "google/gemini-3.8-flash": {"input": 0.25, "output": 1.00, "image_input": 0.0008, "audio_input": 0.005, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
+        "deepseek/deepseek-v4.1-flash": {"input": 0.035, "output": 0.29, "modalities": ["text", "vision"], "reliability": 0.99},
+        "google/gemini-3.8-flash": {"input": 0.75, "output": 3.75, "image_input": 0.0008, "audio_input": 0.005, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
     }
 
 PRIMARY_MODELS = ModelPolicy.PRIMARY_MODELS

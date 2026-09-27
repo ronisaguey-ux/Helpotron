@@ -40,15 +40,18 @@ def test_parse_effort_score(value, expected):
 # ── resolve_vision_model tiers ────────────────────────────────────────────────
 
 def test_tier_low_below_333():
+    """2026-09-26: LOW is now deepseek-v4.1-flash. The ladder was reordered when
+    the price table was corrected — deepseek is the CHEAPEST vision model, so the
+    old order had LOW costing 5.5x more than MEDIUM."""
     model, tier, score = resolve_vision_model(333)
-    assert model == "google/gemini-3.1-flash-lite"      # cheapest
+    assert model == "deepseek/deepseek-v4.1-flash"      # cheapest
     assert tier == "low"
     assert score == 333
 
 
 def test_tier_med_334_666():
     model, tier, _ = resolve_vision_model(334)
-    assert model == VISION_MODEL                          # deepseek v4.1 flash
+    assert model == VISION_MODEL                          # gemini 3.1-flash-lite
     assert tier == "med"
     model, tier, _ = resolve_vision_model(666)
     assert model == VISION_MODEL
@@ -69,8 +72,26 @@ def test_resolve_default_and_clamped():
     assert resolve_vision_model() == (VISION_MODEL, "med", 500)
     # out-of-range clamps, never a 500/error
     assert resolve_vision_model(99999) == ("google/gemini-3.8-flash", "high", 1000)
-    assert resolve_vision_model(-42) == ("google/gemini-3.1-flash-lite", "low", 1)
+    assert resolve_vision_model(-42) == ("deepseek/deepseek-v4.1-flash", "low", 1)
 
+
+
+def test_effort_bands_ascend_in_real_cost():
+    """The ladder must be ordered by MEASURED cost, not by nominal input price.
+
+    2026-09-26: a corrected price table showed the bands were inverted — picking
+    LOW effort selected a model 5.5x dearer than MEDIUM. Asserting the dict is
+    sorted is not enough; the BAND MAPPING must agree with the cost order, or the
+    same bug returns with a sorted dict and inverted bands.
+    """
+    from server.llm import calculate_effective_task_cost as cost
+    low, _t, _s = resolve_vision_model(1)
+    med, _t, _s = resolve_vision_model(500)
+    high, _t, _s = resolve_vision_model(1000)
+    assert cost(low) <= cost(med) <= cost(high), (
+        f"effort bands must ascend in cost, got "
+        f"low={cost(low):.6f} med={cost(med):.6f} high={cost(high):.6f}"
+    )
 
 def test_tiers_are_ordered_by_price():
     """Sanity: the three ids are distinct, ascending price, and every one of
