@@ -70,6 +70,10 @@ import aiohttp
 
 logger = logging.getLogger("helpotron.hip")
 
+# The preservation guard: a rewrite that changes the FACTS is discarded and the
+# original kept. See text_preservation.py for the measured fabrications behind it.
+from .text_preservation import check_preservation  # noqa: E402
+
 # Load the repo .env ourselves rather than relying on server.llm having been
 # imported first: "someone else already called load_dotenv" is an invisible
 # ordering dependency, and getting it wrong makes hip_configured() silently
@@ -301,6 +305,29 @@ async def hip_humanize(text: str, rounds: Optional[int] = None) -> Optional[str]
                     logger.info("HIP round %s shrank %sw -> %sw; discarding",
                                 i + 1, len(current.split()), len(out.split()))
                     break
+                # ★ THE PRESERVATION GUARD. A "humanizer" that invents facts is not a style
+                # tool, it is a misinformation tool — measured on a real job: two fabricated
+                # Locke quotations (77w -> 155w) and a fabricated death date that was WRONG.
+                # The shrink check above only guarded one direction, and growth is the shape
+                # fabrication takes. On a failed check the round is retried ONCE and then the
+                # text is left as it was: for factual work, an unrewritten sentence is worth
+                # more than a fluent invented one.
+                verdict = check_preservation(current, out)
+                if not verdict["ok"]:
+                    logger.warning("HIP round %s failed preservation (%s); retrying once",
+                                   i + 1, "; ".join(verdict["violations"])[:200])
+                    retry = await _one_round(current, session)
+                    if retry:
+                        retry_verdict = check_preservation(current, retry)
+                        if retry_verdict["ok"]:
+                            out = retry
+                        else:
+                            logger.warning(
+                                "HIP round %s still unfaithful (%s); keeping the original",
+                                i + 1, "; ".join(retry_verdict["violations"])[:200])
+                            break
+                    else:
+                        break
                 current = out
     except Exception as e:
         logger.warning("HIP humanize failed: %s", type(e).__name__)
