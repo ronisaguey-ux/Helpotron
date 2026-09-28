@@ -291,13 +291,20 @@ def queue_status() -> Dict[str, Any]:
 
 async def run_with_budget(fn: Callable[[], Awaitable[Any]],
                           on_queued: Optional[Callable[[float], None]] = None,
-                          process: str = "unknown") -> Any:
+                          process: str = "unknown",
+                          track_stall: bool = False) -> Any:
     """Run `fn` now if the machine is within budget, else wait in line for a slot.
 
     Never raises a timeout: a task waits as long as it takes, and the client is told to show
     the "server is busy" notice rather than the work being cancelled.
     `process` names the caller in `priority.PRIORITY_REGISTRY`, which decides where it sits
     in the line. An unknown name gets the default priority — it is never refused.
+
+    ★ `track_stall` IS OPT-IN AND THAT IS DELIBERATE. The activity watchdog judges a stall by
+    "no CPU progress while resident". That is exactly right for work that burns LOCAL CPU
+    (ONNX detection, the local humanizer model) and exactly WRONG for a task waiting on a
+    provider: a slow LLM call is also zero-CPU, and tracking it would cancel legitimate work
+    every couple of minutes. So only local-compute callers pass True.
 
     ★ HOW THE ORDERING IS ACTUALLY GUARANTEED. The slot is acquired BEFORE the budget wait
     and held until the task finishes, so at most `MAX_CONCURRENT` callers are ever past the
@@ -352,9 +359,28 @@ async def run_with_budget(fn: Callable[[], Awaitable[Any]],
 
     STATS.running += 1
     STATS.peak_running = max(STATS.peak_running, STATS.running)
+    watchdog_key = None
+    if track_stall:
+        # Only local-compute callers opt in (see the docstring): tracking a provider wait
+        # would cancel perfectly healthy work, because an LLM round-trip is also zero-CPU.
+        try:
+            from .activity_watchdog import WATCHDOG
+            current = asyncio.current_task()
+            if current is not None:
+                watchdog_key = f"{process}:{id(current)}:{int(time.time())}"
+                WATCHDOG.register_in_process(watchdog_key, process, current.cancel)
+        except Exception as e:                                    # noqa: BLE001
+            logger.debug("could not register with the activity watchdog: %s", e)
+            watchdog_key = None
     try:
         return await fn()
     finally:
+        if watchdog_key:
+            try:
+                from .activity_watchdog import WATCHDOG
+                WATCHDOG.unregister(watchdog_key)
+            except Exception:                                     # noqa: BLE001
+                pass
         STATS.running = max(0, STATS.running - 1)
         STATS.completed += 1
         gate.release()

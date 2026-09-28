@@ -594,12 +594,21 @@ class OverlordAgent:
     ) -> str:
         """Summarize + trim a chat thread so it never bloats.
 
-        Thresholds: more than ``max_messages`` messages OR more than
-        ``max_chars`` of text. The oldest messages are summarized with a
-        low-effort LLM call (cheap engines — compaction never needs flagship
-        reasoning), the newest 10 stay verbatim, and the summary is injected
-        as an overlord message. If the LLM is unreachable we fall back to
-        keeping the newest 15 messages unsummarized.
+        ★ THE THRESHOLD IS A SHARE OF THE MODEL'S REAL CONTEXT WINDOW (owner 2026-09-28:
+        *"for all working agents on helpotron, have them autocompact at 30% context ... so
+        it's seamless and they don't gotta worry about it"*). It used to be a flat
+        40-message / 12,000-char count, which is unrelated to what the model can hold: on a
+        1M-token engine that compacts far too eagerly, and on the 32k engine it is already
+        past the point where quality degrades. Compaction now fires at
+        `COMPACT_AT_CONTEXT_SHARE` of the window the agent's own model actually has.
+
+        The message/char caps are kept as a hard safety net — if the context window cannot
+        be resolved at all, the old behaviour still bounds the thread.
+
+        The oldest messages are summarized with a low-effort LLM call (compaction never
+        needs flagship reasoning), the newest 10 stay verbatim, and the summary is injected
+        as an overlord message. If the LLM is unreachable we fall back to keeping the newest
+        15 messages unsummarized.
         """
         from .llm import call_llm
 
@@ -607,7 +616,12 @@ class OverlordAgent:
         k = _history_key(target_key, getattr(user, "id", None) if user is not None else None)
         history = self._chat_histories.get(k, [])
         total_chars = sum(len(m.get("text", "")) for m in history)
-        if len(history) <= max_messages and total_chars <= max_chars:
+        # Context-share trigger first; the flat caps remain as a floor that must never be
+        # exceeded even when the window is unknown.
+        window = agent_context_window(user)
+        budget_chars = int(window * COMPACT_AT_CONTEXT_SHARE * CHARS_PER_TOKEN)
+        over_context = total_chars > budget_chars
+        if not over_context and len(history) <= max_messages and total_chars <= max_chars:
             return None  # nothing to compact
 
         if history and history[0].get("id") == "init_msg":

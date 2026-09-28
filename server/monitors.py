@@ -400,6 +400,16 @@ async def run_monitors_loop() -> None:
             # Reclamation is an optimisation. Never let it take the monitor loop, and with
             # it every snapshot the admin dashboard reads, down with it.
             logger.debug("idle reclamation skipped: %s", e)
+        try:
+            # ★ Activity watchdog (owner 2026-09-28): kill anything holding RAM with no CPU
+            # progress, so a wedged task does not sit on the machine forever. Runs here for
+            # the same reason reclamation does — it must never make a request wait.
+            from .activity_watchdog import sweep as _stall_sweep
+            for rec in await asyncio.to_thread(_stall_sweep):
+                logger.warning("killed stalled task %s (pid %s, idle %ss)",
+                               rec.get("label"), rec.get("pid"), rec.get("idle_seconds"))
+        except Exception as e:                                    # noqa: BLE001
+            logger.debug("activity watchdog skipped: %s", e)
 
 
 def snapshot_once() -> Dict[str, Any]:
