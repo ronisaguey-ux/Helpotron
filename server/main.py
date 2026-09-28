@@ -2564,9 +2564,15 @@ async def humanize_assignment_route(payload: dict, request: Request, current_use
     check_costly("humanize", request, current_user)
     text = payload.get("content", "")
     # settings ride through so HIP follows the humanizer toggle (owner 2026-09-17).
-    sanitized_text, metrics = await humanizer_pipeline.humanize_loop(
+    # Admission control (2026-09-28): a humanize run drives the local base model for
+    # seconds of CPU per call. `check_costly` above only rate-limits ONE user's abuse; it
+    # says nothing about the machine, so under real load this queued nowhere and competed
+    # directly. It waits its turn in the same FIFO slot pool as every other heavy task.
+    # (The HIP server still lazy-loads on its own — that is orthogonal to admission.)
+    from .resource_guard import run_with_budget as _budgeted
+    sanitized_text, metrics = await _budgeted(lambda: humanizer_pipeline.humanize_loop(
         text, settings=(current_user.settings if current_user and current_user.settings else None),
-    )
+    ))
     return {"status": "success", "metrics": metrics, "content": sanitized_text}
 
 
