@@ -158,6 +158,30 @@ def describe(process: str) -> Dict[str, Any]:
     return {"process": process, "known": True, **entry}
 
 
+# ★ AGENT ACTION TYPES ARE NOT REGISTRY KEYS. Every agent action used to run at the generic
+# default because the call sites passed no `process=`, so the whole registry was bypassed on
+# that path — and `humanize_text` is the DEAREST thing in the table (150, a 300s budget).
+# This maps an action type onto the process it actually is, so the score and the wait budget
+# the user experiences match the work being done.
+ACTION_PROCESS = {
+    "humanize_text": "humanize",
+    "summarize_lecture": "summary",
+    "generate_flashcards": "study_material",
+    "run_shell": "math_exec",
+    "run_sandbox_script": "math_exec",
+}
+
+
+def priority_for_action(action_type: str) -> str:
+    """The registry process name for an agent action type.
+
+    Falls back to the action type itself, which is not in the registry and therefore resolves
+    to DEFAULT_PRIORITY — the safe middle. An action with no confident mapping must not be
+    given a cheap task's score, or the queue would favour it over real interactive work.
+    """
+    return ACTION_PROCESS.get(action_type or "", action_type or "unknown")
+
+
 def effective_priority(priority: int, waited_seconds: float) -> float:
     """Priority as the queue should read it right now, including the aging bonus.
 
