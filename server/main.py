@@ -1790,6 +1790,19 @@ class AiDetectRequest(BaseModel):
     assignment_id: Optional[int] = None
 
 
+async def _budgeted_detectors_score(text: str, threshold: float):
+    """Admission-controlled detector scoring.
+
+    ★ DETECTION IS THE HEAVIEST CPU PATH A USER CAN TRIGGER, and it ran outside the queue.
+    The registry runs the RoBERTa ONNX model plus the perplexity/burstiness heuristics, and
+    every one of those is CPU on THIS MACHINE — the in-process detectors are metered at
+    their measured CPU cost precisely because they are real work. Under load this competes
+    directly with everything else, so it waits its turn in the same FIFO slot pool.
+    """
+    from .resource_guard import run_with_budget as _budgeted
+    return await _budgeted(lambda: detectors.score_text(text, threshold=threshold))
+
+
 @app.post("/api/ai/detect")
 async def ai_detect(
     body: AiDetectRequest,
@@ -1807,7 +1820,7 @@ async def ai_detect(
         return {"risk": 0.0, "score": 0.0, "passed": True, "scored_chars": len(text),
                 "detectors": [], "note": "text too short to score"}
 
-    avg_score, results, passed = await detectors.score_text(text, threshold=body.threshold)
+    avg_score, results, passed = await _budgeted_detectors_score(text, threshold=body.threshold)
     details = [{"detector": r.name, "score": round(r.score, 2), "error": r.error, "details": r.details}
                for r in results][:12]
     verdict = {
