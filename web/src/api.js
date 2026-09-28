@@ -689,7 +689,6 @@ export const api = {
   deleteAgentMemory: (entryId) => request(`/api/agent/memory/${entryId}`, { method: 'DELETE' }),
   listAgentFiles: () => request('/api/agent/files', { method: 'GET' }),
   deleteAgentFile: (fileId) => request(`/api/agent/files/${fileId}`, { method: 'DELETE' }),
-  compactAgentChat: () => request('/api/agent/chat/compact', { method: 'POST' }),
   uploadAgentFile: async (file, kind) => {
     if (isDemoMode()) {
       await new Promise((r) => setTimeout(r, 350));
