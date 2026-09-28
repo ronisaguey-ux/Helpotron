@@ -2304,9 +2304,17 @@ async def agent_start(body: AgentStartIn, current_user: User = Depends(get_curre
 
 async def _run_agent_and_persist(session: agent_session.AgentSession) -> None:
     """Run the agent; on success persist collected pages as a transcript, on
-    failure with nothing collected refund the session credit."""
+    failure with nothing collected refund the session credit.
+
+    ★ THE SESSION'S WORK IS ADMISSION-CONTROLLED HERE, ON THE TASK. Every other heavy
+    path runs inside `run_with_budget`; an agent session did not, so the single largest
+    consumer of this machine was invisible to the resource guard and could not be
+    counted as load or queued behind one. Wrapping `agent_manager.run` puts the session
+    inside the same FIFO slot pool as everything else.
+    """
+    from .resource_guard import run_with_budget as _budgeted
     try:
-        await agent_manager.run(session)
+        await _budgeted(lambda: agent_manager.run(session))
     except Exception as e:
         logger.error("agent %s execution error: %s", session.session_id, e)
 
