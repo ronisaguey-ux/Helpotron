@@ -938,16 +938,18 @@ async def _apply_approval_decision(
             action_payload["user_instruction"] = comment.strip()
 
         # Admission control (owner 2026-09-17): under load the task QUEUES rather
-        # than failing or fighting for CPU. Budget is 80% RAM / 90% CPU, measured
+        # than failing or fighting for CPU. Budget is 80% RAM / 85% CPU, measured
         # machine-wide. No timeout — a task must never be dropped for taking long.
         from .resource_guard import run_with_budget as _budgeted
+        from .priority import priority_for_action as _prio
         exec_res = await _budgeted(lambda: overlord_agent.execute_task_action(
             db,
             user=user,
             action_type=perm_entry["action_type"],
             payload=action_payload,
             assignment_id=assignment_id,
-        ))
+        ),
+            process=_prio(perm_entry["action_type"]))
         if assignment_id and (comment or "").strip():
             overlord_agent.add_chat_message(
                 assignment_id,
@@ -1227,6 +1229,54 @@ async def get_chat(assignment_id: int, request: Request, db: Session = Depends(g
 
 
 # ─── 4.5. LLM-first agent intent (one agent, does anything) ──────────────────
+
+# ── HUMANIZE AS A TOOL (owner 2026-09-28) ──────────────────────────────────────
+# *"just add humanization as a tool to the agents system prompt, and guide them into
+# using the tool, rules nk make it better, things to watch out for, etc"*.
+#
+# The `humanize_text` action existed and was advertised in the action table, but with a
+# four-word spec ("str to humanize") an agent had no idea WHEN it was appropriate or what
+# it does to the text. The guide below is the difference between a tool that is listed
+# and a tool that gets used correctly.
+HUMANIZE_TOOL_GUIDE = """HUMANIZING TEXT (the `humanize_text` action)
+
+WHAT IT IS: rewrites a draft so it reads like a person wrote it, rather than like a model
+wrote it. Use it on prose the user will hand in or send.
+
+WHEN TO USE IT:
+- The user asks for something to sound less formal / more natural / more human.
+- You have just drafted essay or assignment prose and are about to present it.
+- The user says the writing "sounds like AI" or "sounds robotic".
+
+WHEN NOT TO USE IT:
+- Code, formulas, data, citations or reference lists. It rewrites PROSE and will damage
+  anything where the exact characters matter.
+- Short answers, chat replies and your own explanation of what you did. Rewriting a
+  two-line reply wastes a queue slot — this is one of the heaviest actions helpotron runs.
+- Text the user pasted as a QUOTATION to be analysed. Rewriting a quotation falsifies it.
+
+RULES WHEN YOU DO USE IT:
+1. PASS THE FULL DRAFT in `text`. Chunks rewritten separately lose their transitions and
+   will not read as one piece.
+2. NEVER CHANGE THE FACTS, and this is enforced, not just asked for. A rewrite that invents
+   a quotation, a date, a number or a name is DISCARDED and you get the original back.
+   If you need to add a source, find it first (use `web_search`) — never let the rewrite
+   supply one.
+3. QUOTATIONS ARE SACRED. Whatever is inside quote marks must come out identical. A
+   rewrite that alters or adds a quotation is refused.
+4. DO NOT PARAPHRASE A QUOTATION YOU HAVE NOT VERIFIED. If you are about to write a famous
+   line, confirm the wording and its source first; unverified famous quotations are the
+   most common way a draft gets something wrong.
+5. CHECK THE RETURN. The result carries `result_text` and a `human_confidence_score`. If
+   `result_text` is unchanged from what you sent, the guard rejected the rewrite — report
+   that honestly rather than claiming you improved the text.
+6. IT IS SLOW AND HEAVY. Tell the user it is running rather than presenting it as instant.
+
+WATCH OUT FOR:
+- A rewrite that comes back MUCH longer than the input is a warning sign, not a bonus. The
+  measured failure mode is a paragraph growing 77 -> 155 words while inventing quotations.
+- Style changes are fine. Any change to a name, date, number or quotation is not.
+"""
 
 _AGENT_ACTIONS = {
     "create_assignment": {"title": "str", "prompt": "str", "due_date": "str", "course": "str"},
@@ -1987,6 +2037,7 @@ async def _resolve_agent_intent(
         system_prompt += assignment_context
     system_prompt += (
         f"AVAILABLE ACTIONS (choose exactly one):\n{action_spec}\n\n"
+        f"{HUMANIZE_TOOL_GUIDE}\n\n"
         f"OPERATION MODE RULE (Bob 09-01 — the user's mode is "
         f"'{str(settings.get('operation_mode', 'auto')).upper()}' and it is binding):\n"
         f"- MANUAL: EVERY work tool call must end with the suffix `_ask_permissions` "
@@ -2618,9 +2669,10 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
             return {"status": "failed", "message": agent_reply, "reply": reply_text,
                     "token_balance": _tk_balance(user)}
     # Admission control (owner 2026-09-17): under load the task QUEUES rather
-    # than failing or fighting for CPU. Budget is 80% RAM / 90% CPU, measured
+    # than failing or fighting for CPU. Budget is 80% RAM / 85% CPU, measured
     # machine-wide. No timeout — a task must never be dropped for taking long.
     from .resource_guard import run_with_budget as _budgeted
+    from .priority import priority_for_action as _prio
     exec_res = await _budgeted(lambda: overlord_agent.execute_task_action(
         db,
         user=user,
@@ -2628,7 +2680,8 @@ async def send_chat_message(payload: ChatMessageRequest, request: Request, db: S
         payload=intent["payload"],
         assignment_id=bubble_assignment_id,
         node=agent_node,
-    ))
+    ),
+        process=_prio(intent["action"]))
     if not is_admin and user.plan != "elite":
         _charge_usage(user, db, intent["action"], since_id=_usage_mark)
     _LLM_EMPTY_HONEST = ("Hmm — I ran into an issue answering that one."
@@ -2832,13 +2885,15 @@ async def dispatch_task(payload: TaskRequest, request: Request, db: Session = De
     # leaving it ungated meant a caller could bypass the 80%/90% caps simply by
     # posting here instead.
     from .resource_guard import run_with_budget as _budgeted
+    from .priority import priority_for_action as _prio
     exec_res = await _budgeted(lambda: overlord_agent.execute_task_action(
         db,
         user=user,
         action_type=action_type,
         payload=payload.payload,
         assignment_id=thread_key,
-    ))
+    ),
+        process=_prio(action_type))
     return {"status": "success", "execution_result": exec_res}
 
 
