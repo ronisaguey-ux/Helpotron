@@ -94,7 +94,7 @@ const SECTIONS = [
     ],
     tips: [
       'An assignment\'s bubble chat and the workspace chat are the same thread — whichever view you use, the conversation persists.',
-      'Compact a long chat from the chat header — the agent keeps the key context and drops old filler.',
+      'Long chats tidy themselves — the agent keeps the key context and drops old filler automatically, so there is nothing to press.',
       'Agent replies to each task carry the updated token balance; the top bar follows along live.',
     ],
   },

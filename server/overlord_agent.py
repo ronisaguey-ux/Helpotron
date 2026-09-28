@@ -535,6 +535,70 @@ async def _compute_shell_command(command: str) -> Optional[str]:
     return out
 
 
+# ── context-window-aware auto-compaction (owner 2026-09-28) ──────────────────
+# *"for all working agents on helpotron, have them autocompact at 30% context"*.
+# The window is per-model, so this is a share of it rather than a fixed message count.
+COMPACT_AT_CONTEXT_SHARE = float(os.environ.get("HELPOTRON_COMPACT_SHARE", "0.30"))
+# Rough characters-per-token. Only used to convert the token budget into the char count the
+# history is measured in; being approximate is fine because the trigger is a soft ceiling
+# and the flat caps below remain a hard floor.
+CHARS_PER_TOKEN = float(os.environ.get("HELPOTRON_CHARS_PER_TOKEN", "4.0"))
+# If the window cannot be resolved, fall back to this so a missing mapping degrades to a
+# real budget rather than to 0 (which would compact on every single message).
+_DEFAULT_CONTEXT_WINDOW = int(os.environ.get("HELPOTRON_DEFAULT_CONTEXT_WINDOW", "32768"))
+
+# The context window each model id actually has, in tokens. Sourced from the same table the
+# settings UI advertises (`user_settings_service.AVAILABLE_MODELS`) so the two cannot drift:
+# a UI that says 1M while the compactor assumes 32k would compact 30x too eagerly.
+_MODEL_CONTEXT_WINDOWS = {
+    "nemotron_nano": 32768,
+    "qwen_72b": 131072,
+    "gemini_31_flash_lite": 1000000,
+    "deepseek_v4_1_flash": 1048576,
+    "gemini_38_flash": 1000000,
+}
+
+
+def agent_context_window(user: Any) -> int:
+    """The context window of the model THIS user's agent will actually run on.
+
+    Resolves through the same routing the agent uses, so the compaction threshold follows
+    the effort slider rather than a number picked once. An unresolvable model falls back to
+    the smallest common window, which compacts sooner — the safe direction, because
+    overflowing a real window loses the conversation outright.
+    """
+    try:
+        from .routes_overlord import resolve_agent_effort
+        from .llm import effective_chat_model, resolve_model_routing
+
+        settings = dict(getattr(user, "settings", None) or {})
+        effort = resolve_agent_effort(settings)
+        route = resolve_model_routing(effort_score=effort)
+        model_id = route.get("model") if isinstance(route, dict) else None
+        if model_id:
+            # The router returns an OpenRouter slug; the registry keys are our own ids.
+            for known, window in _MODEL_CONTEXT_WINDOWS.items():
+                if known in str(model_id):
+                    return window
+            # Try the constraint layer, which maps a slug to what will really run.
+            try:
+                effective = effective_chat_model(model_id, json_mode=False, images=False)
+                for known, window in _MODEL_CONTEXT_WINDOWS.items():
+                    if known in str(effective):
+                        return window
+            except Exception:
+                pass
+        # Slug-shaped ids still carry a hint: the big-context providers name themselves.
+        text = str(model_id or "").lower()
+        for hint, window in (("gemini", 1000000), ("deepseek", 1048576), ("qwen", 131072),
+                             ("nemotron", 32768)):
+            if hint in text:
+                return window
+    except Exception:
+        pass
+    return _DEFAULT_CONTEXT_WINDOW
+
+
 class OverlordAgent:
     """The central orchestrating agent managing sub-agents, virtual sandboxes, NLP tasks, and permissions."""
 
