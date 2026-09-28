@@ -30,6 +30,8 @@ import asyncio
 import logging
 import os
 import subprocess
+
+from .priority import effective_priority, get_priority
 import sys
 import time
 from dataclasses import dataclass, field
@@ -38,7 +40,7 @@ from typing import Any, Awaitable, Callable, Dict, Optional
 logger = logging.getLogger("helpotron.resources")
 
 RAM_CAP_PCT = 80.0          # owner's number
-CPU_CAP_PCT = 90.0          # owner's number
+CPU_CAP_PCT = 85.0          # owner 2026-09-28: "same if it goes over 85% cpu"
 MIN_AVAILABLE_MB = 3000.0   # absolute floor catches swap-pinned boxes
 POLL_SECONDS = 0.5          # how often a queued task re-checks the budget
 BUSY_AFTER_SECONDS = 180    # 3 minutes: when the CLIENT should say "server is busy"
@@ -198,20 +200,76 @@ MAX_CONCURRENT = int(os.environ.get("RESOURCE_GUARD_MAX_CONCURRENT", "4"))
 # of holding an unbounded backlog of futures.
 MAX_QUEUE_DEPTH = int(os.environ.get("RESOURCE_GUARD_MAX_QUEUE_DEPTH", "200"))
 
-# ★ SEMAPHORES ARE PER-EVENT-LOOP, so a module-level one is a trap: the tests (and any
-# `asyncio.run`) create a fresh loop each time, and a semaphore that queued a waiter on a
+# ★ GATES ARE PER-EVENT-LOOP, so a module-level one is a trap: the tests (and any
+# `asyncio.run`) create a fresh loop each time, and a gate that queued a waiter on a
 # closed loop raises on the next use. Keyed by loop id, created on demand.
-_slot_pools: Dict[int, asyncio.Semaphore] = {}
+_gate_pools: Dict[int, "PriorityGate"] = {}
 
 
-def _slots() -> asyncio.Semaphore:
-    """The concurrency pool for the RUNNING loop (created on first use)."""
+class PriorityGate:
+    """Hands out slots in PRIORITY order rather than arrival order.
+
+    ★ A PLAIN SEMAPHORE CANNOT DO THIS, and that is the whole reason this class exists:
+    `asyncio.Semaphore` releases to waiters in the order they queued, so it is FIFO and a
+    priority number attached to a caller would change nothing at all. Measured, the FIFO
+    version admitted 6 callers as `[0,1,2,3,4,5]` regardless of what they were doing.
+
+    Ordering is by `effective_priority`, so an aged low-priority waiter climbs (see
+    `priority.effective_priority`) — "lower gets in later", not "lower never gets in".
+    """
+
+    def __init__(self, limit: int) -> None:
+        self._limit = max(1, int(limit))
+        self._active = 0
+        self._waiters: list[dict] = []
+        self._seq = 0
+
+    def _pump(self) -> None:
+        # Drop cancelled waiters FIRST. A cancelled future still sitting in the list would
+        # otherwise be selected, consume a slot, and never give it back — a slow leak that
+        # shows up as a permanently-shrunk pool.
+        self._waiters = [w for w in self._waiters if not w["future"].done()]
+        while self._waiters and self._active < self._limit:
+            now = time.time()
+            best = max(
+                self._waiters,
+                key=lambda w: (effective_priority(w["priority"], now - w["enqueued"]),
+                               -w["seq"]),
+            )
+            self._waiters.remove(best)
+            if best["future"].done():
+                continue                      # cancelled between selection and here
+            self._active += 1
+            best["future"].set_result(True)
+
+    async def acquire(self, priority: int) -> None:
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        self._seq += 1
+        self._waiters.append({"priority": int(priority), "enqueued": time.time(),
+                              "seq": self._seq, "future": fut})
+        self._pump()
+        await fut
+
+    def release(self) -> None:
+        self._active = max(0, self._active - 1)
+        self._pump()
+
+    def snapshot(self) -> Dict[str, Any]:
+        return {"limit": self._limit, "active": self._active,
+                "waiting": len(self._waiters),
+                "waiting_priorities": sorted((w["priority"] for w in self._waiters),
+                                             reverse=True)[:10]}
+
+
+def _gate() -> "PriorityGate":
+    """The priority gate for the RUNNING loop (created on first use)."""
     loop = asyncio.get_running_loop()
-    sem = _slot_pools.get(id(loop))
-    if sem is None:
-        sem = asyncio.Semaphore(MAX_CONCURRENT)
-        _slot_pools[id(loop)] = sem
-    return sem
+    gate = _gate_pools.get(id(loop))
+    if gate is None:
+        gate = PriorityGate(MAX_CONCURRENT)
+        _gate_pools[id(loop)] = gate
+    return gate
 
 
 def queue_status() -> Dict[str, Any]:
@@ -232,16 +290,19 @@ def queue_status() -> Dict[str, Any]:
 
 
 async def run_with_budget(fn: Callable[[], Awaitable[Any]],
-                          on_queued: Optional[Callable[[float], None]] = None) -> Any:
+                          on_queued: Optional[Callable[[float], None]] = None,
+                          process: str = "unknown") -> Any:
     """Run `fn` now if the machine is within budget, else wait in line for a slot.
 
     Never raises a timeout: a task waits as long as it takes, and the client is told to show
     the "server is busy" notice rather than the work being cancelled.
+    `process` names the caller in `priority.PRIORITY_REGISTRY`, which decides where it sits
+    in the line. An unknown name gets the default priority — it is never refused.
 
     ★ HOW THE ORDERING IS ACTUALLY GUARANTEED. The slot is acquired BEFORE the budget wait
     and held until the task finishes, so at most `MAX_CONCURRENT` callers are ever past the
-    gate. Callers beyond that wait on the semaphore, which hands out slots in the order they
-    were requested — so the backlog drains in arrival order instead of as a stampede.
+    gate. Callers beyond that wait on a `PriorityGate`, which selects by effective priority
+    — not arrival order — so a message is not stuck behind a humanization run.
 
     The previous implementation re-checked the budget every `POLL_SECONDS` and reserved
     nothing, so its own docstring's claim ("a burst of simultaneous requests does not all
@@ -256,12 +317,14 @@ async def run_with_budget(fn: Callable[[], Awaitable[Any]],
         raise ServerAtCapacity(
             f"server at capacity: {STATS.waiting} tasks already waiting")
 
-    slots = _slots()
+    prio = get_priority(process)
+    gate = _gate()
     STATS.waiting += 1
     if not _within_budget():
-        logger.info("task queued — over budget (%s)", budget_status())
+        logger.info("task queued — over budget (%s) process=%s priority=%d",
+                    budget_status(), process, prio)
     try:
-        await slots.acquire()
+        await gate.acquire(prio)
         # Hold the slot while we wait for the machine: this reservation is what stops the
         # whole backlog walking in together when the budget momentarily frees.
         while not _within_budget():
@@ -294,7 +357,7 @@ async def run_with_budget(fn: Callable[[], Awaitable[Any]],
     finally:
         STATS.running = max(0, STATS.running - 1)
         STATS.completed += 1
-        slots.release()
+        gate.release()
 
 
 def should_show_busy(elapsed_seconds: float) -> bool:

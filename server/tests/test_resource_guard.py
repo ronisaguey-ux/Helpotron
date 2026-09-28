@@ -201,7 +201,7 @@ def test_guard_refuses_below_the_absolute_memory_floor(monkeypatch):
 def _run_n(monkeypatch, n, max_concurrent):
     """Drive n callers through the guard while the budget is blocked, and report the peak."""
     monkeypatch.setattr(rg, "MAX_CONCURRENT", max_concurrent)
-    monkeypatch.setattr(rg, "_slot_pools", {})
+    monkeypatch.setattr(rg, "_gate_pools", {})
     state = {"full": True}
     monkeypatch.setattr(rg, "_within_budget", lambda: not state["full"])
 
@@ -238,7 +238,7 @@ def test_concurrency_is_bounded_not_a_stampede(monkeypatch):
 def test_one_lane_is_strictly_sequential_and_fifo(monkeypatch):
     """The owner's literal ask: a sequential queue, drained in arrival order."""
     monkeypatch.setattr(rg, "MAX_CONCURRENT", 1)
-    monkeypatch.setattr(rg, "_slot_pools", {})
+    monkeypatch.setattr(rg, "_gate_pools", {})
     state = {"full": True}
     monkeypatch.setattr(rg, "_within_budget", lambda: not state["full"])
     order = []
@@ -264,7 +264,7 @@ def test_a_cancelled_waiter_does_not_leak_the_counter(monkeypatch):
     upward with no way back down.
     """
     monkeypatch.setattr(rg, "MAX_CONCURRENT", 1)
-    monkeypatch.setattr(rg, "_slot_pools", {})
+    monkeypatch.setattr(rg, "_gate_pools", {})
     monkeypatch.setattr(rg, "_within_budget", lambda: False)   # never admits
     before = rg.STATS.waiting
 
