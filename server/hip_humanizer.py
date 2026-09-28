@@ -295,12 +295,118 @@ def _record_hip_energy(cpu_seconds: float) -> None:
         pass
 
 
-async def hip_humanize(text: str, rounds: Optional[int] = None) -> Optional[str]:
-    """Humanize `text` with HIP.
+# ★ CHUNK LIMIT (owner 2026-09-28): *"add a char limit to humanizing so big humanization tasks
+# are done in chunks, cuz we know that doing it paragraph by paragraph yeilds better results and
+# longer ones generate junk"*.
+#
+# This is measured, not a preference. Humanizing a 321-word, 5-paragraph biography as ONE string
+# silently LOST THE ENTIRE CONCLUDING PARAGRAPH and merged everything into one block; at 3 rounds
+# it repeated "John Locke" 15 times and invented a quotation, and at 5 rounds it invented a
+# claim about someone's liver. Per paragraph, all 5 paragraphs survived with both real
+# quotations intact. **A base model's context is where the junk comes from**, so the fix is to
+# never hand it more than one paragraph's worth.
+#
+# Chunking also makes a failure VISIBLE: a paragraph can be compared against its own input,
+# where a document total hides one paragraph being dropped while another bloats.
+HIP_MAX_CHUNK_CHARS = int(os.environ.get("HIP_MAX_CHUNK_CHARS", "1200"))
 
-    Returns the rewritten text, or None if HIP is unconfigured or every round
-    failed. A None return means "leave the draft alone" — this function is on the
-    critical path of a live chat and must never raise or return an empty string.
+
+def chunk_text(text: str, max_chars: int = 0) -> list:
+    """Split prose into chunks no larger than `max_chars`, preferring paragraph boundaries.
+
+    Paragraphs first (a blank line is the author's own idea of where the thought ends), then
+    sentences inside any paragraph still over the limit. A caller gets back the pieces in
+    order; rejoining with a blank line reproduces the original structure.
+
+    Deliberately does NOT split mid-sentence: cutting a sentence in half guarantees the model
+    completes it badly, which is the very junk this exists to avoid.
+    """
+    limit = max_chars or HIP_MAX_CHUNK_CHARS
+    body = (text or "").strip()
+    if not body:
+        return []
+    if len(body) <= limit:
+        return [body]
+
+    import re as _re
+    paragraphs = [p.strip() for p in _re.split(r"\n\s*\n", body) if p.strip()]
+    chunks: list = []
+    for para in paragraphs:
+        if len(para) <= limit:
+            chunks.append(para)
+            continue
+        # Too big even alone — fall back to sentence boundaries.
+        sentences = _re.split(r"(?<=[.!?])\s+", para)
+        buf = ""
+        for sentence in sentences:
+            candidate = f"{buf} {sentence}".strip() if buf else sentence
+            if buf and len(candidate) > limit:
+                chunks.append(buf.strip())
+                buf = sentence
+            else:
+                buf = candidate
+        if buf.strip():
+            chunks.append(buf.strip())
+    return chunks
+
+
+async def _humanize_chunk(chunk: str, session, rounds: int) -> Optional[str]:
+    """Rewrite ONE chunk, repairing any factual damage before it is accepted.
+
+    Returns the rewritten chunk, or None if it could not be improved — a None means "keep the
+    original for this chunk", which is the safe direction for anything factual.
+    """
+    current = chunk
+    for i in range(rounds):
+        out = await _one_round(current, session)
+        if not out:
+            break
+        # A round that collapses is discarded rather than fed forward.
+        if len(out.split()) < 0.5 * len(current.split()):
+            logger.info("HIP round %s shrank %sw -> %sw; discarding",
+                        i + 1, len(current.split()), len(out.split()))
+            break
+        # ★ THE PRESERVATION GUARD. A "humanizer" that invents facts is not a style tool, it is
+        # a misinformation tool — measured on a real job: two fabricated Locke quotations
+        # (77w -> 155w) and a fabricated death date that was WRONG.
+        #
+        # ★ REPAIR, DO NOT REGENERATE. Owner: *"Instead of discarding humanized text cuz it
+        # invented fake quotes just make sure the ai agents that are using the humanize tool
+        # just edit the quote manually, regenerating everytime they fake a quote is a never
+        # ending cat and mouse chase"*. Asking again is an independent draw with no memory of
+        # the last failure; restoring the source's exact wording is DETERMINISTIC. So an
+        # invented or altered quotation is repaired IN PLACE here, and anything unsafe to
+        # auto-edit (invented numbers, dates, names) is left for the agent with an instruction
+        # — never silently mangled.
+        verdict = check_preservation(current, out)
+        if not verdict["ok"]:
+            fix = repair_quotes(current, out)
+            if fix["edits"]:
+                logger.info("HIP round %s repaired: %s", i + 1,
+                            ", ".join(e["action"] for e in fix["edits"]))
+            todos = agent_todo(current, out)
+            if todos:
+                logger.warning("HIP round %s needs agent review: %s",
+                               i + 1, "; ".join(todos)[:200])
+                _LAST_REVIEW_TODOS["items"].extend(todos)
+            out = fix["text"]
+            if not out.strip():
+                break
+        current = out
+    return current if current != chunk else None
+
+
+async def hip_humanize(text: str, rounds: Optional[int] = None) -> Optional[str]:
+    """Humanize `text` with HIP, ONE CHUNK AT A TIME.
+
+    Returns the rewritten text, or None if HIP is unconfigured or nothing could be improved. A
+    None return means "leave the draft alone" — this function is on the critical path of a live
+    chat and must never raise or return an empty string.
+
+    ★ CHUNKED, because a whole document produces junk and loses content. See
+    HIP_MAX_CHUNK_CHARS for the measurements. Each chunk is rewritten and fact-checked on its
+    own, then the pieces are rejoined with a blank line so the original paragraph structure
+    survives.
     """
     if not hip_configured():
         return None
@@ -310,61 +416,40 @@ async def hip_humanize(text: str, rounds: Optional[int] = None) -> Optional[str]
 
     rounds = rounds or hip_rounds()
     _LAST_REVIEW_TODOS["items"] = []   # never report the PREVIOUS run's todo list
-    current = text
+    chunks = chunk_text(text)
+    if not chunks:
+        return None
+
     cpu_before = _hip_server_cpu_seconds()
+    rewritten: list = []
+    changed = False
     try:
         async with aiohttp.ClientSession() as session:
-            for i in range(rounds):
-                out = await _one_round(current, session)
-                if not out:
-                    break
-                # A round that collapses is discarded rather than fed forward.
-                if len(out.split()) < 0.5 * len(current.split()):
-                    logger.info("HIP round %s shrank %sw -> %sw; discarding",
-                                i + 1, len(current.split()), len(out.split()))
-                    break
-                # ★ THE PRESERVATION GUARD (owner 2026-09-28). A "humanizer" that invents
-                # facts is not a style tool, it is a misinformation tool — measured on a real
-                # job: two fabricated Locke quotations (77w -> 155w) and a fabricated death
-                # date that was WRONG.
-                #
-                # ★ REPAIR, DO NOT REGENERATE. The owner's correction: *"Instead of discarding
-                # humanized text cuz it invented fake quotes just make sure the ai agents that
-                # are using the humanize tool just edit the quote manually, regenerating
-                # everytime they fake a quote is a never ending cat and mouse chase"*. Asking
-                # the model again is an independent draw with no memory of the last failure;
-                # restoring the source's exact wording is DETERMINISTIC. So an invented or
-                # altered quotation is repaired in place here, and anything that cannot be
-                # repaired safely (invented numbers, dates, names) is left for the agent with
-                # an instruction — never silently mangled.
-                verdict = check_preservation(current, out)
-                if not verdict["ok"]:
-                    fix = repair_quotes(current, out)
-                    if fix["edits"]:
-                        logger.info("HIP round %s repaired: %s", i + 1,
-                                    ", ".join(e["action"] for e in fix["edits"]))
-                    todos = agent_todo(current, out)
-                    if todos:
-                        logger.warning("HIP round %s needs agent review: %s",
-                                       i + 1, "; ".join(todos)[:200])
-                        _LAST_REVIEW_TODOS["items"] = todos
-                    out = fix["text"]
-                    if not out.strip():
-                        # Nothing survived the repair — keep what we had.
-                        break
-                current = out
+            for idx, chunk in enumerate(chunks):
+                if len(chunks) > 1:
+                    logger.info("HIP chunk %s/%s (%s chars)", idx + 1, len(chunks), len(chunk))
+                out = await _humanize_chunk(chunk, session, rounds)
+                if out:
+                    changed = True
+                    rewritten.append(out)
+                else:
+                    # Untouched is the honest outcome for a chunk the model could not improve
+                    # without damaging it — dropping it would silently delete the paragraph.
+                    rewritten.append(chunk)
     except Exception as e:
         logger.warning("HIP humanize failed: %s", type(e).__name__)
         return None
 
-    # Bill the electricity this run actually consumed (owner: everything costs
-    # tokens). Recorded only when the rewrite produced something, and only when
-    # the backend's CPU counters could be read.
+    # Bill the electricity this run actually consumed (owner: everything costs tokens).
+    # Recorded only when the rewrite produced something, and only when the backend's CPU
+    # counters could be read.
     cpu_after = _hip_server_cpu_seconds()
     if cpu_before is not None and cpu_after is not None and cpu_after >= cpu_before:
         _record_hip_energy(cpu_after - cpu_before)
 
-    return current if current != text else None
+    if not changed:
+        return None
+    return "\n\n".join(rewritten)
 
 
 async def hip_health() -> dict:
