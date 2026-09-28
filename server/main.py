@@ -1972,10 +1972,20 @@ async def generate_stream(kind: str, body: GenerateIn, current_user: User = Depe
         async def run() -> None:
             try:
                 target_user = db.query(User).filter(User.id == current_user.id).first() or current_user
-                material = await _generate(
-                    db, target_user, kind, transcript_text, body.assignment_prompt,
-                    body.reading_level, body.assignment_id, transcript_id,
-                    on_progress=on_progress, count=body.count)
+                # Admission control (2026-09-28): generation is heavy and this route runs
+                # OUTSIDE the queue like the agent session did — the SSE wrapper returns as
+                # soon as the stream is set up, but the work inside `run()` is the cost.
+                # Under load it waits its turn in the same FIFO slot pool as every other
+                # heavy task, rather than competing for the machine.
+                from .resource_guard import run_with_budget as _budgeted
+
+                async def _generate_budgeted():
+                    return await _generate(
+                        db, target_user, kind, transcript_text, body.assignment_prompt,
+                        body.reading_level, body.assignment_id, transcript_id,
+                        on_progress=on_progress, count=body.count)
+
+                material = await _budgeted(_generate_budgeted)
                 db.commit()
                 await q.put(_sse("done", material=_material_payload(material)))
             except HTTPException as e:
