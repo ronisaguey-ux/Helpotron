@@ -2266,6 +2266,31 @@ async def agent_start(body: AgentStartIn, current_user: User = Depends(get_curre
     # from the measured ledger.
     if not credits.has_usage_balance(current_user):
         raise HTTPException(402, "insufficient credits — top up to start an agent session")
+
+    # ── Laya input guard (2026-09-28) ────────────────────────────────────────
+    # `instruction` is caller-supplied free text that becomes a live agent session's
+    # standing objective, and this route had NO injection screen at all. The extension
+    # chat path was guarded on 2026-09-28; leaving the main agent surface unguarded would
+    # make the cheapest place to smuggle a directive the one that was never screened.
+    #
+    # Fails OPEN by design: `assess()` returns None on any error, so an unreachable Laya
+    # can never take the agent down — it only refuses when the guard positively says the
+    # text is an injection attempt. A guard that fails closed on a dead dependency is an
+    # outage, not a control.
+    try:
+        from .layaguard import assess as _guard_assess
+        _guard = await _guard_assess(body.instruction or "")
+    except Exception as e:                                    # noqa: BLE001
+        logger.warning("layaguard call failed at agent_start (%s: %s) — proceeding",
+                       type(e).__name__, e)
+        _guard = None
+    if _guard and _guard.get("verdict") == "block":
+        logger.warning("agent_start BLOCKED by layaguard: %s", _guard.get("reason"))
+        raise HTTPException(400, "This instruction looks like an attempt to override the "
+                                 "agent's rules, so it was not started.")
+    if _guard and _guard.get("verdict") == "review":
+        logger.info("agent_start passed with layaguard review: %s", _guard.get("reason"))
+
     db.commit()
     session = agent_manager.create(current_user.public_id, body.assignment_id, body.instruction)
     try:
