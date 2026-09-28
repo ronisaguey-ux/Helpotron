@@ -33,19 +33,32 @@ FAITHFUL = ('His view was that law protects and expands freedom rather than rest
             'enlarge freedom." Those ideas later shaped the American Revolution.')
 
 
+_PATCHED = ("hip_configured", "hip_rounds", "_hip_server_cpu_seconds", "_one_round")
+
+
 def run(round_output: str, source: str) -> str | None:
-    """Drive hip_humanize with the model call faked."""
-    H.hip_configured = lambda: True          # pretend it is set up
-    H.hip_rounds = lambda: 1
-    H._hip_server_cpu_seconds = lambda: None  # skip the metering path
+    """Drive hip_humanize with the model call faked, restoring the module afterwards."""
     calls = {"n": 0}
 
     async def fake_round(text, session):
         calls["n"] += 1
         return round_output
 
-    H._one_round = fake_round
-    out = asyncio.run(H.hip_humanize(source))
+    # ★ RESTORE EVERYTHING. These are module-level assignments on a production module, so
+    # leaving them set rewrites hip_humanizer for the rest of the process — every later test
+    # (and any code path it exercises) would see a faked model and a forced-on HIP. Measured
+    # on a sibling test: patching `call_llm` without restoring made 6 unrelated llm tests fail
+    # only when that file ran first.
+    _saved = {name: getattr(H, name) for name in _PATCHED}
+    try:
+        H.hip_configured = lambda: True          # pretend it is set up
+        H.hip_rounds = lambda: 1
+        H._hip_server_cpu_seconds = lambda: None  # skip the metering path
+        H._one_round = fake_round
+        out = asyncio.run(H.hip_humanize(source))
+    finally:
+        for name, value in _saved.items():
+            setattr(H, name, value)
     return out, calls["n"]
 
 

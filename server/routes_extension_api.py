@@ -331,7 +331,20 @@ async def bootstrap(request: Request, db: Session = Depends(get_db)) -> Dict[str
                 "The server is busy — your task is queued and will be completed "
                 "automatically once load lightens."
             ),
+            # ★ THE NOTICE SCALES WITH PRIORITY (owner 2026-09-28). A flat 180 was wrong in
+            # BOTH directions and he named both: *"a high priority easy process like a user
+            # saying 'hello' should only be waiting 30s untill they get a 'server is
+            # busy...' but for lower priority, like lets say humanization, has a 5min wait
+            # score, where the UI shows its in progress ... and beyond that it gets honest"*.
+            # At a flat 180 a greeting was told to wait six times too long, and a humanization
+            # was warned 120s BEFORE its own patience ran out.
+            #
+            # `busy_after_seconds` stays as the fallback for a caller that names no process;
+            # `wait_budgets` is the real per-process table, published from the same registry
+            # the queue uses so the number the user sees cannot drift from the number the
+            # queue enforces.
             "busy_after_seconds": 180,
+            "wait_budgets": _wait_budget_map(),
         },
         "features": {
             "agent_mode": True,
@@ -340,6 +353,20 @@ async def bootstrap(request: Request, db: Session = Depends(get_db)) -> Dict[str
             "control": True,
         },
     }
+
+
+def _wait_budget_map() -> Dict[str, float]:
+    """Process -> seconds before the user is told the server is busy.
+
+    Published to the client so the notice it shows uses the SAME budget the server enforces.
+    Hardcoding a second copy client-side is how the two silently disagree — and the one the
+    user reads is the one that would be wrong.
+    """
+    from .priority import PRIORITY_REGISTRY, DEFAULT_WAIT_SECONDS
+    out = {name: float(entry.get("wait_seconds", DEFAULT_WAIT_SECONDS))
+           for name, entry in PRIORITY_REGISTRY.items()}
+    out["default"] = float(DEFAULT_WAIT_SECONDS)
+    return out
 
 
 @router.get("/queue")

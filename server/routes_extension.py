@@ -2200,18 +2200,28 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
 
     # Execute the chosen action on the extensions surface.
     # Admission control (owner 2026-09-17): under load the task QUEUES rather
-    # than failing or fighting for CPU. Budget is 80% RAM / 90% CPU machine-wide.
-    # No timeout — the owner's instruction is explicit that a task must never be
-    # dropped for taking long; the client narrates the wait instead.
+    # than failing or fighting for CPU. Budget is 80% RAM / 85% CPU machine-wide
+    # (owner raised the CPU figure to 85 on 2026-09-28). No timeout — the owner's
+    # instruction is explicit that a task must never be dropped for taking long;
+    # the client narrates the wait instead.
+    #
+    # ★ THIS WAS THE FOURTH CALL SITE and it was missed when the other three got
+    # their priority wiring, so every action from the EXTENSION resolved to the
+    # generic 500 — including the dearest ones. The extension is the busiest
+    # surface for agent actions, so this was the one that mattered most.
+    from .priority import priority_for_action as _prio
     from .resource_guard import run_with_budget as _budgeted
-    exec_res = await _budgeted(lambda: overlord_agent.execute_task_action(
-        db,
-        user=user,
-        action_type=intent["action"],
-        payload=intent["payload"],
-        assignment_id=None,
-        node="extensions",
-    ))
+    exec_res = await _budgeted(
+        lambda: overlord_agent.execute_task_action(
+            db,
+            user=user,
+            action_type=intent["action"],
+            payload=intent["payload"],
+            assignment_id=None,
+            node="extensions",
+        ),
+        process=_prio(intent["action"]),
+    )
     if not is_admin and user.plan != "elite":
         _charge_usage(user, db, intent["action"], since_id=_usage_mark)
     if exec_res.get("status") == "failed":

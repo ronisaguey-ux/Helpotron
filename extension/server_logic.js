@@ -121,10 +121,15 @@
   // Live machine load and queue depth, so the UI can narrate a long wait. The
   // task is never cancelled — it waits for the machine to have room.
 
-  async function fetchQueueStatus() {
+  // `process` names WHAT THE CALLER IS DOING, so the server can answer with that process's
+  // own wait budget. Without it the notice falls back to a generic 3 minutes, which is wrong
+  // in both directions: a greeting is told to wait six times too long, and a humanization is
+  // warned before its own patience has run out.
+  async function fetchQueueStatus(process) {
     const [base, key] = await Promise.all([_base(), _key()]);
     try {
-      const res = await fetch(`${base}/api/extension/queue`, {
+      const qs = process ? `?process=${encodeURIComponent(process)}` : '';
+      const res = await fetch(`${base}/api/extension/queue${qs}`, {
         headers: { Authorization: `Bearer ${key}` },
       });
       if (!res.ok) return null;
