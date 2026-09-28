@@ -460,3 +460,72 @@ def run_isolated_command(sandbox_id: str, command_args: list[str], timeout: int 
         preexec_fn=harden_child_process,
     )
     return res.returncode, res.stdout, res.stderr
+
+
+# ── WHEN IS A SANDBOX NEEDED AT ALL? (owner 2026-09-28) ──────────────────────────
+#
+# Owner: *"not everything 100% needs a sandbox — a simple my agent chat that doesn't deal
+# with any files doesn't need one, but the seccond files are in the mix, it gets opened in a
+# sandbox where agents can edit and do stuff with it"*.
+#
+# Before this, whether a sandbox opened was decided by SUBSTRING-MATCHING the user's message
+# ("sandbox" in text, "script" in text) — so asking "can I run a script for this?" opened one
+# while attaching three files did not. That is backwards: the sandbox exists to give file work
+# and code execution an isolated, disposable workspace, and its cost (a directory, a process,
+# a slot in the machine's budget) should be paid only when that is what the task is.
+#
+# ★ THE RULE IS IN ONE PLACE. Two call sites deciding this separately is how one of them ends
+# up disagreeing with the other — the same shape as the duplicated auth logic and the two
+# error normalisers already recorded on this codebase.
+
+# Actions that EXECUTE code. Code that runs must run somewhere disposable, so these always get
+# a sandbox even with no files attached.
+SANDBOX_ACTIONS = frozenset({
+    "run_sandbox_script",
+    "run_shell",
+    "execute_code",
+})
+
+
+def sandbox_required(
+    *,
+    files: Optional[List[Dict[str, Any]]] = None,
+    agent_files: Optional[List[Dict[str, Any]]] = None,
+    action_type: str = "",
+    input_files: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Whether this task needs an isolated workspace, and why.
+
+    Returns `{"required": bool, "reason": str, "triggers": [...]}`. The reason is returned
+    rather than a bare boolean because "why did a sandbox open" is the question that gets
+    asked when the machine is under load and they are consuming slots.
+
+    A plain chat — no attachments, no agent files, no code — returns `required: False`. That
+    is the case the owner called out, and it is the common one: most chat turns must not pay
+    for a workspace they will never touch.
+    """
+    triggers: List[str] = []
+
+    n_files = len(files or [])
+    if n_files:
+        triggers.append(f"{n_files} file(s) attached to this request")
+
+    n_agent_files = len(agent_files or [])
+    if n_agent_files:
+        # The agent's own loaded files count: they are "in the mix" for exactly the same
+        # reason an attachment is — the task may open, edit and rewrite them.
+        triggers.append(f"{n_agent_files} loaded agent file(s)")
+
+    if input_files:
+        triggers.append(f"{len(input_files)} input file(s) supplied for execution")
+
+    if action_type in SANDBOX_ACTIONS:
+        triggers.append(f"action '{action_type}' executes code")
+
+    if triggers:
+        return {"required": True, "reason": "; ".join(triggers), "triggers": triggers}
+    return {
+        "required": False,
+        "reason": "plain chat — no files and no code execution",
+        "triggers": [],
+    }
