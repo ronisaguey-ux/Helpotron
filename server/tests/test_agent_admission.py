@@ -33,8 +33,9 @@ def test_agent_session_enters_the_admission_guard(monkeypatch):
     """The session's work must be wrapped by run_with_budget."""
     entered = {"n": 0}
 
-    async def fake_run_with_budget(fn, on_queued=None):
+    async def fake_run_with_budget(fn, on_queued=None, process="unknown"):
         entered["n"] += 1
+        entered["process"] = process
         return await fn()
 
     async def fake_agent_run(session):
@@ -48,6 +49,8 @@ def test_agent_session_enters_the_admission_guard(monkeypatch):
     asyncio.run(main._run_agent_and_persist(_FakeSession()))
 
     assert entered["n"] == 1, "agent session did NOT pass through run_with_budget"
+    assert entered.get("process") == "agent_session", (
+        "the session must name itself so the queue can order it by priority")
     assert entered.get("ran") is True, "the session never actually ran"
 
 

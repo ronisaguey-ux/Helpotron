@@ -1800,7 +1800,8 @@ async def _budgeted_detectors_score(text: str, threshold: float):
     directly with everything else, so it waits its turn in the same FIFO slot pool.
     """
     from .resource_guard import run_with_budget as _budgeted
-    return await _budgeted(lambda: detectors.score_text(text, threshold=threshold))
+    return await _budgeted(lambda: detectors.score_text(text, threshold=threshold),
+                           process="detection")
 
 
 @app.post("/api/ai/detect")
@@ -1896,7 +1897,8 @@ async def transcribe(file: UploadFile = File(...),
     # concurrency slot while it streams in.
     from .resource_guard import run_with_budget as _budgeted
     try:
-        text, duration = await _budgeted(lambda: transcription.transcribe_audio(path))
+        text, duration = await _budgeted(lambda: transcription.transcribe_audio(path),
+                                        process="transcription")
     except RuntimeError as e:
         raise HTTPException(500, str(e))
     if not text.strip():
@@ -1959,7 +1961,7 @@ async def _material_endpoint(db: Session, body: GenerateIn, kind: str, current_u
         material = await _budgeted(lambda: _generate(
             db, current_user, kind, transcript_text, body.assignment_prompt,
             body.reading_level, body.assignment_id, transcript_id,
-            count=body.count))
+            count=body.count), process="study_material")
     except HTTPException:
         raise
     except Exception as e:
@@ -2009,7 +2011,7 @@ async def generate_stream(kind: str, body: GenerateIn, current_user: User = Depe
                         body.reading_level, body.assignment_id, transcript_id,
                         on_progress=on_progress, count=body.count)
 
-                material = await _budgeted(_generate_budgeted)
+                material = await _budgeted(_generate_budgeted, process="study_material")
                 db.commit()
                 await q.put(_sse("done", material=_material_payload(material)))
             except HTTPException as e:
@@ -2348,7 +2350,7 @@ async def _run_agent_and_persist(session: agent_session.AgentSession) -> None:
     """
     from .resource_guard import run_with_budget as _budgeted
     try:
-        await _budgeted(lambda: agent_manager.run(session))
+        await _budgeted(lambda: agent_manager.run(session), process="agent_session")
     except Exception as e:
         logger.error("agent %s execution error: %s", session.session_id, e)
 
@@ -2590,7 +2592,7 @@ async def humanize_assignment_route(payload: dict, request: Request, current_use
     from .resource_guard import run_with_budget as _budgeted
     sanitized_text, metrics = await _budgeted(lambda: humanizer_pipeline.humanize_loop(
         text, settings=(current_user.settings if current_user and current_user.settings else None),
-    ))
+    ), process="humanize")
     return {"status": "success", "metrics": metrics, "content": sanitized_text}
 
 
