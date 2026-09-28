@@ -35,6 +35,10 @@ PARAS = [
 DOC = "\n\n".join(PARAS)
 
 
+_PATCHED = ("hip_configured", "hip_rounds", "_hip_server_cpu_seconds",
+            "_one_round", "HIP_MAX_CHUNK_CHARS")
+
+
 def main() -> int:
     ok = True
 
@@ -78,21 +82,31 @@ def main() -> int:
         ok = False
 
     print("\n  --- EVERY paragraph survives the chunked round trip ---")
-    H.hip_configured = lambda: True
-    H.hip_rounds = lambda: 1
-    H._hip_server_cpu_seconds = lambda: None
-    # Drive the REAL threshold used by hip_humanize. The 895-char doc fits inside the 1200
-    # default in one piece, so leaving the default in place would test nothing — it has to be
-    # lowered below the document size for the chunking path to be exercised at all.
-    H.HIP_MAX_CHUNK_CHARS = 300
     seen = {"n": 0}
 
     async def fake_round(text, session):
         seen["n"] += 1
         return text.upper()          # a stand-in that preserves every word
 
-    H._one_round = fake_round
-    out = asyncio.run(H.hip_humanize(DOC))
+    # ★ RESTORE EVERYTHING. These are module-level assignments on a production module, so
+    # leaving them set rewrites hip_humanizer for the rest of the process — every later test
+    # (and any code path it exercises) would see a faked model and a forced-on HIP. Measured
+    # on a sibling test: patching `call_llm` without restoring made 6 unrelated llm tests fail
+    # only when that file ran first.
+    _saved = {name: getattr(H, name) for name in _PATCHED}
+    try:
+        H.hip_configured = lambda: True
+        H.hip_rounds = lambda: 1
+        H._hip_server_cpu_seconds = lambda: None
+        # Drive the REAL threshold used by hip_humanize. The 895-char doc fits inside the 1200
+        # default in one piece, so leaving the default in place would test nothing — it has to
+        # be lowered below the document size for the chunking path to be exercised at all.
+        H.HIP_MAX_CHUNK_CHARS = 300
+        H._one_round = fake_round
+        out = asyncio.run(H.hip_humanize(DOC))
+    finally:
+        for name, value in _saved.items():
+            setattr(H, name, value)
     calls_made = seen["n"]
     print(f"    model called {calls_made}x for {len(PARAS)} paragraphs")
     print(f"    result paragraphs: {len((out or '').split(chr(10) + chr(10)))}")

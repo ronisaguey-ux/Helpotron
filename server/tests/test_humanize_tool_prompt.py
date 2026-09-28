@@ -43,6 +43,13 @@ def main() -> int:
     ok = True
     # ★ `_resolve_agent_intent` does `from .llm import call_llm` INSIDE the function body, so
     # patching the route module is a no-op — the local import rebinds it. Patch the SOURCE.
+    #
+    # ★ AND RESTORE IT. The first version assigned `LLM.call_llm = fake_call_llm` and left it
+    # there for the rest of the process — so every later test that calls `call_llm` got this
+    # canned JSON reply instead of a model. Measured: the four llm test files pass 10/10 alone
+    # and 6 FAIL once this file has run before them. A test that permanently rewrites a
+    # production module is not testing, it is vandalising the session it runs in.
+    _original_call_llm = LLM.call_llm
     LLM.call_llm = fake_call_llm
 
     try:
@@ -62,6 +69,8 @@ def main() -> int:
                   f"{type(e).__name__}: {e}")
             return 1
         print(f"  note: resolver raised after the call ({type(e).__name__}); prompt captured")
+    finally:
+        LLM.call_llm = _original_call_llm
         result = None
 
     print(f"  resolver returned: {str(result)[:200]}")

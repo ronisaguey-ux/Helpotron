@@ -4205,6 +4205,9 @@ if (btnCancelTyping) {
 // rule is that a task is never abandoned for taking long. If the server has to
 // wait for the machine to have room, the task waits and the UI explains why.
 const BUSY_POLL_MS = 15000;
+// What this surface is DOING when it narrates a wait — the launch-to-doc flow runs an agent
+// action on the extensions surface, which is the process the queue charges it as.
+const QUEUE_PROCESS = 'agent_action';
 
 let _uiCopy = null;
 let _verbIdx = 0;
@@ -4246,12 +4249,22 @@ function startProgressNarration() {
     if (_busyShown) return;
     const copy = await _ensureUiCopy();
     if (!copy || !copy.busy_after_seconds) return;
+    // ★ THE BUDGET SCALES WITH PRIORITY (owner 2026-09-28). The server publishes the real
+    // per-process table; using its OWN number means the notice the user reads cannot drift
+    // from the wait the queue enforces. The flat `busy_after_seconds` is only the fallback
+    // for a process the server does not know.
+    const budgets = copy.wait_budgets || {};
+    const budget = Number(budgets[QUEUE_PROCESS] ?? budgets.default
+                          ?? copy.busy_after_seconds);
     const elapsedMs = Date.now() - typingState.startedAt;
-    if (elapsedMs < copy.busy_after_seconds * 1000) return;
-    const q = await globalThis.HelpotronSL?.fetchQueueStatus();
-    // Only claim a queue wait when the server is actually over budget; a task
-    // that is simply slow gets the honest message, not a false excuse.
-    if (!q || !q.over_budget) return;
+    if (elapsedMs < budget * 1000) return;   // still inside the promise: keep saying "in progress"
+    const q = await globalThis.HelpotronSL?.fetchQueueStatus(QUEUE_PROCESS);
+    // Only claim the server is busy when it actually is — either over a machine cap, or with
+    // work genuinely waiting behind others. A task that is merely slow gets the honest
+    // message rather than a false excuse. The priority budget decides WHEN we ask; this
+    // decides whether the answer is worth telling the user.
+    const genuinelyBusy = q && (q.over_budget || (q.waiting || 0) > 0);
+    if (!genuinelyBusy) return;
     _busyShown = true;
     if (ltdTypingStatus) ltdTypingStatus.textContent = copy.busy_message;
   }, BUSY_POLL_MS);

@@ -45,7 +45,12 @@ RAM_CAP_PCT = 80.0          # owner's number
 CPU_CAP_PCT = 85.0          # owner 2026-09-28: "same if it goes over 85% cpu"
 MIN_AVAILABLE_MB = 3000.0   # absolute floor catches swap-pinned boxes
 POLL_SECONDS = 0.5          # how often a queued task re-checks the budget
-BUSY_AFTER_SECONDS = 180    # 3 minutes: when the CLIENT should say "server is busy"
+# The FALLBACK budget, for a caller that names no process. Derived from the priority registry
+# rather than written twice: two literals for one promise is how they drift, and this value is
+# published to the client as `busy_after_seconds`.
+from .priority import DEFAULT_WAIT_SECONDS as _DEFAULT_WAIT
+
+BUSY_AFTER_SECONDS = _DEFAULT_WAIT
 
 
 def read_meminfo() -> Dict[str, int]:
@@ -388,15 +393,23 @@ async def run_with_budget(fn: Callable[[], Awaitable[Any]],
         gate.release()
 
 
-def should_show_busy(elapsed_seconds: float) -> bool:
+def should_show_busy(elapsed_seconds: float, process: Optional[str] = None) -> bool:
     """Whether the client should switch to the 'server is busy' notice.
 
-    Owner: *"if it takes more then 3min for their task to enter line, give them a
-    'server is busy, your task will be completed automatically once load
-    lightens'"*. The task itself is never cancelled — this only changes what the
-    user is told.
+    Owner: *"if it takes more then 3min for their task to enter line, give them a 'server is
+    busy, your task will be completed automatically once load lightens'"*, revised 2026-09-28:
+    *"it scales with priority ... a user saying 'hello' should only be waiting 30s ... but for
+    lower priority, like lets say humanization, has a 5min wait score"*.
+
+    ★ THIS DELEGATES, DELIBERATELY. This module and `priority.py` both had a function of this
+    name — this one flat at 180s and priority's scaled by process — which is exactly how two
+    numbers for one promise drift apart, and the one the user READS is the one that ends up
+    wrong. `priority.py` owns the decision; this is a pass-through so a caller importing from
+    either module gets the same answer. `process` is optional only for backward compatibility:
+    an unnamed caller gets the default budget rather than a cheap task's impatience.
     """
-    return float(elapsed_seconds or 0) >= BUSY_AFTER_SECONDS
+    from .priority import should_show_busy as _priority_should_show_busy
+    return _priority_should_show_busy(elapsed_seconds, process)
 
 
 # ── idle reclamation — the other half of the owner's ask ─────────────────────
