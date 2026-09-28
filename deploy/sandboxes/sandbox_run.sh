@@ -38,6 +38,23 @@ echo "[sandbox] ${RUN_ID} work=${RUN_DIR}/work"
          timeout "${TIMEOUT}" "${ARGS[@]}"
 ) > "${RUN_DIR}/logs/run.log" 2>&1
 RC=$?
+
+# ★ THE SANDBOX IS KILLED THE SECOND THE TASK IS OVER (owner 2026-09-28: *"every time an
+# assignment or task is processed, a new sandbox for that assignment/task is auto generated
+# then killed the second the task is over"*). The work directory is the sandbox — every file
+# and every byte of scratch the task produced — so it is destroyed here, on the exit path,
+# rather than left for a cleanup that never ran. Measured before this: 3,655 run directories
+# had accumulated because nothing ever removed them.
+#
+# `logs/` and `state.json` deliberately SURVIVE: the caller reads the run log after this
+# script exits (`_read_sandbox_output` in overlord_agent.py), so deleting the evidence would
+# break the feature that produced it. Those are a few hundred bytes; the work dir is not.
+if [ -d "${RUN_DIR}/work" ]; then
+  # rm -rf on the exact directory; -f so a permission oddity cannot fail the run's rc.
+  rm -rf "${RUN_DIR}/work" 2>/dev/null || true
+  mkdir -p "${RUN_DIR}/work" 2>/dev/null || true
+fi
+
 echo "{\"run_id\":\"${RUN_ID}\",\"kind\":\"${KIND}\",\"started\":\"$(date +%Y-%m-%dT%H:%M:%S)\",\"finished\":\"$(date +%Y-%m-%dT%H:%M:%S)\",\"rc\":${RC},\"timeout\":${TIMEOUT}}" \
   > "${RUN_DIR}/state.json"
 echo "[sandbox] ${RUN_ID} rc=${RC} log=${RUN_DIR}/logs/run.log"

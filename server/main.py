@@ -1801,7 +1801,7 @@ async def _budgeted_detectors_score(text: str, threshold: float):
     """
     from .resource_guard import run_with_budget as _budgeted
     return await _budgeted(lambda: detectors.score_text(text, threshold=threshold),
-                           process="detection")
+                           process="detection", track_stall=True)
 
 
 @app.post("/api/ai/detect")
@@ -1898,7 +1898,7 @@ async def transcribe(file: UploadFile = File(...),
     from .resource_guard import run_with_budget as _budgeted
     try:
         text, duration = await _budgeted(lambda: transcription.transcribe_audio(path),
-                                        process="transcription")
+                                        process="transcription", track_stall=True)
     except RuntimeError as e:
         raise HTTPException(500, str(e))
     if not text.strip():
@@ -2592,7 +2592,7 @@ async def humanize_assignment_route(payload: dict, request: Request, current_use
     from .resource_guard import run_with_budget as _budgeted
     sanitized_text, metrics = await _budgeted(lambda: humanizer_pipeline.humanize_loop(
         text, settings=(current_user.settings if current_user and current_user.settings else None),
-    ), process="humanize")
+    ), process="humanize", track_stall=True)
     return {"status": "success", "metrics": metrics, "content": sanitized_text}
 
 

@@ -351,10 +351,20 @@ async def queue(request: Request, db: Session = Depends(get_db)) -> Dict[str, An
     notice after three minutes. The task itself is never cancelled — the server
     keeps it queued until the machine has room.
     """
-    from .resource_guard import queue_status, should_show_busy
+    from .resource_guard import queue_status
+    from .priority import should_show_busy, wait_budget_seconds, get_priority
     await _user(request, db)
     st = queue_status()
-    st["should_show_busy"] = should_show_busy(st.get("last_wait_seconds", 0))
+    # ★ THE WAIT BUDGET SCALES WITH PRIORITY (owner 2026-09-28). A flat 3-minute notice is
+    # wrong in both directions: a "hello" should not be told to wait 3 minutes, and a
+    # humanization legitimately takes ~5, so warning at 3 would be noise. The caller names
+    # the process it is asking about; an unnamed caller gets the default budget.
+    proc = request.query_params.get("process") or ""
+    st["process"] = proc or None
+    st["wait_budget_seconds"] = wait_budget_seconds(proc) if proc else None
+    if proc:
+        st["priority"] = get_priority(proc)
+    st["should_show_busy"] = should_show_busy(st.get("last_wait_seconds", 0), proc or None)
     return {"status": "success", **st}
 
 
