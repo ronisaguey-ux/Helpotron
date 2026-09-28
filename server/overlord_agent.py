@@ -31,6 +31,7 @@ from .database import AgentFile, Assignment, CreditTransaction, StudyMaterial, T
 from .security import is_admin_user, is_junk_content, educational_guards_on
 from .humanizer import AIHumanizerPipeline
 from .subagents import SubAgentCoordinator
+from .agent_files import list_agent_files
 from .engine.sandbox import sandbox_manager
 
 logger = logging.getLogger("helpotron.overlord")
@@ -1011,8 +1012,18 @@ class OverlordAgent:
             return {"status": "success", "reply": reply, "message_id": msg.id}
 
         # ─── 6. Virtual Sandbox Script Execution ────────────────────────────
-        # e.g., "run python script in sandbox", "process audio file in sandbox"
-        if "sandbox" in text.lower() or "script" in text.lower() or files:
+        # ★ OWNER RULE (2026-09-28): a plain chat gets NO sandbox; files do. This used to be
+        # decided by substring-matching the user's message ("sandbox" in text, "script" in
+        # text), so asking ABOUT a script opened a workspace while attaching three files did
+        # not — exactly backwards. `sandbox_required` is the single rule; see its docstring.
+        from .engine.sandbox import sandbox_required as _sandbox_rule
+        _sbx = _sandbox_rule(
+            files=files,
+            agent_files=list_agent_files(user.id) if user and user.id else None,
+            action_type=action_type or "",
+        )
+        if _sbx["required"]:
+            subagent_logs.append(f"{display_name}: sandbox — {_sbx['reason']}")
             subagent_logs.append(f"{display_name}: Initializing Virtual Sub-Agent Sandbox...")
 
             if "audio" in text.lower() or (files and any(f.get("name", "").endswith((".mp3", ".wav", ".webm")) for f in files)):
