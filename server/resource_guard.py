@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -166,10 +167,51 @@ class QueueStats:
     queued_total: int = 0
     longest_wait: float = 0.0
     last_wait: float = 0.0
+    # ★ ADDED 2026-09-28. `peak_running` is the number that proves the cap holds — the old
+    # design let every waiter enter at once and had no counter that could show it.
+    # `rejected` counts callers turned away because the backlog itself hit its bound.
+    peak_running: int = 0
+    rejected: int = 0
     started_at: float = field(default_factory=time.time)
 
 
 STATS = QueueStats()
+
+
+class ServerAtCapacity(RuntimeError):
+    """Raised when the queue is already as deep as we are willing to hold.
+
+    Subclasses RuntimeError so a caller with a generic `except Exception` still catches it
+    rather than taking the request down. The alternative — queueing without bound — trades a
+    clear 503 for an out-of-memory crash, which is strictly worse for every other user.
+    """
+
+
+# ★ THE BOUND THAT MAKES THIS A QUEUE. Without it the budget check is advisory: every
+# waiter re-checks the same metrics on its own tick and they ALL pass together the moment
+# the machine frees up, re-blowing the cap the guard exists to protect. Measured 2026-09-28:
+# 6 concurrent callers released at once produced **peak_running 6** — a herd, not a queue.
+# The slot is RESERVED for the duration (acquired before the budget wait), which is what the
+# old docstring claimed and the old code did not do.
+MAX_CONCURRENT = int(os.environ.get("RESOURCE_GUARD_MAX_CONCURRENT", "4"))
+# A memory guard, not a policy: past this many waiting we tell the caller honestly instead
+# of holding an unbounded backlog of futures.
+MAX_QUEUE_DEPTH = int(os.environ.get("RESOURCE_GUARD_MAX_QUEUE_DEPTH", "200"))
+
+# ★ SEMAPHORES ARE PER-EVENT-LOOP, so a module-level one is a trap: the tests (and any
+# `asyncio.run`) create a fresh loop each time, and a semaphore that queued a waiter on a
+# closed loop raises on the next use. Keyed by loop id, created on demand.
+_slot_pools: Dict[int, asyncio.Semaphore] = {}
+
+
+def _slots() -> asyncio.Semaphore:
+    """The concurrency pool for the RUNNING loop (created on first use)."""
+    loop = asyncio.get_running_loop()
+    sem = _slot_pools.get(id(loop))
+    if sem is None:
+        sem = asyncio.Semaphore(MAX_CONCURRENT)
+        _slot_pools[id(loop)] = sem
+    return sem
 
 
 def queue_status() -> Dict[str, Any]:
@@ -182,32 +224,60 @@ def queue_status() -> Dict[str, Any]:
         "longest_wait_seconds": round(STATS.longest_wait, 1),
         "last_wait_seconds": round(STATS.last_wait, 1),
         "busy_after_seconds": BUSY_AFTER_SECONDS,
+        "max_concurrent": MAX_CONCURRENT,
+        "peak_running": STATS.peak_running,
+        "rejected": STATS.rejected,
     })
     return st
 
 
 async def run_with_budget(fn: Callable[[], Awaitable[Any]],
                           on_queued: Optional[Callable[[float], None]] = None) -> Any:
-    """Run `fn` now if the machine is within budget, else queue until it is.
+    """Run `fn` now if the machine is within budget, else wait in line for a slot.
 
-    Never raises a timeout: the task waits as long as it takes. `on_queued` is
-    called once, with the elapsed wait, if the task had to wait at all — the
-    HTTP layer uses it to tell the client to show the "server is busy" notice.
+    Never raises a timeout: a task waits as long as it takes, and the client is told to show
+    the "server is busy" notice rather than the work being cancelled.
 
-    Admission is re-checked every POLL_SECONDS rather than reserving a slot, so
-    a burst of simultaneous requests does not all pass the gate at once and then
-    collectively blow the cap.
+    ★ HOW THE ORDERING IS ACTUALLY GUARANTEED. The slot is acquired BEFORE the budget wait
+    and held until the task finishes, so at most `MAX_CONCURRENT` callers are ever past the
+    gate. Callers beyond that wait on the semaphore, which hands out slots in the order they
+    were requested — so the backlog drains in arrival order instead of as a stampede.
+
+    The previous implementation re-checked the budget every `POLL_SECONDS` and reserved
+    nothing, so its own docstring's claim ("a burst of simultaneous requests does not all
+    pass the gate at once") was false — measured, all 6 callers were admitted in the same
+    tick. Re-checking a shared condition is not admission control; holding a slot is.
     """
-    waited_from: Optional[float] = None
+    queued_at = time.time()
+    if STATS.waiting >= MAX_QUEUE_DEPTH:
+        STATS.rejected += 1
+        logger.warning("task refused — queue already %d deep (max %d)",
+                       STATS.waiting, MAX_QUEUE_DEPTH)
+        raise ServerAtCapacity(
+            f"server at capacity: {STATS.waiting} tasks already waiting")
+
+    slots = _slots()
+    STATS.waiting += 1
     if not _within_budget():
-        waited_from = time.time()
-        STATS.waiting += 1
-        STATS.queued_total += 1
         logger.info("task queued — over budget (%s)", budget_status())
+    try:
+        await slots.acquire()
+        # Hold the slot while we wait for the machine: this reservation is what stops the
+        # whole backlog walking in together when the budget momentarily frees.
         while not _within_budget():
             await asyncio.sleep(POLL_SECONDS)
+    finally:
+        # ★ MUST BE IN `finally`. The old code decremented `waiting` only on the success
+        # path, so a cancelled client (the browser tab closes while queued) leaked a waiter
+        # forever and the count drifted upward on a busy server.
         STATS.waiting = max(0, STATS.waiting - 1)
-        waited = time.time() - waited_from
+
+    waited = time.time() - queued_at
+    if waited >= POLL_SECONDS:
+        # `queued_total` counts tasks that ACTUALLY queued. Counting every caller would make
+        # a healthy server report a backlog, and the metric's whole job is to say whether the
+        # machine is under pressure.
+        STATS.queued_total += 1
         STATS.last_wait = waited
         STATS.longest_wait = max(STATS.longest_wait, waited)
         logger.info("task admitted after %.1fs in queue", waited)
@@ -218,11 +288,13 @@ async def run_with_budget(fn: Callable[[], Awaitable[Any]],
                 pass
 
     STATS.running += 1
+    STATS.peak_running = max(STATS.peak_running, STATS.running)
     try:
         return await fn()
     finally:
         STATS.running = max(0, STATS.running - 1)
         STATS.completed += 1
+        slots.release()
 
 
 def should_show_busy(elapsed_seconds: float) -> bool:
@@ -234,6 +306,139 @@ def should_show_busy(elapsed_seconds: float) -> bool:
     user is told.
     """
     return float(elapsed_seconds or 0) >= BUSY_AFTER_SECONDS
+
+
+# ── idle reclamation — the other half of the owner's ask ─────────────────────
+#
+# Owner: *"it has to free up stuff the second it's not being used to allow new stuff in,
+# that's how we support as many users as possible"*. Admission control is the half that
+# makes a busy machine safe; this is the half that makes an idle one cheap.
+#
+# ★ THE RESOURCE THAT ACTUALLY MATTERS IS RAM, NOT CPU, and the measured case is worth
+# recording because it is what prompted this: on 2026-09-28 the box hit swap 99% /
+# MemAvailable 1,163 MB while `helpotron-hip.service` (a local llama-server model) held
+# **2,712 MB having served ZERO requests in 24 hours**. Stopping it plus trimming a grown
+# Laya service freed 6.3 GB with no functional loss. A model that is loaded and unused is
+# pure cost, so it should not stay loaded.
+
+# Below this much headroom, memory-pressure reclamation runs.
+IDLE_PRESSURE_MB = float(os.environ.get("RESOURCE_GUARD_IDLE_PRESSURE_MB", "2500"))
+# How long a process must show no CPU progress before it counts as idle.
+IDLE_CPU_SECONDS = float(os.environ.get("RESOURCE_GUARD_IDLE_SECONDS", "180"))
+
+
+def process_cpu_ticks(pid: int) -> Optional[int]:
+    """utime+stime for a pid, or None if it cannot be read.
+
+    /proc/<pid>/stat is the portable signal and it is unambiguous: a process doing no work
+    accumulates no ticks. This is the same reading recorded elsewhere in this file's notes
+    for telling a WEDGED lane from a busy one (0 ticks = blocked, not thinking).
+    """
+    try:
+        with open(f"/proc/{pid}/stat", "rb") as fh:
+            parts = fh.read().rsplit(b")", 1)[-1].split()
+        return int(parts[11]) + int(parts[12])      # utime + stime, after the comm field
+    except Exception:
+        return None
+
+
+class IdleTracker:
+    """Remembers the last time a service was observed doing work.
+
+    Keyed by unit name so a service that is busy at one check and idle at the next is
+    measured against real elapsed work, not a single snapshot.
+    """
+
+    def __init__(self) -> None:
+        self._state: Dict[str, Dict[str, Any]] = {}
+
+    def observe(self, unit: str, ticks: Optional[int]) -> float:
+        """Return how many seconds this unit has been idle (0 if it just made progress)."""
+        now = time.time()
+        prev = self._state.get(unit)
+        if ticks is None:
+            # Unreadable: treat as NOT idle. Failing toward "leave it running" costs memory;
+            # failing the other way would stop a working service, which is worse.
+            self._state[unit] = {"ticks": None, "since": now}
+            return 0.0
+        if prev is None or prev.get("ticks") != ticks:
+            self._state[unit] = {"ticks": ticks, "since": now}
+            return 0.0
+        return max(0.0, now - float(prev.get("since") or now))
+
+
+IDLE = IdleTracker()
+
+
+def idle_reclaim_candidates() -> list[dict]:
+    """Loaded-but-unused services that could be stopped to make room.
+
+    READ-ONLY: this reports, it never stops anything by itself. Whether to release a
+    service is a policy decision and the caller owns it.
+    """
+    out = []
+    for unit, caps in OPTIONAL_MODELS.items():
+        state = _unit_active(unit)
+        if not state:
+            continue
+        pid = _unit_main_pid(unit)
+        ticks = process_cpu_ticks(pid) if pid else None
+        idle_for = IDLE.observe(unit, ticks)
+        out.append({"unit": unit, "pid": pid, "rss_mb": caps.get("rss_mb"),
+                    "idle_seconds": round(idle_for, 1),
+                    "reclaimable": idle_for >= IDLE_CPU_SECONDS})
+    return out
+
+
+# Services that exist to serve a feature which may simply not be in use. Stopping one costs
+# a lazy load on its next request; leaving it resident costs RAM on every user's behalf.
+OPTIONAL_MODELS: Dict[str, Dict[str, Any]] = {
+    "helpotron-hip.service": {"rss_mb": 2700, "why": "humanizer model — loads on demand"},
+}
+
+
+def _unit_active(unit: str) -> bool:
+    try:
+        proc = subprocess.run(["systemctl", "--user", "is-active", unit],
+                              capture_output=True, text=True, timeout=5)
+        return proc.stdout.strip() == "active"
+    except Exception:
+        return False
+
+
+def _unit_main_pid(unit: str) -> Optional[int]:
+    try:
+        proc = subprocess.run(["systemctl", "--user", "show", "-p", "MainPID", "--value", unit],
+                              capture_output=True, text=True, timeout=5)
+        pid = int(proc.stdout.strip() or 0)
+        return pid or None
+    except Exception:
+        return None
+
+
+def release_idle_models() -> list[str]:
+    """Stop optional model services that are loaded, unused, and not needed right now.
+
+    Only runs under actual memory pressure — an idle box with plenty of headroom should
+    keep its models warm, because a lazy load is a user-visible delay.
+    """
+    avail = read_meminfo().get("MemAvailable")
+    avail_mb = avail / (1024 * 1024) if avail is not None else None
+    if avail_mb is None or avail_mb >= IDLE_PRESSURE_MB:
+        return []
+    released = []
+    for cand in idle_reclaim_candidates():
+        if not cand.get("reclaimable"):
+            continue
+        try:
+            subprocess.run(["systemctl", "--user", "stop", cand["unit"]],
+                           capture_output=True, text=True, timeout=20)
+            released.append(cand["unit"])
+            logger.warning("released idle model %s (idle %.0fs, ~%s MB) — MemAvailable was %.0f MB",
+                           cand["unit"], cand["idle_seconds"], cand.get("rss_mb"), avail_mb)
+        except Exception as e:                                    # noqa: BLE001
+            logger.warning("could not release %s: %s", cand["unit"], e)
+    return released
 
 
 # Prime at import so the first budget check has an interval to measure.
