@@ -1877,8 +1877,13 @@ async def transcribe(file: UploadFile = File(...),
     if len(content) > max_audio_bytes:
         raise HTTPException(413, "Audio upload exceeds 100MB limit")
     path = transcription.save_upload(content, file.filename or "lecture.webm")
+    # Admission control (2026-09-28): transcription of up to 100MB of audio is one of the
+    # heaviest things a user can ask for, and it ran outside the queue. Wrapped around the
+    # transcription itself rather than the upload read, so a large upload does not hold a
+    # concurrency slot while it streams in.
+    from .resource_guard import run_with_budget as _budgeted
     try:
-        text, duration = await transcription.transcribe_audio(path)
+        text, duration = await _budgeted(lambda: transcription.transcribe_audio(path))
     except RuntimeError as e:
         raise HTTPException(500, str(e))
     if not text.strip():
