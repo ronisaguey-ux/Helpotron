@@ -375,12 +375,31 @@ def _trim_history() -> None:
 
 
 async def run_monitors_loop() -> None:
-    """Background task (lifespan-managed): snapshot every MONITORS_INTERVAL."""
+    """Background task (lifespan-managed): snapshot every MONITORS_INTERVAL.
+
+    Also the host for periodic IDLE RECLAMATION — freeing a loaded-but-unused model is the
+    same kind of housekeeping as taking a snapshot, and it needs a tick on a running server.
+
+    ★ WHY HERE AND NOT IN THE ADMISSION PATH. Reclamation only has to happen when a new user
+    needs room, but doing it inside `run_with_budget` would make a request wait on
+    `systemctl` (seconds) before it could even queue. This loop runs every
+    MONITORS_INTERVAL, and `release_idle_models()` is a NO-OP unless there is genuine memory
+    pressure, so an idle box with headroom keeps its models warm.
+    """
     global _last_snapshot, _last_snapshot_ts, _snap_requests
     await asyncio.to_thread(snapshot_once)
     while True:
         await asyncio.sleep(MONITORS_INTERVAL)
         await asyncio.to_thread(snapshot_once)
+        try:
+            from .resource_guard import release_idle_models
+            released = await asyncio.to_thread(release_idle_models)
+            if released:
+                logger.warning("idle reclamation freed %s", ", ".join(released))
+        except Exception as e:                                    # noqa: BLE001
+            # Reclamation is an optimisation. Never let it take the monitor loop, and with
+            # it every snapshot the admin dashboard reads, down with it.
+            logger.debug("idle reclamation skipped: %s", e)
 
 
 def snapshot_once() -> Dict[str, Any]:

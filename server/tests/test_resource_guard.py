@@ -15,6 +15,7 @@ get subtly wrong and impossible to notice in production:
   * the CPU cap must be live on the FIRST check after a restart.
 """
 import asyncio
+import os
 import time
 
 import pytest
@@ -188,3 +189,158 @@ def test_guard_refuses_below_the_absolute_memory_floor(monkeypatch):
     assert rg._within_budget() is False, (
         "a swap-pinned box passed admission because only the percentage was checked"
     )
+
+
+# ── the queue: bounded slots, not a stampede (2026-09-28) ────────────────────
+#
+# The old implementation re-checked a shared budget every POLL_SECONDS and reserved
+# nothing, so its own docstring's anti-herd claim was false: measured, 6 concurrent callers
+# were admitted in the SAME tick and all ran together. These tests exist because that is
+# invisible without a concurrency counter.
+
+def _run_n(monkeypatch, n, max_concurrent):
+    """Drive n callers through the guard while the budget is blocked, and report the peak."""
+    monkeypatch.setattr(rg, "MAX_CONCURRENT", max_concurrent)
+    monkeypatch.setattr(rg, "_slot_pools", {})
+    state = {"full": True}
+    monkeypatch.setattr(rg, "_within_budget", lambda: not state["full"])
+
+    running = 0
+    peak = 0
+
+    async def job():
+        nonlocal running, peak
+        running += 1
+        peak = max(peak, running)
+        await asyncio.sleep(0.1)
+        running -= 1
+
+    async def drive():
+        tasks = [asyncio.create_task(rg.run_with_budget(job)) for _ in range(n)]
+        await asyncio.sleep(0.4)          # let the whole backlog pile up
+        state["full"] = False
+        await asyncio.gather(*tasks)
+        return peak
+
+    return asyncio.run(drive())
+
+
+def test_concurrency_is_bounded_not_a_stampede(monkeypatch):
+    """★ THE DEFECT THIS QUEUE EXISTS TO FIX.
+
+    Measured on the old code: 6 callers released together produced peak_running 6 — the
+    whole backlog walked in at once and re-blew the cap the guard protects. A slot is
+    RESERVED for the duration; re-checking a shared condition reserves nothing.
+    """
+    assert _run_n(monkeypatch, n=6, max_concurrent=2) == 2
+
+
+def test_one_lane_is_strictly_sequential_and_fifo(monkeypatch):
+    """The owner's literal ask: a sequential queue, drained in arrival order."""
+    monkeypatch.setattr(rg, "MAX_CONCURRENT", 1)
+    monkeypatch.setattr(rg, "_slot_pools", {})
+    state = {"full": True}
+    monkeypatch.setattr(rg, "_within_budget", lambda: not state["full"])
+    order = []
+
+    async def job(i):
+        order.append(i)
+        await asyncio.sleep(0.05)
+
+    async def drive():
+        tasks = [asyncio.create_task(rg.run_with_budget(lambda i=i: job(i))) for i in range(5)]
+        await asyncio.sleep(0.3)
+        state["full"] = False
+        await asyncio.gather(*tasks)
+
+    asyncio.run(drive())
+    assert order == sorted(order), f"queue is not FIFO: {order}"
+
+
+def test_a_cancelled_waiter_does_not_leak_the_counter(monkeypatch):
+    """A closed browser tab while queued used to leak a waiter forever.
+
+    The old code decremented `waiting` only on the success path, so a busy server drifted
+    upward with no way back down.
+    """
+    monkeypatch.setattr(rg, "MAX_CONCURRENT", 1)
+    monkeypatch.setattr(rg, "_slot_pools", {})
+    monkeypatch.setattr(rg, "_within_budget", lambda: False)   # never admits
+    before = rg.STATS.waiting
+
+    async def drive():
+        a = asyncio.create_task(rg.run_with_budget(lambda: asyncio.sleep(1)))
+        b = asyncio.create_task(rg.run_with_budget(lambda: asyncio.sleep(1)))
+        await asyncio.sleep(0.2)
+        assert rg.STATS.waiting == before + 2, "both callers should be waiting"
+        a.cancel()
+        b.cancel()
+        await asyncio.gather(a, b, return_exceptions=True)
+
+    asyncio.run(drive())
+    assert rg.STATS.waiting == before, "cancelled waiters leaked their count"
+
+
+def test_a_full_queue_is_refused_not_held_forever(monkeypatch):
+    """An unbounded backlog turns a clear 503 into an out-of-memory crash."""
+    monkeypatch.setattr(rg, "MAX_QUEUE_DEPTH", 0)              # nothing may wait
+    monkeypatch.setattr(rg, "STATS", rg.QueueStats(waiting=5))
+
+    async def drive():
+        with pytest.raises(rg.ServerAtCapacity):
+            await rg.run_with_budget(lambda: asyncio.sleep(0))
+
+    asyncio.run(drive())
+    assert rg.STATS.rejected >= 1
+
+
+def test_queue_status_reports_the_bound_and_the_peak():
+    """Without peak_running the stampede was unobservable — that is why it survived."""
+    st = rg.queue_status()
+    for key in ("max_concurrent", "peak_running", "rejected"):
+        assert key in st, f"queue_status() must report {key}"
+
+
+# ── idle reclamation: the other half of the owner's ask ──────────────────────
+
+def test_process_cpu_ticks_reads_this_process():
+    ticks = rg.process_cpu_ticks(os.getpid())
+    assert isinstance(ticks, int) and ticks >= 0
+    assert rg.process_cpu_ticks(999999999) is None, "a dead pid must read as unknown"
+
+
+def test_idle_tracker_needs_no_progress_across_two_observations(monkeypatch):
+    """Idle is ELAPSED TIME WITHOUT PROGRESS — one snapshot cannot tell you that."""
+    tr = rg.IdleTracker()
+    assert tr.observe("u", 100) == 0.0, "first sighting is not idle"
+    # Not an exact 0.0: a few microseconds of real time pass between the two calls,
+    # so the fresh idle clock reads a hair above zero.
+    assert abs(tr.observe("u", 100)) < 0.1, "the clock starts on the second identical reading"
+    # Rewind the recorded instant rather than sleeping 3 minutes.
+    tr._state["u"]["since"] -= 400
+    assert tr.observe("u", 100) >= 400.0, "no progress for 400s must read as idle"
+
+
+def test_idle_tracker_resets_when_the_process_works():
+    tr = rg.IdleTracker()
+    tr.observe("u", 100)
+    tr.observe("u", 100)
+    tr._state["u"]["since"] -= 400
+    assert tr.observe("u", 100) > 0
+    assert tr.observe("u", 150) == 0.0, "progress must clear the idle clock"
+
+
+def test_unreadable_ticks_are_never_treated_as_idle():
+    """Failing toward 'leave it running' costs memory; the other way stops a working service."""
+    tr = rg.IdleTracker()
+    tr.observe("u", None)
+    assert tr.observe("u", None) == 0.0
+
+
+def test_reclamation_only_runs_under_real_pressure(monkeypatch):
+    """An idle box with headroom keeps its models warm — a lazy load is a user-visible delay."""
+    called = []
+    monkeypatch.setattr(rg, "read_meminfo", lambda: {"MemAvailable": 8 * 1024 * 1024 * 1024})
+    monkeypatch.setattr(rg, "idle_reclaim_candidates", lambda: called.append("checked") or [])
+    assert rg.release_idle_models() == []
+    assert called == [], "no candidate scan should happen when there is plenty of headroom"
