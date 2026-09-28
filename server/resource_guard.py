@@ -29,12 +29,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import shutil
 import subprocess
 
 from .priority import effective_priority, get_priority
 import sys
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 logger = logging.getLogger("helpotron.resources")
@@ -503,6 +505,37 @@ def _unit_main_pid(unit: str) -> Optional[int]:
         return pid or None
     except Exception:
         return None
+
+
+# Sandbox run history: each run leaves a directory. The work dir is now destroyed at the end
+# of the run, so what remains is a few hundred bytes of log — but nothing was ever removing
+# the directories themselves, and **3,655 of them had accumulated** (72MB) before this.
+SANDBOX_RETAIN = int(os.environ.get("HELPOTRON_SANDBOX_RETAIN", "200"))
+
+
+def prune_sandbox_history() -> int:
+    """Delete all but the newest `SANDBOX_RETAIN` sandbox run directories.
+
+    Returns how many were removed. Recent runs are kept because the run log is the record of
+    what a subagent did; older ones are history nobody reads.
+    """
+    base = Path(__file__).resolve().parent.parent / "data" / "sandboxes"
+    try:
+        if not base.is_dir():
+            return 0
+        runs = sorted((p for p in base.iterdir() if p.is_dir()),
+                      key=lambda p: p.name, reverse=True)
+        removed = 0
+        for old in runs[SANDBOX_RETAIN:]:
+            try:
+                shutil.rmtree(old, ignore_errors=True)
+                removed += 1
+            except Exception:                                     # noqa: BLE001
+                pass
+        return removed
+    except Exception as e:                                        # noqa: BLE001
+        logger.debug("sandbox pruning skipped: %s", e)
+        return 0
 
 
 def release_idle_models() -> list[str]:

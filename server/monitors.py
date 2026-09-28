@@ -392,10 +392,13 @@ async def run_monitors_loop() -> None:
         await asyncio.sleep(MONITORS_INTERVAL)
         await asyncio.to_thread(snapshot_once)
         try:
-            from .resource_guard import release_idle_models
+            from .resource_guard import release_idle_models, prune_sandbox_history
             released = await asyncio.to_thread(release_idle_models)
             if released:
                 logger.warning("idle reclamation freed %s", ", ".join(released))
+            pruned = await asyncio.to_thread(prune_sandbox_history)
+            if pruned:
+                logger.info("pruned %d old sandbox run director(ies)", pruned)
         except Exception as e:                                    # noqa: BLE001
             # Reclamation is an optimisation. Never let it take the monitor loop, and with
             # it every snapshot the admin dashboard reads, down with it.
