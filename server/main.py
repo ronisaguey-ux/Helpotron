@@ -1932,10 +1932,16 @@ async def summary(body: GenerateIn, current_user: User = Depends(get_current_use
 
 async def _material_endpoint(db: Session, body: GenerateIn, kind: str, current_user: User) -> dict:
     transcript_text, transcript_id = _require_transcript(db, current_user.public_id, body.transcript_id, body.transcript_text)
+    # Admission control (2026-09-28): this single helper backs /api/study-guide,
+    # /api/flashcards and /api/practice-test, so wrapping it here covers all three —
+    # wrapping the routes individually would be three chances to miss one. Generation is
+    # heavy, and none of these ran inside the queue.
+    from .resource_guard import run_with_budget as _budgeted
     try:
-        material = await _generate(db, current_user, kind, transcript_text, body.assignment_prompt,
-                                   body.reading_level, body.assignment_id, transcript_id,
-                                   count=body.count)
+        material = await _budgeted(lambda: _generate(
+            db, current_user, kind, transcript_text, body.assignment_prompt,
+            body.reading_level, body.assignment_id, transcript_id,
+            count=body.count))
     except HTTPException:
         raise
     except Exception as e:
