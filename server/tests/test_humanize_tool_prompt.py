@@ -78,9 +78,11 @@ def main() -> int:
         ("says when to use it", "WHEN TO USE IT" in prompt),
         ("says when NOT to", "WHEN NOT TO USE IT" in prompt),
         ("warns that facts must not change", "NEVER CHANGE THE FACTS" in prompt),
-        ("protects quotations", "QUOTATIONS ARE SACRED" in prompt),
+        ("says quotations are repaired for it", "QUOTATIONS ARE REPAIRED FOR YOU" in prompt),
         ("tells it to verify quotes first", "web_search" in prompt),
-        ("tells it the guard enforces it", "DISCARDED" in prompt),
+        ("tells it the guard enforces the rule", "preservation guard" in prompt),
+        ("names the field it must hand-fix", "facts_to_check" in prompt),
+        ("forbids the regeneration loop", "lottery" in prompt),
         ("the action is still advertised", "AVAILABLE ACTIONS" in prompt),
     ]
     for name, present in checks:

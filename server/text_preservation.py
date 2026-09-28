@@ -134,3 +134,156 @@ def check_preservation(source: str, rewritten: str) -> Dict[str, Any]:
 def is_faithful(source: str, rewritten: str) -> bool:
     """Boolean form for a caller that only needs the gate."""
     return check_preservation(source, rewritten)["ok"]
+
+
+# ── AUGMENT, DO NOT DISCARD (owner 2026-09-28) ───────────────────────────────────
+#
+# Owner, after the guard shipped: *"Instead of discarding humanized text cuz it invented fake
+# quotes just make sure the ai agents that are using the humanize tool just edit the quote
+# manually, regenerating everytime they fake a quote is a never ending cat and mouse chase"*.
+#
+# He is right, and this is the better design. Asking the model to regenerate until it happens
+# to produce a faithful quotation is a lottery: each attempt is an independent draw with no
+# memory of the last failure, so a task can burn its whole budget and still come back with an
+# invented Locke. Repairing the text is DETERMINISTIC — the source holds the true wording, so
+# restoring it dictates the answer rather than hoping for one.
+#
+# The split is by what can be repaired SAFELY:
+#   • QUOTATIONS are repaired automatically. The source is ground truth for the exact wording,
+#     so putting it back cannot introduce an error of its own.
+#   • NUMBERS, DATES and NAMES are only FLAGGED. Deleting an invented year can leave a sentence
+#     nonsense ("Hume (May 7 1711 – ) was born…"), so an agent — which can read the sentence —
+#     makes that edit. Handing over a sentence that needs judgement is honest; mangling it to
+#     look automatic is not.
+
+# A quote this short is more likely to be a scare-quoted word than a citation.
+_CITATION_MIN_WORDS = 4
+
+
+def _citation_quotes(text: str) -> List[str]:
+    """Quotations long enough to be a claim about what someone said."""
+    out = []
+    for q in _quotes(text):
+        if len(q.split()) >= _CITATION_MIN_WORDS:
+            out.append(q)
+    return out
+
+
+def repair_quotes(source: str, rewritten: str) -> Dict[str, Any]:
+    """Put the source's real quotations back into `rewritten`.
+
+    Drops any quotation the rewrite invented, and replaces an ALTERED one IN PLACE with the
+    source's exact wording. Returns the repaired text plus a record of every edit, so the
+    caller can report what it changed rather than silently rewriting the user's prose.
+
+    ★ IN PLACE, NOT APPENDED. A first version removed the altered quotation and appended the
+    real one as a new sentence, which produced `He wrote, His ideas ... Revolution. He wrote,
+    ""The end of law...""` — a dangling clause, doubled quote marks, and the quotation now
+    sitting in the wrong part of the paragraph. Replacing the span keeps the sentence the
+    rewrite built and only dictates the words inside it, which is the whole point.
+
+    Deliberately does NOT touch numbers, dates or names — see the section comment.
+    """
+    src_quotes = _citation_quotes(source)
+    out_quotes = _citation_quotes(rewritten)
+    src_by_key = {_norm(q): q for q in src_quotes}
+    surviving = {_norm(q) for q in out_quotes if _norm(q) in src_by_key}
+
+    repaired = rewritten
+    edits: List[Dict[str, str]] = []
+
+    # The source quotations this rewrite does not contain. One missing means the rewrite
+    # almost certainly ALTERED it, so it is restored in place rather than thrown away.
+    missing = [q for q in src_quotes if _norm(q) not in surviving]
+
+    # 1. Walk the rewrite's quotations. Longest first so a nested span is handled before its
+    #    own substring.
+    for q in sorted(out_quotes, key=lambda s: -len(s)):
+        if _norm(q) in src_by_key:
+            continue                                     # already correct
+        if len(missing) == 1 and not edits:
+            # ALTERED — swap the words inside the existing quotation marks, keeping position.
+            replacement = f'"{missing[0]}"'
+            if f'"{q}"' in repaired:
+                repaired = repaired.replace(f'"{q}"', replacement, 1)
+            else:
+                repaired = repaired.replace(q, missing[0], 1)
+            edits.append({"action": "restored_quote_in_place", "quote": missing[0]})
+        else:
+            # INVENTED — remove the quotation entirely, marks included.
+            repaired = repaired.replace(f'"{q}"', "", 1)
+            if q in repaired:                            # was not quote-wrapped
+                repaired = repaired.replace(q, "", 1)
+            edits.append({"action": "removed_invented_quote", "quote": q})
+
+    # 2. A source quotation still absent after the pass cannot be placed without guessing where
+    #    it belongs — that is the agent's call, not ours.
+    final_keys = {_norm(q) for q in _citation_quotes(repaired)}
+    for q in src_quotes:
+        if _norm(q) not in final_keys:
+            edits.append({"action": "quote_missing_needs_agent", "quote": q})
+
+    # 3. Tidy what the excisions left behind: doubled spaces, an orphaned quote mark, empty
+    #    quote pairs, punctuation with a space before it, and dangling connectives.
+    repaired = repaired.replace('""', "")
+    repaired = re.sub(r'\s*"\s*"', " ", repaired)
+    repaired = re.sub(r"\s{2,}", " ", repaired)
+    repaired = re.sub(r"\s+([.,;:!?])", r"\1", repaired)
+    repaired = re.sub(r"\.\s*\.", ".", repaired)
+    # "He wrote, ." and "He wrote, His" — a quotation tag left without its quotation.
+    repaired = re.sub(r",\s*(?=[.,;:!?]|$)", "", repaired)
+    repaired = re.sub(r"\b(wrote|said|stated|argued|noted|claimed)\s*,\s*"
+                      r"(?=[A-Z])", r"\1 that ", repaired)
+    repaired = repaired.strip()
+
+    verdict = check_preservation(source, repaired)
+    return {
+        "text": repaired,
+        "edits": edits,
+        "still_unfaithful": [] if verdict["ok"] else verdict["violations"],
+        "repaired": bool(edits),
+    }
+
+
+def agent_todo(source: str, rewritten: str) -> List[str]:
+    """What an AGENT must fix by hand in a humanized draft, in plain instructions.
+
+    Deliberately narrow: only the facts that cannot be repaired automatically. An empty list
+    means the draft is safe to use as-is.
+    """
+    v = check_preservation(source, rewritten)
+    if v["ok"]:
+        return []
+
+    todos: List[str] = []
+    for violation in v["violations"]:
+        if violation.startswith("invented number/date"):
+            todos.append(
+                "A number or date was introduced that is not in the original: "
+                f"{violation.split(':', 1)[1].strip()}. Check it against the source and either "
+                "correct it or remove it — do NOT leave an unverified figure in place."
+            )
+        elif violation.startswith("introduced name"):
+            todos.append(
+                "A person or place was introduced that is not in the original: "
+                f"{violation.split(':', 1)[1].strip()}. Verify each one or remove it."
+            )
+        elif violation.startswith("dropped") or violation.startswith("invented") and "quot" in violation:
+            todos.append(
+                "A quotation does not match the original. Restore the source's exact wording — "
+                "quotations must be character-for-character."
+            )
+        elif violation.startswith("grew"):
+            todos.append(
+                "The rewrite is much longer than the original, which usually means content was "
+                "invented. Read it against the source and cut anything that is not in it."
+            )
+        else:
+            todos.append(violation)
+    # De-duplicate while keeping order — the same instruction twice reads like a bug.
+    seen, out = set(), []
+    for t in todos:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+    return out

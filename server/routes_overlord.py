@@ -1259,22 +1259,28 @@ RULES WHEN YOU DO USE IT:
 1. PASS THE FULL DRAFT in `text`. Chunks rewritten separately lose their transitions and
    will not read as one piece.
 2. NEVER CHANGE THE FACTS, and this is enforced, not just asked for. A rewrite that invents
-   a quotation, a date, a number or a name is DISCARDED and you get the original back.
-   If you need to add a source, find it first (use `web_search`) — never let the rewrite
-   supply one.
-3. QUOTATIONS ARE SACRED. Whatever is inside quote marks must come out identical. A
-   rewrite that alters or adds a quotation is refused.
-4. DO NOT PARAPHRASE A QUOTATION YOU HAVE NOT VERIFIED. If you are about to write a famous
+   a quotation, a date, a number or a name is caught by a preservation guard that compares the
+   rewrite against what you sent.
+3. QUOTATIONS ARE REPAIRED FOR YOU. If the rewrite alters or invents a quotation, the real
+   wording is restored automatically — the rewrite is NOT thrown away. Do not regenerate to
+   chase a faithful quote; that is a lottery and it will not converge.
+4. CHECK `facts_to_check` IN THE RESULT, AND FIX THOSE BY HAND. The guard can only repair
+   quotations automatically. An invented number, date or name is left untouched because
+   deleting it could break the sentence — it is listed for you instead, and fixing it is YOUR
+   job, not a reason to run the tool again. Edit the text yourself and say what you corrected.
+5. DO NOT PARAPHRASE A QUOTATION YOU HAVE NOT VERIFIED. If you are about to write a famous
    line, confirm the wording and its source first; unverified famous quotations are the
    most common way a draft gets something wrong.
-5. CHECK THE RETURN. The result carries `result_text` and a `human_confidence_score`. If
-   `result_text` is unchanged from what you sent, the guard rejected the rewrite — report
-   that honestly rather than claiming you improved the text.
-6. IT IS SLOW AND HEAVY. Tell the user it is running rather than presenting it as instant.
+6. READ `result_text` AND REPORT IT HONESTLY. It carries `result_text`, a
+   `human_confidence_score`, and `facts_to_check` when anything needs your attention. Never
+   claim you improved the text if you did not read what came back.
+7. IT IS SLOW AND HEAVY. Tell the user it is running rather than presenting it as instant.
 
 WATCH OUT FOR:
 - A rewrite that comes back MUCH longer than the input is a warning sign, not a bonus. The
   measured failure mode is a paragraph growing 77 -> 155 words while inventing quotations.
+- If you need a source or a quotation that is not already in the text, find it FIRST (use
+  `web_search`) and confirm the wording — never let the rewrite supply one.
 - Style changes are fine. Any change to a name, date, number or quotation is not.
 """
 

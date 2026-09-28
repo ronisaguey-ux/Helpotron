@@ -70,9 +70,26 @@ import aiohttp
 
 logger = logging.getLogger("helpotron.hip")
 
+# What the last rewrite could not repair and an agent must fix by hand. A module-level
+# box rather than a changed return type, because hip_humanize is on a live chat's critical
+# path and every existing caller expects a plain string.
+_LAST_REVIEW_TODOS: dict = {"items": []}
+
+
+def review_todos() -> list:
+    """Facts from the LAST rewrite that need an agent's hand, and why.
+
+    Empty means the rewrite was faithful and safe to use as-is.
+    """
+    return list(_LAST_REVIEW_TODOS.get("items") or [])
+
 # The preservation guard: a rewrite that changes the FACTS is discarded and the
 # original kept. See text_preservation.py for the measured fabrications behind it.
-from .text_preservation import check_preservation  # noqa: E402
+from .text_preservation import (  # noqa: E402
+    agent_todo,
+    check_preservation,
+    repair_quotes,
+)
 
 # Load the repo .env ourselves rather than relying on server.llm having been
 # imported first: "someone else already called load_dotenv" is an invisible
@@ -292,6 +309,7 @@ async def hip_humanize(text: str, rounds: Optional[int] = None) -> Optional[str]
         return None
 
     rounds = rounds or hip_rounds()
+    _LAST_REVIEW_TODOS["items"] = []   # never report the PREVIOUS run's todo list
     current = text
     cpu_before = _hip_server_cpu_seconds()
     try:
@@ -305,28 +323,34 @@ async def hip_humanize(text: str, rounds: Optional[int] = None) -> Optional[str]
                     logger.info("HIP round %s shrank %sw -> %sw; discarding",
                                 i + 1, len(current.split()), len(out.split()))
                     break
-                # ★ THE PRESERVATION GUARD. A "humanizer" that invents facts is not a style
-                # tool, it is a misinformation tool — measured on a real job: two fabricated
-                # Locke quotations (77w -> 155w) and a fabricated death date that was WRONG.
-                # The shrink check above only guarded one direction, and growth is the shape
-                # fabrication takes. On a failed check the round is retried ONCE and then the
-                # text is left as it was: for factual work, an unrewritten sentence is worth
-                # more than a fluent invented one.
+                # ★ THE PRESERVATION GUARD (owner 2026-09-28). A "humanizer" that invents
+                # facts is not a style tool, it is a misinformation tool — measured on a real
+                # job: two fabricated Locke quotations (77w -> 155w) and a fabricated death
+                # date that was WRONG.
+                #
+                # ★ REPAIR, DO NOT REGENERATE. The owner's correction: *"Instead of discarding
+                # humanized text cuz it invented fake quotes just make sure the ai agents that
+                # are using the humanize tool just edit the quote manually, regenerating
+                # everytime they fake a quote is a never ending cat and mouse chase"*. Asking
+                # the model again is an independent draw with no memory of the last failure;
+                # restoring the source's exact wording is DETERMINISTIC. So an invented or
+                # altered quotation is repaired in place here, and anything that cannot be
+                # repaired safely (invented numbers, dates, names) is left for the agent with
+                # an instruction — never silently mangled.
                 verdict = check_preservation(current, out)
                 if not verdict["ok"]:
-                    logger.warning("HIP round %s failed preservation (%s); retrying once",
-                                   i + 1, "; ".join(verdict["violations"])[:200])
-                    retry = await _one_round(current, session)
-                    if retry:
-                        retry_verdict = check_preservation(current, retry)
-                        if retry_verdict["ok"]:
-                            out = retry
-                        else:
-                            logger.warning(
-                                "HIP round %s still unfaithful (%s); keeping the original",
-                                i + 1, "; ".join(retry_verdict["violations"])[:200])
-                            break
-                    else:
+                    fix = repair_quotes(current, out)
+                    if fix["edits"]:
+                        logger.info("HIP round %s repaired: %s", i + 1,
+                                    ", ".join(e["action"] for e in fix["edits"]))
+                    todos = agent_todo(current, out)
+                    if todos:
+                        logger.warning("HIP round %s needs agent review: %s",
+                                       i + 1, "; ".join(todos)[:200])
+                        _LAST_REVIEW_TODOS["items"] = todos
+                    out = fix["text"]
+                    if not out.strip():
+                        # Nothing survived the repair — keep what we had.
                         break
                 current = out
     except Exception as e:
