@@ -1427,13 +1427,26 @@ print(f"Active files: {os.listdir('.')}")
                 text, settings=(user.settings if user and user.settings else None),
             )
             eval_res = await pipeline.evaluate_multi_checkers(humanized)
-            return {
+            # ★ What the preservation guard could NOT repair and an agent must fix by hand.
+            # Owner: *"just make sure the ai agents that are using the humanize tool just edit
+            # the quote manually"*. The rewrite is returned either way — discarding it and
+            # regenerating is a lottery, whereas handing over the specific facts that need
+            # review is a task the agent can actually complete.
+            from .hip_humanizer import review_todos as _review_todos
+            todos = _review_todos()
+            result = {
                 "action": action_type,
                 "status": "completed",
                 "result_text": humanized,
                 "iterations": iterations,
                 "human_confidence_score": eval_res["human_confidence_score"],
             }
+            if todos:
+                result["facts_to_check"] = todos
+                result["review_note"] = (
+                    "The rewrite was kept, but these facts could not be verified against the "
+                    "source and must be fixed by hand before this is used.")
+            return result
 
         elif action_type == "analyze_rubric":
             coordinator = SubAgentCoordinator()
