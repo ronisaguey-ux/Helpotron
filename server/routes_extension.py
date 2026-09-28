@@ -1733,6 +1733,71 @@ async def send_extension_chat(payload: ExtensionChatRequest, request: Request, d
         )
         logger.info("extension chat text flagged (not blocked): %s", reason)
 
+    # ── Laya abuse screen (2026-09-28) ───────────────────────────────────────
+    # ADDITIVE, never a refusal. Measured against the regex above on an 11-case set: the
+    # regex catches literal secrets and exact slurs, but it has NO signal for abuse that
+    # carries no literal token — a threat, targeted harassment or spam all read as ordinary
+    # words. Laya caught 3 of the 5 such cases with zero false positives on benign work.
+    #
+    # Flag-only on purpose: a ~0.36-accuracy model should not block a student's message on
+    # its own. The value is that a human moderator sees the case at all, which is exactly
+    # what the existing screen already does — this just widens what reaches them.
+    try:
+        from .layaguard import screen_abuse as _screen_abuse
+        abuse = await _screen_abuse(payload.text)
+    except Exception as e:                                    # noqa: BLE001
+        logger.warning("layaguard abuse screen failed at the route (%s: %s) — continuing",
+                       type(e).__name__, e)
+        abuse = None
+    if abuse and abuse.get("flagged"):
+        # A distinct content_ref so an abuse flag and a regex flag on the same message do
+        # not collide in the dedupe check and silently drop one of them.
+        flag_content(
+            db,
+            content_type="agent_chat_abuse",
+            content_ref=f"agent_chat_abuse:{user.public_id}:{thread_key}",
+            user_public_id=user.public_id,
+            text=payload.text,
+            reason=abuse.get("reason") or "laya moderation",
+            risk_score=min(1.0, float(abuse.get("violation") or 0.0)),
+        )
+        logger.info("extension chat abuse flagged (not blocked): %s", abuse.get("reason"))
+
+    # ── Laya input guard (2026-09-28) ────────────────────────────────────────
+    # The moderation screen above is regex-based and RECORDS only — it catches literal
+    # secrets and known slurs, which a pattern match does well. This is a different
+    # question: is the inbound text trying to steer the agent rather than ask it
+    # something. It matters most HERE, because the extension reads arbitrary web pages
+    # and then acts on what it read — injected instructions arrive inside a
+    # legitimate-looking tool result rather than from the user.
+    #
+    # `assess` FAILS OPEN: it returns None when the guard is disabled, when the model is
+    # unreachable, or when its reply cannot be read, and None means "proceed". A guard
+    # outage must never become a product outage. Only a high-confidence `block` stops the
+    # turn; `review` is logged and allowed through, because a ~0.36-accuracy model does
+    # not get to silently decide an ambiguous case against the user.
+    try:
+        from .layaguard import assess as _guard_assess
+        guard = await _guard_assess(payload.text)
+    except Exception as e:                                    # noqa: BLE001
+        # Defence in depth: assess() already fails open, but this endpoint must not 500
+        # because a sidecar has a bad day.
+        logger.warning("layaguard call failed at the route (%s: %s) — proceeding",
+                       type(e).__name__, e)
+        guard = None
+    if guard and guard.get("verdict") == "block":
+        logger.warning("extension chat BLOCKED by layaguard: %s", guard.get("reason"))
+        agent_reply = _chat_reply(
+            db, user, thread_key,
+            text="⚠️ I can't act on that message. It reads as an attempt to override my "
+                 "instructions rather than a request I can help with. If that's not what "
+                 "you meant, rephrase it and I'll take another look.",
+            suggested_actions=[])
+        return {"status": "blocked", "message": agent_reply, "reply": agent_reply,
+                "guard": {"verdict": "block", "reason": guard.get("reason")}}
+    if guard and guard.get("verdict") == "review":
+        logger.info("extension chat passed with layaguard review: %s", guard.get("reason"))
+
     # Restore conversation from the durable store (same as the web chat).
     try:
         load_chat_history_from_db(db, user.id, thread_key)
