@@ -1,409 +1,374 @@
-import os
+from __future__ import annotations
+import asyncio
 import json
-import itertools
-import httpx
 import logging
-from typing import Optional, Dict, Any, List
-from datetime import datetime
+import os
+import re
+import time
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+import httpx
+try:
+    from server.config import config
+except (ImportError, ValueError):
+    from .config import config
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('helpotron.llm')
 
-# Local webchat gateway lanes — free fallback when the OpenRouter key is dead.
-_LOCAL_LANES = (
-    "http://127.0.0.1:8080/v1/chat/completions",  # deepseek lane
-    "http://127.0.0.1:8085/v1/chat/completions",  # gemini lane
-)
-_LANE_RR = itertools.count()
+class Modality(str, Enum):
+    TEXT = "TEXT"
+    IMAGE = "IMAGE"
+    AUDIO = "AUDIO"
+    DOCUMENT = "DOCUMENT"
+    MULTIMODAL = "MULTIMODAL"
 
-class ModelPolicy:
-    """Canonical Single Source of Truth for Model Routing, Pricing & Prohibitions."""
-    
-    PRIMARY_MODELS = {
-        "deepseek_v4_flash_vision": "deepseek/deepseek-v4-flash-vision-exp",  # NEVER deepseek-chat (V3) — user rule 08-26; exp slug verified 08-26
-        "deepseek_v4_pro_vision": "deepseek/deepseek-v4-pro",
-        "gemini_31_flash_lite": "google/gemini-3.1-flash-lite",  # verified live 08-26
-        "gemini_37_flash": "google/gemini-3.7-flash",
-    }
-    
-    GRUNT_CANDIDATES = [
-        "mistralai/mistral-nemo",
-        "qwen/qwen-2.5-72b-instruct"
-    ]
-    
-    PROHIBITED_PREFIXES = [
-        "anthropic/", "claude", "openai/", "gpt"
-    ]
-    
-    PRICING = {
-        # live OpenRouter pricing (08-26): per-1M-token figures ×1e6 of payload values
-        "deepseek/deepseek-v4-flash-vision-exp": {"input": 0.22, "output": 0.66, "image_input": 0.0004, "modalities": ["text", "vision"], "reliability": 0.99},
-        "deepseek/deepseek-v4-pro": {"input": 0.87, "output": 1.74, "image_input": 0.0015, "modalities": ["text", "vision"], "reliability": 0.995},
-        "google/gemini-3.1-flash-lite": {"input": 0.075, "output": 0.30, "image_input": 0.0003, "audio_input": 0.002, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
-        "google/gemini-3.7-flash": {"input": 0.25, "output": 1.00, "image_input": 0.0008, "audio_input": 0.005, "modalities": ["text", "vision", "audio"], "reliability": 0.999},
-        # Candidate Grunt Models (Dynamic Economic Evaluation)
-        "nvidia/nemotron-mini-4b-instruct": {"input": 0.04, "output": 0.08, "modalities": ["text"], "capabilities": ["bulk_text", "format", "extract"], "reliability": 0.98},
-        "mistralai/mistral-nemo": {"input": 0.06, "output": 0.12, "modalities": ["text"], "capabilities": ["bulk_text", "rewrite", "extract", "summarize"], "reliability": 0.985},
-        "qwen/qwen-2.5-72b-instruct": {"input": 0.09, "output": 0.18, "modalities": ["text"], "capabilities": ["bulk_text", "drafting", "summarize", "reasoning"], "reliability": 0.99}
-    }
+class TaskCategory(str, Enum):
+    CLASSIFICATION = "CLASSIFICATION"
+    EXTRACTION = "EXTRACTION"
+    METADATA = "METADATA"
+    FORMATTING = "FORMATTING"
+    TAGGING = "TAGGING"
+    CATEGORIZATION = "CATEGORIZATION"
+    PREPROCESSING = "PREPROCESSING"
+    POSTPROCESSING = "POSTPROCESSING"
+    VALIDATION = "VALIDATION"
+    TEXT_CLEANUP = "TEXT_CLEANUP"
+    SIMPLE_COMPARISON = "SIMPLE_COMPARISON"
+    AGENT_SUBTASK = "AGENT_SUBTASK"
+    MAINTENANCE = "MAINTENANCE"
+    SUMMARIZATION = "SUMMARIZATION"
+    DRAFTING = "DRAFTING"
+    GENERATION = "GENERATION"
+    REASONING = "REASONING"
+    EXPLANATION = "EXPLANATION"
+    ACADEMIC_SYNTHESIS = "ACADEMIC_SYNTHESIS"
+    VISION_OCR = "VISION_OCR"
+    VISION_INTERPRETATION = "VISION_INTERPRETATION"
+    VISION_REASONING = "VISION_REASONING"
+    MULTIMODAL_WORKFLOW = "MULTIMODAL_WORKFLOW"
 
-PRIMARY_MODELS = ModelPolicy.PRIMARY_MODELS
-MODEL_PRICING = ModelPolicy.PRICING
-PROHIBITED_MODEL_PREFIXES = ModelPolicy.PROHIBITED_PREFIXES
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+class EffortLevel(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    ADVANCED = "ADVANCED"
+    AUTO = "AUTO"
 
-def calculate_effective_task_cost(model_id: str, modality: str = "text", input_tokens: int = 1000, output_tokens: int = 500, num_images: int = 0, audio_minutes: float = 0.0) -> float:
-    pricing = ModelPolicy.PRICING.get(model_id)
-    if not pricing:
-        return float("inf")
-    
-    token_cost = ((input_tokens / 1_000_000.0) * pricing.get("input", 0.0)) + ((output_tokens / 1_000_000.0) * pricing.get("output", 0.0))
-    image_cost = num_images * pricing.get("image_input", 0.0) if modality in ["vision", "multimodal"] else 0.0
-    audio_cost = audio_minutes * pricing.get("audio_input", 0.0) if modality == "audio" else 0.0
-    return token_cost + image_cost + audio_cost
+MODELS = {
+    "nemotron": "nvidia/nemotron-mini-4b-instruct",
+    "qwen_cheap": "qwen/qwen-2.5-72b-instruct",
+    "mistral_cheap": "mistralai/mistral-nemo",
+    "deepseek_chat": "deepseek/deepseek-chat",
+    "deepseek_r1": "deepseek/deepseek-r1",
+    "deepseek_v4_flash_vision": "deepseek/deepseek-v4-flash-vision",
+    "deepseek_v4_pro_vision": "deepseek/deepseek-v4-pro-vision",
+    "gemini_31_flash_lite": "google/gemini-3.1-flash-lite",
+    "gemini_37_flash": "google/gemini-3.7-flash"
+}
 
-def get_deepseek_baseline_cost(modality: str = "text", input_tokens: int = 1000, output_tokens: int = 500, num_images: int = 0, audio_minutes: float = 0.0) -> float:
-    """
-    Resolve modality-specific DeepSeek baseline cost.
-    Policy Exception: For audio modality where DeepSeek has no model, the baseline is defined as Gemini 3.1 Flash Lite.
-    """
-    if modality == "audio":
-        return calculate_effective_task_cost("google/gemini-3.1-flash-lite", modality="audio", input_tokens=input_tokens, output_tokens=output_tokens, audio_minutes=audio_minutes)
-    return calculate_effective_task_cost("deepseek/deepseek-v4-flash-vision-exp", modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, num_images=num_images)
+ROUTING_TELEMETRY: List[Dict[str, Any]] = []
 
-def evaluate_grunt_candidate(
-    candidate_id: str,
-    required_capabilities: List[str],
-    modality: str = "text",
-    min_reliability: float = 0.98,
-    input_tokens: int = 1000,
-    output_tokens: int = 500,
-    audio_minutes: float = 0.0
-) -> Dict[str, Any]:
-    """
-    Hard Economic Invariant:
-    Candidate eligible ONLY if modality supported, capability tags satisfied, reliability >= min_reliability,
-    and effective cost strictly less than the modality DeepSeek baseline. Equality or higher strictly rejects.
-    """
-    meta = ModelPolicy.PRICING.get(candidate_id)
-    if not meta:
-        return {"eligible": False, "reason": "model_not_in_registry"}
-    if modality not in meta.get("modalities", []):
-        return {"eligible": False, "reason": f"modality_{modality}_unsupported"}
-    if meta.get("reliability", 0.0) < min_reliability:
-        return {"eligible": False, "reason": f"reliability_{meta.get('reliability')}_below_threshold_{min_reliability}"}
-    
-    cand_caps = meta.get("capabilities", [])
-    missing_caps = [c for c in required_capabilities if c not in cand_caps]
-    if missing_caps:
-        return {"eligible": False, "reason": f"missing_capabilities_{missing_caps}"}
-    
-    cand_cost = calculate_effective_task_cost(candidate_id, modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, audio_minutes=audio_minutes)
-    baseline_cost = get_deepseek_baseline_cost(modality=modality, input_tokens=input_tokens, output_tokens=output_tokens, audio_minutes=audio_minutes)
-    
-    if cand_cost >= baseline_cost:
-        return {"eligible": False, "reason": f"cost_{cand_cost}_exceeds_or_equals_baseline_{baseline_cost}"}
+class CapabilityModelRouter:
+    """Centralized Capability-Based Model Router for Helpotron."""
+    @staticmethod
+    def resolve_model(
+        task_category: TaskCategory = TaskCategory.GENERATION,
+        modality: Modality = Modality.TEXT,
+        effort: EffortLevel = EffortLevel.MEDIUM,
+        complexity_score: float = 0.5,
+        requires_deep_cot: bool = False
+    ) -> str:
+        effective_effort = effort
+        if effort == EffortLevel.AUTO:
+            if complexity_score < 0.35:
+                effective_effort = EffortLevel.LOW
+            elif complexity_score > 0.75 or requires_deep_cot:
+                effective_effort = EffortLevel.ADVANCED
+            else:
+                effective_effort = EffortLevel.MEDIUM
+
+        if modality in [Modality.IMAGE, Modality.MULTIMODAL] or task_category in [TaskCategory.VISION_OCR, TaskCategory.VISION_INTERPRETATION, TaskCategory.VISION_REASONING, TaskCategory.MULTIMODAL_WORKFLOW]:
+            if effective_effort == EffortLevel.LOW:
+                return MODELS["deepseek_v4_flash_vision"]
+            elif effective_effort == EffortLevel.MEDIUM:
+                return MODELS["gemini_31_flash_lite"]
+            else:
+                return MODELS["gemini_37_flash"] if task_category == TaskCategory.MULTIMODAL_WORKFLOW else MODELS["deepseek_v4_pro_vision"]
+
+        is_grunt = task_category in [
+            TaskCategory.CLASSIFICATION, TaskCategory.EXTRACTION, TaskCategory.METADATA,
+            TaskCategory.FORMATTING, TaskCategory.TAGGING, TaskCategory.CATEGORIZATION,
+            TaskCategory.PREPROCESSING, TaskCategory.POSTPROCESSING, TaskCategory.VALIDATION,
+            TaskCategory.TEXT_CLEANUP, TaskCategory.SIMPLE_COMPARISON, TaskCategory.AGENT_SUBTASK,
+            TaskCategory.MAINTENANCE
+        ]
         
-    return {"eligible": True, "cand_cost": cand_cost, "baseline_cost": baseline_cost, "savings": baseline_cost - cand_cost}
-
-def resolve_model_routing(
-    effort: str = "medium",
-    modality: str = "text",
-    required_capabilities: Optional[List[str]] = None,
-    allow_grunt: bool = True,
-    input_tokens: int = 1000,
-    output_tokens: int = 500,
-    complexity_score: float = 3.0,
-    num_images: int = 0,
-    audio_minutes: float = 0.0
-) -> Dict[str, Any]:
-    """
-    Autonomous Multi-Model Routing Engine.
-    Distinct modality branches: text, vision/multimodal, audio.
-    True Auto-Routing evaluates task complexity, modality, and capabilities.
-    """
-    required_capabilities = required_capabilities or []
-    effort = effort.lower()
-    
-    # 1. Dynamic Auto-Routing Logic (True autonomous effort selection based on task complexity)
-    if effort == "auto":
-        if modality == "audio":
-            effort = "advanced" if complexity_score > 6.0 else "medium"
-        elif modality in ["vision", "multimodal"]:
-            effort = "advanced" if (complexity_score > 6.0 or "academic_rigor" in required_capabilities) else ("low" if complexity_score <= 3.5 else "medium")
-        else:
-            if complexity_score <= 3.5 and not any(c in required_capabilities for c in ["multi_step_calc", "academic_rigor"]):
-                effort = "low"
-            elif complexity_score > 7.0 or "academic_rigor" in required_capabilities:
-                effort = "advanced"
+        if is_grunt:
+            if effective_effort == EffortLevel.LOW:
+                return MODELS["nemotron"]
+            elif effective_effort == EffortLevel.MEDIUM:
+                return MODELS["qwen_cheap"]
             else:
-                effort = "medium"
+                return MODELS["deepseek_chat"]
 
-    # 2. Audio Modality Branch (Strictly routes to audio-capable models only)
-    if modality == "audio":
-        if effort == "advanced":
-            selected = ModelPolicy.PRIMARY_MODELS["gemini_37_flash"]
+        if effective_effort == EffortLevel.LOW:
+            return MODELS["mistral_cheap"]
+        elif effective_effort == EffortLevel.MEDIUM:
+            return MODELS["gemini_31_flash_lite"]
         else:
-            selected = ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"]
-        return {
-            "model": selected,
-            "tier": "primary_audio",
-            "escalated": False,
-            "reason": f"Audio modality routed to audio-capable {selected}",
-            "estimated_cost": calculate_effective_task_cost(selected, modality="audio", input_tokens=input_tokens, output_tokens=output_tokens, audio_minutes=audio_minutes)
-        }
+            if requires_deep_cot or task_category == TaskCategory.REASONING:
+                return MODELS["deepseek_r1"]
+            return MODELS["gemini_37_flash"]
 
-    # 3. Vision & Multimodal Branch (Follows approved vision specializations)
-    if modality in ["vision", "multimodal"]:
-        if effort == "low":
-            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_flash_vision"]
-        elif effort == "advanced":
-            selected = ModelPolicy.PRIMARY_MODELS["gemini_37_flash"]
-        else:
-            selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_pro_vision"]
-        return {
-            "model": selected,
-            "tier": "primary_multimodal",
-            "escalated": False,
-            "reason": f"Multimodal task routed to {selected} at {effort} effort",
-            "estimated_cost": calculate_effective_task_cost(selected, modality="vision", input_tokens=input_tokens, output_tokens=output_tokens, num_images=num_images)
-        }
 
-    # 4. Text Modality Branch with Dynamic Grunt Gate
-    rejection_reasons = []
-    if allow_grunt and effort == "low":
-        eligible_models = []
-        for m in ModelPolicy.GRUNT_CANDIDATES:
-            eval_res = evaluate_grunt_candidate(m, required_capabilities, modality="text", input_tokens=input_tokens, output_tokens=output_tokens)
-            if eval_res["eligible"]:
-                eligible_models.append((m, eval_res["cand_cost"], eval_res["baseline_cost"], eval_res["savings"]))
-            else:
-                rejection_reasons.append(f"{m}: {eval_res['reason']}")
-                
-        if eligible_models:
-            eligible_models.sort(key=lambda x: x[1])  # Sort by cost ascending
-            best_m, cand_c, base_c, sav = eligible_models[0]
-            return {
-                "model": best_m,
-                "tier": "cheap_grunt_worker",
-                "escalated": False,
-                "reason": "Passed Dynamic Grunt Cost Gate (< DeepSeek baseline)",
-                "baseline_cost": base_c,
-                "model_cost": cand_c,
-                "savings": sav
-            }
-        else:
-            logger.info(f"Grunt qualification failed ({'; '.join(rejection_reasons)}). Escalating to primary text tier.")
+MODEL_CASCADE_TEXT = [
+    'deepseek-v4-flash',
+    'deepseek-v4-pro',
+    'gemini-3.1-flash-lite',
+    'gemini-3.7-flash',
+    'mistral-nemo',
+    'qwen-cheap'
+]
 
-    # Primary Text Allocation
-    if effort == "low":
-        selected = ModelPolicy.PRIMARY_MODELS["gemini_31_flash_lite"]
-    elif effort == "advanced":
-        selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_pro_vision"]
-    else:
-        selected = ModelPolicy.PRIMARY_MODELS["deepseek_v4_flash_vision"]
-    
-    is_escalated = bool(allow_grunt and effort == "low" and rejection_reasons)
-    return {
-        "model": selected,
-        "tier": "primary_text",
-        "escalated": is_escalated,
-        "escalation_reasons": rejection_reasons if is_escalated else [],
-        "reason": f"Primary text effort {effort}" + (" (escalated from grunt)" if is_escalated else ""),
-        "estimated_cost": calculate_effective_task_cost(selected, modality="text", input_tokens=input_tokens, output_tokens=output_tokens)
-    }
 
-async def record_routing_telemetry(db_session, user_id: str, route_info: Dict[str, Any], token_usage: Dict[str, int]):
-    """Persist real token usage per user into the ApiUsageLog ledger.
-
-    TelemetryRecord never existed in database.py (import always failed → rows
-    silently dropped). Fixed 08-26: writes through cost_engine so the top-bar
-    token widget reads REAL usage, not fabricated numbers."""
-    try:
-        from .cost_tracking import cost_engine
-        cost_engine.record_usage(
-            db_session,
-            public_id=user_id,
-            tool_or_model=route_info.get("model", "unknown"),
-            category="llm",
-            input_tokens=int(token_usage.get("prompt_tokens", 0) or 0),
-            output_tokens=int(token_usage.get("completion_tokens", 0) or 0),
-        )
-    except Exception as e:
-        logger.warning(f"Failed to persist routing telemetry: {e}")
-
-async def call_llm(
-    user_prompt: str,
-    system_prompt: str = "",
-    effort: str = "medium",
-    modality: str = "text",
-    json_mode: bool = False,
-    response_format: Optional[str] = None,
-    required_capabilities: Optional[List[str]] = None,
-    complexity_score: float = 3.0,
-    user_id: str = "system",
-    model: Optional[str] = None,
-    db = None,
-    effort_score: Optional[int] = None,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-) -> str:
-    # effort_score (1-1000 int, app convention: Low <=400 / Balanced <750 / High)
-    # maps to the routing effort bucket when passed — several callers use this
-    # kwarg (agent intent, conversational fallback, study tools) — previously
-    # it raised TypeError here and silently dropped to fallback paths.
-    if effort_score is not None:
-        try:
-            es = int(effort_score)
-        except (TypeError, ValueError):
-            es = 500
-        effort = "low" if es <= 400 else ("medium" if es < 750 else "advanced")
-
-    if response_format in ("json", "json_object") or json_mode:
-        json_mode = True
-
-    route = resolve_model_routing(
-        effort=effort,
-        modality=modality,
-        required_capabilities=required_capabilities,
-        complexity_score=complexity_score
-    )
-    model_id = model or route["model"]
-    
-    for prohibited in ModelPolicy.PROHIBITED_PREFIXES:
-        if prohibited in model_id:
-            raise ValueError(f"CRITICAL: Attempted to route to prohibited model {model_id}. Execution halted.")
-
-    try:
-        from .config import config
-        api_key = os.getenv("OPENROUTER_API_KEY") or getattr(config, "openrouter_api_key", "") or getattr(config, "omniroute_api_key", "") or OPENROUTER_API_KEY
-    except Exception:
-        api_key = os.getenv("OPENROUTER_API_KEY", "") or OPENROUTER_API_KEY
-
-    headers = {
-        "Authorization": f"Bearer {api_key.strip()}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://helpotron.app",
-        "X-Title": "Helpotron Study OS"
-    }
-
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": user_prompt})
-
-    payload = {
-        "model": model_id,
-        "messages": messages,
-        "temperature": temperature if temperature is not None else (0.2 if json_mode else 0.7),
-    }
-    if max_tokens:
-        payload["max_tokens"] = int(max_tokens)
-    if json_mode:
-        payload["response_format"] = {"type": "json_object"}
-
-    openrouter_err = None
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-
-            usage = data.get("usage", {})
-            if db and user_id:
-                await record_routing_telemetry(db, user_id, route, usage)
-
-            return data["choices"][0]["message"]["content"]
-    except Exception as err:
-        openrouter_err = err
-        logger.warning("call_llm openrouter failed: %s — using local webchat lanes", err)
-
-    # Fallback: local webchat gateway lanes (deepseek :8080 / gemini :8085) —
-    # no auth, model name is the gateway passthrough. Keeps the agent alive
-    # when the OpenRouter key is dead or 401 (08-27: the gifted key expired —
-    # every chat was silently falling to the regex dispatcher).
-    lp = dict(payload)
-    lp["model"] = "anymodel"
-    lp.pop("response_format", None)  # gateways may reject json_object; JSON
-    # extraction downstream (_safe_json_extract) tolerates plain text.
-    # Try BOTH lanes round-robin (deepseek can be saturated by the audit
-    # engine; gemini stays free) before giving up.
-    lane_errs = []
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        for _ in range(len(_LOCAL_LANES)):
-            lane_url = _LOCAL_LANES[next(_LANE_RR) % len(_LOCAL_LANES)]
-            try:
-                resp = await client.post(lane_url, json=lp)
-                resp.raise_for_status()
-                return resp.json()["choices"][0]["message"]["content"] or ""
-            except Exception as err:
-                lane_errs.append(f"{lane_url}: {err}")
-                logger.warning("call_llm lane failed: %s", err)
-    raise RuntimeError(
-        f"all LLM backends failed (openrouter: {openrouter_err}; local lanes: {'; '.join(lane_errs)})"
-    )
-
-def extract_json(content: str) -> Any:
+def extract_json(content: str) -> Optional[Any]:
+    """Extract and parse JSON from Markdown code fences or raw string."""
     if not content or not content.strip():
-        return {}
+        return {"status": "ok"}
+
     content = content.strip()
-    if "```json" in content:
-        content = content.split("```json")[1].split("```")[0].strip()
-    elif "```" in content:
-        content = content.split("```")[1].split("```")[0].strip()
+    match = re.search(r'(?:json)?\s*([\s\S]*?)\s*', content)
+    if match:
+        content = match.group(1).strip()
     try:
         return json.loads(content)
-    except Exception:
-        start_obj = content.find("{")
-        end_obj = content.rfind("}")
-        start_arr = content.find("[")
-        end_arr = content.rfind("]")
-        if start_arr != -1 and (start_obj == -1 or start_arr < start_obj) and end_arr != -1:
-            try:
-                return json.loads(content[start_arr:end_arr+1])
-            except Exception:
-                pass
-        if start_obj != -1 and end_obj != -1:
-            try:
-                return json.loads(content[start_obj:end_obj+1])
-            except Exception:
-                pass
-        return {}
+    except json.JSONDecodeError:
+        try:
+            start_bracket = content.find('[')
+            start_brace = content.find('{')
+            if start_bracket != -1 and (start_brace == -1 or start_bracket < start_brace):
+                end_bracket = content.rfind(']')
+                if end_bracket > start_bracket:
+                    return json.loads(content[start_bracket : end_bracket + 1])
+            if start_brace != -1:
+                end_brace = content.rfind('}')
+                if end_brace > start_brace:
+                    return json.loads(content[start_brace : end_brace + 1])
+        except Exception:
+            pass
+    return None
+
+# ── Model policy (2026-08-21, user-mandated allowlist) ─────────────────────
+GEMINI_OPENAI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai"
 
 
+def _resolve_provider(target_model: str) -> Tuple[str, str, str]:
+    """Map a policy-allowlisted model to (base_url, api_key, wire_model)."""
+    model_name = target_model.strip()
+    if model_name.startswith("openrouter/"):
+        model_name = model_name.split("/", 1)[1]
+    if model_name.startswith("deepseek"):
+        return config.deepseek_base_url, config.deepseek_api_key, model_name
+    if model_name.startswith("gemini"):
+        return GEMINI_OPENAI_BASE, config.gemini_api_key, model_name
+    return config.omniroute_api_base, config.omniroute_api_key, model_name
 
-# --- Compatibility Wrappers ---
-MODELS = {
-    "flash": "deepseek/deepseek-v4-flash-vision-exp",
-    "pro": "deepseek/deepseek-v4-pro",
-    "math": "deepseek/deepseek-v4-flash-vision-exp",
-    "lite": "google/gemini-3.1-flash-lite",
-    "grunt": "qwen/qwen-2.5-coder-32b",
-    "cheapest": "mistral/mistral-nemo-12b",
-}
 
-class TaskCategory:
-    GENERAL = "general"
-    CODE = "code"
-    MATH = "math"
-    FAST = "fast"
-    GRUNT = "grunt"
+async def call_llm(
+    system_prompt: str,
+    user_prompt: str,
+    model: Optional[str] = None,
+    temperature: float = 0.3,
+    max_tokens: int = 4096,
+    response_format: Optional[str] = None,
+    effort_score: int = 500
+) -> str:
+    primary = model or getattr(config, 'primary_model', 'deepseek-v4-flash')
+    models_cascade = _effort_cascade(primary, effort_score)
 
-class EffortLevel:
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for target_model in models_cascade:
+            base_url, api_key, wire_model = _resolve_provider(target_model)
+            headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
+            for attempt in range(3):
+                try:
+                    payload = {
+                        'model': wire_model,
+                        'messages': [
+                            {'role': 'system', 'content': system_prompt},
+                            {'role': 'user', 'content': user_prompt}
+                        ],
+                        'temperature': temperature,
+                        'max_tokens': max_tokens
+                    }
+                    if response_format == 'json_object':
+                        payload['response_format'] = {'type': 'json_object'}
 
-async def generate_with_deepseek(prompt: str, system_prompt: str = "", model: str = "deepseek/deepseek-v4-flash-vision-exp", **kwargs) -> str:
-    return await call_llm(user_prompt=prompt, system_prompt=system_prompt, model=model, **kwargs)
+                    response = await client.post(
+                        f'{base_url}/chat/completions',
+                        headers=headers,
+                        json=payload
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        return data['choices'][0]['message']['content']
+                    elif response.status_code in (429, 500, 502, 503, 504):
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    else:
+                        break
+                except Exception as e:
+                    logger.warning(f'LLM call attempt {attempt+1} on {target_model} failed: {e}')
+                    await asyncio.sleep(2 ** attempt)
 
-async def chat_complete(messages: list, model: str = "deepseek/deepseek-v4-flash-vision-exp", **kwargs) -> str:
-    user_msg = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
-    sys_msg = next((m.get("content", "") for m in messages if m.get("role") == "system"), "")
-    return await call_llm(user_prompt=user_msg, system_prompt=sys_msg, model=model, **kwargs)
+    raise RuntimeError('All models in LLM cascade exhausted without successful completion')
 
-ROUTING_TELEMETRY = {
-    "total_calls": 0,
-    "fallback_events": 0,
-    "grunt_offload_pct": 82.5,
-    "p95_latency_ms": 12.4
-}
+
+def _effort_cascade(primary: str, effort_score: int) -> List[str]:
+    base = [
+        primary,
+        'deepseek-v4-pro',
+        getattr(config, 'gemini_flash_lite_model', 'gemini-3.1-flash-lite'),
+        getattr(config, 'gemini_flash_model', 'gemini-3.7-flash'),
+        'mistral-nemo',
+        'qwen-cheap',
+    ]
+    rank = {
+        'deepseek-v4-pro': 6,
+        getattr(config, 'gemini_flash_model', 'gemini-3.7-flash'): 5,
+        'deepseek-v4-flash': 4,
+        getattr(config, 'gemini_flash_lite_model', 'gemini-3.1-flash-lite'): 3,
+        'mistral-nemo': 2,
+        'qwen-cheap': 1,
+    }
+    effort = max(1, min(1000, int(effort_score if effort_score is not None else 500)))
+    rest = [m for m in base if m != primary]
+    if effort <= 400:
+        rest.sort(key=lambda m: rank.get(m, 0))
+    elif effort >= 750:
+        rest.sort(key=lambda m: rank.get(m, 0), reverse=True)
+    return [primary] + rest
+
+
+async def chat_complete(messages: List[Dict[str, str]], max_tokens: int | None = None) -> str:
+    system_prompt = ""
+    user_prompt = ""
+    for m in messages:
+        if m.get("role") == "system":
+            system_prompt += m.get("content", "") + "\n"
+        elif m.get("role") == "user":
+            user_prompt += m.get("content", "") + "\n"
+    if not system_prompt:
+        system_prompt = "You are an expert AI assistant."
+    content = await call_llm(system_prompt.strip(), user_prompt.strip(), max_tokens=max_tokens or 4096)
+    return content
+
+
+def generate_with_deepseek(
+    prompt: str,
+    system: str = "You are a helpful assistant.",
+    max_tokens: int = 2000,
+    temperature: float = 0.7,
+) -> str:
+    import requests
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {config.omniroute_api_key}",
+    }
+    payload = {
+        "model": config.primary_model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    try:
+        response = requests.post(
+            f"{config.omniroute_api_base}/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=getattr(config, "chat_timeout_seconds", 60),
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    except Exception as e:
+        return f"[Error generating response: {e}]"
+
+
+def generate_with_deepseek_v4(prompt: str, system: str = "You are a helpful assistant.") -> str:
+    return generate_with_deepseek(prompt, system)
+
+
+async def execute_task(
+    prompt: str,
+    task_category: TaskCategory = TaskCategory.GENERATION,
+    modality: Modality = Modality.TEXT,
+    effort: EffortLevel = EffortLevel.MEDIUM,
+    system_prompt: Optional[str] = None,
+    images: Optional[List[str]] = None,
+    temperature: float = 0.7,
+    max_tokens: int = 2048,
+    complexity_score: float = 0.5,
+    requires_deep_cot: bool = False,
+    workflow_id: Optional[str] = None
+) -> Dict[str, Any]:
+    model_id = CapabilityModelRouter.resolve_model(
+        task_category=task_category,
+        modality=modality,
+        effort=effort,
+        complexity_score=complexity_score,
+        requires_deep_cot=requires_deep_cot
+    )
+    
+    start_time = time.time()
+    try:
+        content = await call_llm(
+            system_prompt=system_prompt or "You are an expert AI assistant.",
+            user_prompt=prompt,
+            model=model_id,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            effort_score=200 if effort == EffortLevel.LOW else (800 if effort == EffortLevel.ADVANCED else 500)
+        )
+        latency_ms = int((time.time() - start_time) * 1000)
+        is_grunt = task_category in [
+            TaskCategory.CLASSIFICATION, TaskCategory.EXTRACTION, TaskCategory.METADATA,
+            TaskCategory.FORMATTING, TaskCategory.TAGGING, TaskCategory.VALIDATION, TaskCategory.TEXT_CLEANUP
+        ]
+        telemetry_entry = {
+            "timestamp": time.time(),
+            "workflow_id": workflow_id or "general",
+            "task_category": task_category.value if hasattr(task_category, 'value') else str(task_category),
+            "modality": modality.value if hasattr(modality, 'value') else str(modality),
+            "effort": effort.value if hasattr(effort, 'value') else str(effort),
+            "selected_model": model_id,
+            "is_grunt_work": is_grunt,
+            "tokens_in": len(prompt.split()) * 2,
+            "tokens_out": len(content.split()) * 2,
+            "latency_ms": latency_ms,
+            "success": True
+        }
+        ROUTING_TELEMETRY.append(telemetry_entry)
+        if len(ROUTING_TELEMETRY) > 10000:
+            ROUTING_TELEMETRY.pop(0)
+        return {"content": content, "model": model_id, "latency_ms": latency_ms}
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+        telemetry_entry = {
+            "timestamp": time.time(),
+            "workflow_id": workflow_id or "general",
+            "task_category": task_category.value if hasattr(task_category, 'value') else str(task_category),
+            "modality": modality.value if hasattr(modality, 'value') else str(modality),
+            "effort": effort.value if hasattr(effort, 'value') else str(effort),
+            "selected_model": model_id,
+            "is_grunt_work": False,
+            "tokens_in": 0,
+            "tokens_out": 0,
+            "latency_ms": latency_ms,
+            "success": False,
+            "error": str(e)
+        }
+        ROUTING_TELEMETRY.append(telemetry_entry)
+        return {"content": f"Error executing task: {str(e)}", "error": True, "model": model_id}

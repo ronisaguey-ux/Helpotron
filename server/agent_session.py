@@ -1,66 +1,41 @@
-"""Browser agent sessions — the extension's "Activate" feature.
-
-When the user hits Activate, a session starts here and runs for up to
-30 minutes: an LLM agent (DeepSeek V4 Flash via OmniRoute) plans steps and
-issues tool calls (navigate / click / type / read_page / scroll / finish)
-that the extension executes in the user's own Canvas tab over a WebSocket
-bridge. Collected page content lands in the Transcript table (source
-"agent") so the study generators can consume it.
-
-Scope guard: the agent only reads the user's own Canvas account. It never
-submits anything.
-"""
-from __future__ import annotations
-
 import asyncio
 import json
 import logging
 import time
 import uuid
+from typing import Any, Dict
 
 from fastapi import WebSocket
 
-try:
-    from . import llm
-except (ImportError, ValueError):
-    from server import llm
+from . import llm
 
+logger = logging.getLogger(__name__)
 
-logger = logging.getLogger("helpotron.agent")
+MAX_SESSION_SECONDS = 1800  # 30 min cap
+MAX_STEPS = 30
+COMMAND_TIMEOUT = 30.0  # seconds waiting for extension to respond to a tool
+ATTACH_TIMEOUT = 15.0   # seconds waiting for extension WS to attach after start
+MAX_PAGE_CHARS = 12000  # cap tool observation size fed back into prompt
 
-MAX_SESSION_SECONDS = 60 * 60  # spec: "30 minutes to an hour"
-MAX_STEPS = 120                # slow, deliberate scraping pace
-MAX_PAGE_CHARS = 30000
-COMMAND_TIMEOUT = 40  # seconds to wait for the extension to execute one command
-ATTACH_TIMEOUT = 60   # seconds to wait for the extension to connect after start
+AGENT_SYSTEM = """You are Helpotron's page collector. Your goal is to inspect
+the user's active LMS assignment page (Canvas, Blackboard, Brightspace, Moodle,
+Google Classroom, etc.) and read its full text so Helpotron can generate an
+authentic completion plan.
 
-AGENT_SYSTEM = (
-    "You are the Helpotron Universal Collection Subagent working inside the user's selected browser tab. "
-    "Your mission: slowly and methodically gather everything needed to build structured assignment data and study "
-    "materials from ANY educational platform or arbitrary website (Canvas, Google Classroom, Blackboard, Brightspace, Moodle, Schoology, Google Docs, Notion, or custom faculty pages). "
-    "Extract the assignment title, due date, full prompt/description, rubric criteria/tables, instructor guidance, and attached files. "
-    "Navigate and inspect pages using your tool calls. When the assignment details are complete, call 'finish' with the structured JSON payload. "
-    "If the page is heavily obfuscated, DRM-protected, or does not contain readable assignment data, honestly call 'report_unparseable' and suggest submitting feedback to the Data Lake. "
-    "Never submit anything, never take destructive actions."
-)
-
-TOOL_DOC = """Tools (call EXACTLY one per turn, as JSON):
-{"tool": "read_page"} — current page text + links + url + title + detected LMS metadata
-{"tool": "inspect_dom", "args": {"selector": "<css selector>"}} — targeted element inspection
-{"tool": "extract_rubric", "args": {"selector": "<optional table or container selector>"}} — structured rubric parser
-{"tool": "extract_files"} — gathers all downloadable attachment links, PDFs, and Google Drive links
-{"tool": "click", "args": {"selector": "<css selector>"}} — click an element (e.g. accordion, rubric tab)
-{"tool": "type", "args": {"selector": "<css>", "text": "<value>"}} — fill an input
-{"tool": "scroll", "args": {"direction": "down"|"up"}} — methodically scroll to trigger lazy-loaded sections
-{"tool": "navigate", "args": {"url": "<full target url>"}} — navigate to related syllabus/assignment links
-{"tool": "report_unparseable", "args": {"reason": "<honest explanation of why this page cannot be parsed>"}} — report unparseable page and direct to Data Lake
-{"tool": "finish", "args": {"summary": "<summary>", "assignment": {"title": "...", "due_date": "...", "prompt": "...", "rubric": "...", "file_urls": []}}} — end session and ingest data into Helpotron
-
-Strategy:
-1. Call 'read_page' first to analyze page contents and detect page type.
-2. If sections are collapsed, use 'click' to open rubrics or files.
-3. If complete assignment data is extracted, call 'finish'.
+Rules:
+1. Be fast and efficient — read the current page first.
+2. If content is truncated or paginated, scroll or navigate to see the full prompt/rubric.
+3. Once complete assignment data is extracted, call 'finish'.
 4. If page cannot be parsed, honestly call 'report_unparseable'."""
+
+TOOL_DOC = """Available tools (reply with exactly one JSON object):
+- {"tool": "read_page"} — extract text, title, and links from current tab
+- {"tool": "click", "args": {"selector": "css selector or text"}}
+- {"tool": "type", "args": {"selector": "...", "text": "..."}}
+- {"tool": "scroll", "args": {"direction": "down|up"}}
+- {"tool": "navigate", "args": {"url": "..."}}
+- {"tool": "finish", "args": {"summary": "...", "assignment": {"title": "...", "description": "...", "due_date": "...", "points": ...}}}
+- {"tool": "report_unparseable", "args": {"reason": "..."}}"""
 
 
 class AgentSession:
@@ -166,6 +141,7 @@ class AgentManager:
                 if not isinstance(decision, dict) or "tool" not in decision:
                     messages.append({"role": "assistant", "content": content})
                     messages.append({"role": "user", "content": "That response was not valid JSON tool call. Reply with exactly one JSON tool call."})
+                    await asyncio.sleep(0)
                     continue
 
                 tool = decision["tool"]
@@ -258,6 +234,7 @@ class AgentActionExecutionEngine:
             'scope': f'{scope_type}:{scope_id}',
             'reversible': True,
         }
+
 manager = AgentManager()
 
 
@@ -273,5 +250,4 @@ async def execute_session_with_preservation(session_id: str, cost: float, db, us
     except Exception as e:
         if callable(rollback_or_err):
             rollback_or_err()
-        return {"status": "failed", "error": str(e), "refunded": True}
-
+        return {"status": "failed", "error": str(e)}

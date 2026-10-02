@@ -994,6 +994,24 @@ print(f"Active files: {os.listdir('.')}")
                 "sandbox_result": res,
             }
 
+        elif action_type == "scrape_assignment":
+            # 08-28 (Envy ownership): canvas-scrape delegation. The tab scrape
+            # runs CLIENT-SIDE (popup.js -> scrapeWithInstruction) — this
+            # intercept must NOT land on the generic else (which fakes
+            # "completed by sub-agent cluster"). Return a scrape_request the
+            # popup.js can execute; status is "pending" until the extension
+            # reports the real result back.
+            return {
+                "action": action_type,
+                "status": "pending",
+                "node": "extensions",
+                "scrape_request": {
+                    "instruction": payload.get("instruction", "") or "",
+                    "assignment_id": payload.get("assignment_id") or assignment_id,
+                },
+                "message": "Scrape request dispatched to the browser extension — run the real tab scrape via scrapeWithInstruction.",
+            }
+
         else:
             return {
                 "action": action_type,
