@@ -296,6 +296,30 @@ async def download_extension_zip():
 # inferred from the version segments; an admin can overwrite name/notes via
 # POST /api/extension/releases.
 PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
+    "2.8.0": [
+        # Grouped, in rough order of how much they change for the user. Rendered
+        # verbatim by the popup's What's New, so keep each line self-contained.
+        #
+        # The delta over 2.7.3 is everything that landed after that build was cut:
+        # the error/UX pass, determinate progress on the agent loop, and the
+        # wait budget finally matching what the queue actually enforces.
+        "WAITING",
+        "\u23f3 You are told the right amount of time, per task. Every task used to be told to wait a flat 3 minutes, which was wrong in both directions: a simple greeting was told to wait six times longer than it actually would, and a long rewrite was warned to give up 2 minutes BEFORE its patience ran out. The wait now comes from the same table the queue enforces, so the number you read cannot drift from the number that applies \u2014 roughly 30 seconds for something quick like a greeting, up to 5 minutes for a rewrite.",
+        "",
+        "AGENT MODE",
+        "\U0001f4ca Progress, not an endless spinner. A task can run for several minutes, and past about ten seconds an indefinite \u201cThinking\u2026\u201d tells you nothing \u2014 not whether it is working or stuck. The loop now shows real progress through the task. This also fixed a silent bug underneath: the extension was reading its own action budget from the wrong place, so it quietly used a hardcoded 100 instead of the number the server actually enforces.",
+        "\U0001f501 It reports what happened, not what it sent. The agent could say it had scrolled while nothing moved, because it described the actions it dispatched rather than the result. It now reads the page back after acting, so a step that did nothing says so instead of showing a green tick.",
+        "",
+        "APPROVALS",
+        "\U0001f6d1 One answer per request. With approval set to ask you, a fast Approve followed by Reject could fire both, so the agent was told to both allow and deny the same action. Answering now locks the whole set of buttons until the next request appears, and it unlocks again even if something throws.",
+        "",
+        "ERRORS",
+        "\U0001f9f9 Errors read like sentences, not backend output. A failure used to flash a raw server payload on your screen. Every error now says three things in plain language: what happened, why it happened, and what to do about it \u2014 and a copyable sealed report is available if you want to send it on.",
+        "\U0001f9f9 Tidier screens. The popup was crowded, so the layout was rebalanced: less clutter, clearer grouping, the same controls in fewer places.",
+        "",
+        "WRITING",
+        "\u23f3 Rewriting shows it is working. A rewrite runs anywhere from six seconds to a minute and a half, and used to sit on a static \u201cHumanizing\u2026\u201d with no sign of life. It now shows a spinner and a rotating status, and a second click while it runs is refused instead of starting a duplicate. If it fails, you get the server's own explanation rather than \u201cserver 500\u201d.",
+    ],
     "2.7.3": [
         # Grouped, in rough order of how much they change for the user. Rendered
         # verbatim by the popup's What's New, so keep each line self-contained.
