@@ -588,7 +588,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
               style={{ fontSize: 'clamp(2.2rem, 5vw, 3.25rem)', textWrap: 'balance' }}
             >
               Your Academic <span className="whitespace-nowrap">Co-pilot,</span>{' '}
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">Redefined</span>
+              <span className="text-primary">Redefined</span>
             </h1>
 
             <p className="font-body-md text-body-md sm:text-[18px] text-on-surface-variant max-w-xl mb-8 leading-relaxed">
