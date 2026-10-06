@@ -8,10 +8,14 @@ never drift apart. Every value below was extracted from shipped code, not invent
 
 ## 1. Design philosophy
 
-- **Dark academic OS.** Near-black navy canvas (`#090d16`), quiet slate surfaces,
-  restrained decoration. No light theme exists — the app is dark-first, always.
-- **One interaction accent: blue.** `#3b82f6` is the only color for buttons,
-  active states, focus rings, selected tabs, links. Nothing else is interactive-blue.
+- **Dark academic OS.** Near-black canvas (`#0E1113`, the Luminous Glass base),
+  quiet slate surfaces, restrained decoration. Dark-first, and a light theme
+  DOES exist (`[data-theme="light"]`, `index.css:191`); dark remains the default.
+- **One interaction accent: M3 Electric Teal.** `#78F5E5` (`--st-primary`,
+  `index.css:41`) is the only color for buttons, active states, focus rings,
+  selected tabs, links. `--accent` aliases it (`index.css:151`, `:276`), so the
+  legacy blue tokens below resolve to teal in the shipped app — the live site is
+  teal. Nothing else is interactive-anything.
 - **Emerald = live / active / working.** Emerald signals status only: the agent
   avatar's ready/working ring, the "Saved" flash, running indicators. Never
   decorative, never used for buttons.
@@ -34,9 +38,9 @@ never drift apart. Every value below was extracted from shipped code, not invent
 | `--bg-surface-elevated` | `#182238` | raised surfaces above cards | `bg-slate-800` |
 | `--border-subtle` | `rgba(255,255,255,0.07)` | default 1px card/input borders | `border-white/8` |
 | `--border-hover` | `rgba(255,255,255,0.15)` | card border on hover | `border-white/10`+ |
-| `--accent` | `#3b82f6` | primary buttons, focus rings, active states, slider thumbs, scrollbar | `bg-blue-500` / `text-blue-400` |
-| `--accent-hover` | `#2563eb` | accent on hover / pressed | `bg-blue-600` |
-| `--accent-subtle` | `rgba(59,130,246,0.12)` | soft blue fills (active nav items) | `bg-blue-600/15` |
+| `--accent` | `var(--st-primary)` → `#78F5E5` | primary buttons, focus rings, active states, slider thumbs, scrollbar | `bg-primary` / `text-primary` |
+| `--accent-hover` | `var(--st-primary-container)` → `#59D8C9` | accent on hover / pressed | `bg-primary-container` |
+| `--accent-subtle` | teal at low alpha | soft teal fills (active nav items) | `bg-primary/15` |
 | `--text-primary` | `#f8fafc` | headings and body (slate-50) | `text-white` |
 | `--text-secondary` | `#cbd5e1` | secondary text, 5.8:1 contrast (slate-300) | `text-slate-300` |
 | `--text-muted` | `#94a3b8` | meta text, WCAG AA 4.5:1 (slate-400) | `text-slate-400` / `text-slate-500` |
@@ -77,11 +81,17 @@ never drift apart. Every value below was extracted from shipped code, not invent
 | `border-white/8` | panel dividers (`border-b border-white/8`), thead rows, timeline rail (`w-px bg-white/8`) |
 | `border-white/10` | kbd, chips, timeline dots, card edges |
 
-### Accent (blue) — interaction only
-`bg-blue-600` (primary buttons, active toggle, active segmented button),
-`bg-blue-500` (hover of primary), `bg-blue-600/15` + `border-blue-500/30`
-(active nav item), `bg-blue-600/20` (active tab),
-`text-blue-300` (active text), `text-blue-400` (icons, stat accents, live dots).
+### Accent (teal) — interaction only
+The shipped JSX uses the semantic names almost exclusively — `bg-primary` (326),
+`text-primary` (550), `border-primary` (148) — which all resolve to
+`--st-primary` `#78F5E5`. Only a handful of legacy raw blue utilities remain
+(`bg-blue-500/600`, `text-blue-300/400`, `border-blue-500`: 11 uses total), and
+because `--accent` is aliased to `--st-primary` they render teal anyway. Prefer
+the semantic names; the raw blue utilities are migration leftovers.
+`bg-primary` (primary buttons, active toggle, active segmented button),
+`bg-primary-container` (hover of primary), `bg-primary/15` + `border-primary/30`
+(active nav item), `bg-primary/20` (active tab),
+`text-primary-container` (active text), `text-primary` (icons, stat accents, live dots).
 
 ### Status (emerald / amber / rose / cyan / purple / indigo)
 | Color | Status meaning | Canonical combo |
@@ -134,7 +144,7 @@ Icons: `w-4 h-4` standard, `w-3.5 h-3.5` inline, `w-3 h-3` in badges; icon butto
 | `text-[13px]` | SectionCard titles |
 | `text-sm` (14px) | section headers, card titles |
 | `text-lg` / `text-2xl` | StatCard values (`text-2xl font-bold text-white`) |
-| `font-mono` | meta readouts: timestamps, effort scores, slider values (`text-[11px] font-mono text-blue-300`) |
+| `font-mono` | meta readouts: timestamps, effort scores, slider values (`text-[11px] font-mono text-primary-container`) |
 | `tracking-wide` / `tracking-wider` | uppercase section labels (`text-[10px] font-bold uppercase tracking-wider text-slate-500`) |
 | `tracking-widest` | logo only |
 
@@ -147,13 +157,13 @@ BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif`).
 ## 7. Component conventions
 
 **Buttons — three tiers.**
-1. **Primary**: `bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2 rounded-xl` (or compact `px-2.5 py-1.5 rounded-lg text-[10px] font-medium`).
-2. **Ghost**: `bg-white/4 text-slate-400 hover:text-slate-200 hover:bg-white/6` (active variant `bg-blue-600 text-white` — display-mode segmented control).
-3. **Tab/segmented**: active `bg-blue-600/20 text-blue-300 border border-blue-500/30`; inactive `text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent`.
+1. **Primary**: `bg-primary hover:bg-primary-container text-white text-xs font-semibold px-4 py-2 rounded-xl` (or compact `px-2.5 py-1.5 rounded-lg text-[10px] font-medium`).
+2. **Ghost**: `bg-white/4 text-slate-400 hover:text-slate-200 hover:bg-white/6` (active variant `bg-primary text-on-primary` — display-mode segmented control).
+3. **Tab/segmented**: active `bg-primary/20 text-primary-container border border-primary/30`; inactive `text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent`.
 
 **Chips / badges** (`ui/os.jsx` `<Badge color>`): `inline-block rounded-md px-2 py-0.5 text-[11px] font-medium border` +
 `bg-{color}-500/10 text-{color}-300 border-{color}-500/30`. `StatusBadge` maps
-status → color (operational=green, warning=amber, down=red, running=blue…).
+status → color (operational=green, warning=amber, down=red, running=primary…).
 
 **Cards** (`clean-card`, `glass-panel`): `bg-surface`, 1px `border-subtle`,
 `rounded-lg`→16px, hover raises border to `--border-hover` (0.2s ease).
@@ -166,8 +176,8 @@ status → color (operational=green, warning=amber, down=red, running=blue…).
 **Section headers** (`SectionHeader`): title `text-sm font-semibold text-white`,
 subtitle `text-xs text-slate-500 mt-0.5`; collapsed strips keep title only.
 
-**Controls**: `Toggle` (blue-600 on / slate-700 off, white knob), `Slider`
-(`os-range` track gradient `#1e293b → #334155`, blue thumb), `Tabs`, `Kbd`
+**Controls**: `Toggle` (`--st-primary` on / slate-700 off, white knob), `Slider`
+(`os-range` track gradient `#1e293b → #334155`, `--st-primary` thumb), `Tabs`, `Kbd`
 (`px-1.5 py-0.5 rounded-md bg-white/5 border-white/10 text-[10px] font-mono`),
 `Timeline` (22px `bg-slate-800 border-white/10` dots, `w-px bg-white/8` rail),
 `DataTable` (thead `border-white/8 text-slate-500`, rows `border-white/5
@@ -186,7 +196,7 @@ halo, status dot `bg-emerald-400` (error = `bg-amber-500`).
 | `cyber-spin-slow` | `animate-cyber-spin` | 8s linear infinite | logo aura (`from-cyan-500/30 to-emerald-500/30` glow) |
 | `visor-scanline` | `animate-visor-scan` | 2.5s ease-in-out infinite | logo / avatar scan sweep |
 | `aperture-pulse` | `animate-aperture-pulse` | 2s cubic-bezier(0.4,0,0.6,1) | working avatar (emerald→cyan glow, scale 1→1.04) |
-| `pulse-soft` | `animate-pulse-soft` | 2.4s ease-in-out infinite | live system-map nodes (blue halo) |
+| `pulse-soft` | `animate-pulse-soft` | 2.4s ease-in-out infinite | live system-map nodes (teal halo) |
 | `animate-ping` / `animate-pulse` | — | Tailwind | avatar working halo, progress pulse |
 
 **Appropriate only for**: brand (logo) and status (live/working nodes). Never on
@@ -205,10 +215,10 @@ cards, text, or content. `prefers-reduced-motion` is globally enforced in
 3. **Dark-first.** Surfaces are always slate-950-family navy + white-alpha
    borders. Never ship a light surface or a hard white border.
 4. **Contrast floor.** Readable text ≥ 4.5:1 (slate-400 `#94a3b8` is the floor;
-   secondary ≥ 5.8:1). Below that is meta/disabled only. Blue `#3b82f6` on
-   `#090d16` is the interaction pair; focus rings are 2px `#3b82f6` offset 2.
-5. **Semantic color lock.** Blue = interaction, emerald = live/active status.
-   Never use emerald for a button, never use blue for a status dot.
+   secondary ≥ 5.8:1). Below that is meta/disabled only. Teal `#78F5E5` on
+   `#0E1113` is the interaction pair; focus rings are 2px `#78F5E5` offset 2.
+5. **Semantic color lock.** Teal = interaction, emerald = live/active status.
+   Never use emerald for a button, never use teal for a status dot.
 6. **Border alphas ≤ 0.15** on surfaces; hover raises to white/10–15.
 7. **Motion is budgeted** — new keyframes only via this doc; animate brand and
    status, nothing else.
