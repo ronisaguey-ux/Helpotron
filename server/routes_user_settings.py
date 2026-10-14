@@ -63,8 +63,12 @@ async def get_literature_book_styles_route():
 
 @router.get("/academic-levels")
 async def get_academic_levels_route():
-    """Returns granular academic levels from 3rd Grade through PhD Professor."""
-    return {"status": "success", "levels": ACADEMIC_LEVELS}
+    """Returns all supported academic levels from 3rd Grade through PhD Professor with reference snippets."""
+    return {
+        "status": "success",
+        "levels": ACADEMIC_LEVELS,
+        "default_styles": DEFAULT_STYLES,
+    }
 
 
 
@@ -218,16 +222,6 @@ async def update_settings_route(payload: Dict[str, Any], request: Request, db: S
         )
     updated = user_settings_service.update_user_settings(db, user, accepted)
     return {"status": "success", "settings": updated, "ignored_fields": sorted(rejected)}
-
-
-@router.get("/academic-levels")
-async def get_academic_levels_route():
-    """Returns all supported academic levels from 3rd Grade through PhD Professor with reference snippets."""
-    return {
-        "status": "success",
-        "levels": ACADEMIC_LEVELS,
-        "default_styles": DEFAULT_STYLES,
-    }
 
 
 # ─── Custom Writing Style Samples (Private Per User) ────────────────────────
