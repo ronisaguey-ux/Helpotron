@@ -114,7 +114,7 @@ async def list_study_decks(
 
         decks.append({
             "id": m.id,
-            "title": f"{m.kind.replace("_", " ").title()} #{m.id}",
+            "title": f"{m.kind.replace('_', ' ').title()} #{m.id}",
             "kind": m.kind,
             "total_cards": total_cards,
             "mastered_cards": mastered_count,
