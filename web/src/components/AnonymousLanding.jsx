@@ -57,10 +57,10 @@ const FALLBACK_PLANS = [
   {
     id: 'testing',
     name: 'Testing',
-    tagline: 'Free 15,000 task tokens for people evaluating the platform and reporting issues. Tell the developer who you are — approval is manual.',
+    tagline: 'Free 10,000 task tokens for people evaluating the platform and reporting issues. Tell the developer who you are — approval is manual.',
     price_cents: 0,
     price_monthly: 0,
-    monthly_task_tokens: 15000,
+    monthly_task_tokens: 10000,
     is_trial: false,
     is_testing: true,
     available: true,
@@ -325,7 +325,7 @@ function Pricing({ onOpenAuth, onApplyTesting }) {
           </div>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {plans.map((p) => (
             <div
               key={p.id}
@@ -350,7 +350,7 @@ function Pricing({ onOpenAuth, onApplyTesting }) {
                 <span className="text-3xl font-extrabold tracking-tight text-on-surface">
                   ${p.price_monthly % 1 === 0 ? p.price_monthly : p.price_monthly.toFixed(2)}
                 </span>
-                <span className="text-xs text-on-surface-variant">/{p.is_trial ? '14 days' : 'mo'}</span>
+                <span className="text-xs text-on-surface-variant">/{p.is_trial ? '14 days' : p.is_testing ? 'grant' : 'mo'}</span>
               </div>
               <div className="text-xs text-on-surface-variant leading-relaxed">{p.tagline}</div>
 
@@ -714,7 +714,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
                 type="button"
                 onClick={closeModal}
                 aria-label="Close guide"
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
+                className="w-11 h-11 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -750,7 +750,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
                 type="button"
                 onClick={closeModal}
                 aria-label="Close privacy policy"
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
+                className="w-11 h-11 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -786,7 +786,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
                 type="button"
                 onClick={closeModal}
                 aria-label="Close terms of service"
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
+                className="w-11 h-11 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -822,7 +822,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
                 type="button"
                 onClick={closeModal}
                 aria-label="Close extension companion"
-                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
+                className="w-11 h-11 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
