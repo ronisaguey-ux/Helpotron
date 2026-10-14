@@ -1423,32 +1423,34 @@ export default function AdminAdvancedDashboard({ userId = '' }) {
           </div>
           <div className="panel-body">
             {healthData ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs font-mono">
-                <div className="group p-4">
-                  <span className="text-[var(--text-muted)] block text-[10px] uppercase font-semibold">API Status</span>
-                  <strong className={`text-base inline-flex items-center gap-1.5 mt-1 ${healthData.status === 'healthy' ? 'text-emerald-400' : 'text-red-400'}`}>
-                    <span className={`w-2 h-2 rounded-full ${healthData.status === 'healthy' ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} aria-hidden="true" />
-                    {healthData.status === 'healthy' ? 'operational' : 'degraded'}
-                  </strong>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs font-mono">
+                  <div className="group p-4">
+                    <span className="text-[var(--text-muted)] block text-[10px] uppercase font-semibold">API Status</span>
+                    <strong className={`text-base inline-flex items-center gap-1.5 mt-1 ${healthData.status === 'healthy' ? 'text-emerald-400' : 'text-red-400'}`}>
+                      <span className={`w-2 h-2 rounded-full ${healthData.status === 'healthy' ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} aria-hidden="true" />
+                      {healthData.status === 'healthy' ? 'operational' : 'degraded'}
+                    </strong>
+                  </div>
+                  <div className="group p-4">
+                    <span className="text-[var(--text-muted)] block text-[10px] uppercase font-semibold">Database</span>
+                    <strong className={`text-base inline-flex items-center gap-1.5 mt-1 ${healthData.db_alive ? 'text-emerald-400' : 'text-red-400'}`}>
+                      <span className={`w-2 h-2 rounded-full ${healthData.db_alive ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} aria-hidden="true" />
+                      {healthData.db_alive ? 'connected' : 'down'}
+                    </strong>
+                  </div>
+                  <div className="group p-4">
+                    <span className="text-[var(--text-muted)] block text-[10px] uppercase font-semibold">Uptime</span>
+                    <strong className="text-white text-base block mt-1">{healthData.uptime_formatted || 'unknown'}</strong>
+                  </div>
                 </div>
-                <div className="group p-4">
-                  <span className="text-[var(--text-muted)] block text-[10px] uppercase font-semibold">Database</span>
-                  <strong className={`text-base inline-flex items-center gap-1.5 mt-1 ${healthData.db_alive ? 'text-emerald-400' : 'text-red-400'}`}>
-                    <span className={`w-2 h-2 rounded-full ${healthData.db_alive ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} aria-hidden="true" />
-                    {healthData.db_alive ? 'connected' : 'down'}
-                  </strong>
-                </div>
-                <div className="group p-4">
-                  <span className="text-[var(--text-muted)] block text-[10px] uppercase font-semibold">Uptime</span>
-                  <strong className="text-white text-base block mt-1">{healthData.uptime_formatted || 'unknown'}</strong>
-                </div>
-              </div>
-              {healthData.metrics_mode === 'placeholder' && (
-                <p className="mt-3 text-[10px] text-[var(--text-muted)]">
-                  Latency and error-rate metrics are not instrumented yet. Only the values above are
-                  measured; the raw health payload still carries placeholder figures.
-                </p>
-              )}
+                {healthData.metrics_mode === 'placeholder' && (
+                  <p className="mt-3 text-[10px] text-[var(--text-muted)]">
+                    Latency and error-rate metrics are not instrumented yet. Only the values above are
+                    measured; the raw health payload still carries placeholder figures.
+                  </p>
+                )}
+              </>
             ) : (
               <div className="empty-state">
                 <span className="empty-state__icon"><Activity className="w-4 h-4" aria-hidden="true" /></span>
