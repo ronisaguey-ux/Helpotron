@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Generator, Optional
 
 from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, Boolean, UniqueConstraint, create_engine, event
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 from sqlalchemy.pool import NullPool, QueuePool
 
@@ -62,7 +63,7 @@ class User(Base):
     plan: Mapped[str] = mapped_column(String(16), default="none")  # none|basic|pro|elite; "none" = nothing until paid/upgraded (operator 08-26)
     credits: Mapped[float] = mapped_column(Float, default=0.0)
     notifications_paused: Mapped[bool] = mapped_column(default=False)
-    settings: Mapped[dict] = mapped_column(JSON, default=dict)
+    settings: Mapped[dict] = mapped_column(MutableDict.as_mutable(JSON), default=dict)
     discount_balance: Mapped[float] = mapped_column(Float, default=0.0)
     discount_spillover: Mapped[float] = mapped_column(Float, default=0.0)
     # Operator 08-31: one-time order discount granted by redeeming someone
