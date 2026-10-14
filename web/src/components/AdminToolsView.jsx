@@ -580,18 +580,19 @@ export default function AdminToolsView() {
                         <div className="flex items-center gap-2 pt-1">
                           <input
                             type="text"
+                            aria-label="Operator reply message"
                             placeholder="Type response..."
                             value={replyTextMap[m.id] || ""}
                             onChange={(e) =>
                               setReplyTextMap((prev) => ({ ...prev, [m.id]: e.target.value }))
                             }
-                            className="flex-1 h-8 px-2.5 rounded-lg bg-surface-container text-on-surface border border-outline-variant/30 text-xs focus:outline-none"
+                            className="flex-1 min-h-[40px] px-2.5 rounded-lg bg-surface-container text-on-surface border border-outline-variant/30 text-xs focus:outline-none"
                           />
                           <button
                             type="button"
                             disabled={replyingId === m.id}
                             onClick={() => handleReplyInquiry(m.id)}
-                            className="h-8 px-3 rounded-lg bg-primary text-on-primary font-label-caps text-[10px] uppercase flex items-center gap-1 cursor-pointer"
+                            className="min-h-[40px] px-3 rounded-lg bg-primary text-on-primary font-label-caps text-[10px] uppercase flex items-center gap-1 cursor-pointer"
                           >
                             <Send className="w-3 h-3" />
                             <span>Reply</span>
