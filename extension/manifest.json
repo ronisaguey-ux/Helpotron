@@ -15,11 +15,13 @@
     "tabs",
     "scripting",
     "alarms",
+    "notifications",
+    "sidePanel"
+  ],
+  "optional_permissions": [
     "tabCapture",
     "desktopCapture",
-    "notifications",
-    "debugger",
-    "sidePanel"
+    "debugger"
   ],
   "host_permissions": [
     "https://*.instructure.com/*",
