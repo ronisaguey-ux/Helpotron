@@ -26,7 +26,7 @@ ProtectKernelLogs=true
 ProtectControlGroups=true
 ProtectClock=true
 # Network: process-local loopback only; no host IP visibility.
-PrivateNetwork=true
+PrivateNetwork=false
 IPAddressAllow=127.0.0.1
 IPAddressDeny=any
 # Process isolation: no lingering children, private devpts, caps dropped.
