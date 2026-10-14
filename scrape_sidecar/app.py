@@ -230,8 +230,24 @@ def _fetch_rss(url: str) -> str:
         return ""
 
     import feedparser
+    import httpx
+    import urllib.parse
 
-    parsed = feedparser.parse(url, request_headers={"User-Agent": _UA})
+    with httpx.Client(timeout=15.0, follow_redirects=False, headers={"User-Agent": _UA}) as client:
+        cur = url
+        for _ in range(5):
+            resp = client.get(cur)
+            if resp.is_redirect:
+                nxt = urllib.parse.urljoin(cur, resp.headers.get("location", ""))
+                if not is_safe_url(nxt):
+                    return ""
+                cur = nxt
+                continue
+            break
+        else:
+            return ""
+
+    parsed = feedparser.parse(resp.text)
     if not parsed or not parsed.entries:
         return ""
     parts = [f"# {parsed.feed.get('title') or 'RSS feed'}"]
@@ -290,10 +306,16 @@ def _fetch_scrapling(url: str, mode: str) -> str:
     elif mode == "stealth":
         from scrapling.fetchers import StealthyFetcher
         page = StealthyFetcher().fetch(url, timeout=max(_SCRAPE_TIMEOUT, 60) * 1000)
+        final_url = str(getattr(page, "url", url) or url)
+        if not is_safe_url(final_url):
+            return ""
     else:
         from scrapling.fetchers import DynamicFetcher
         page = DynamicFetcher().fetch(url, timeout=max(_SCRAPE_TIMEOUT, 60) * 1000,
                                       headless=True)
+        final_url = str(getattr(page, "url", url) or url)
+        if not is_safe_url(final_url):
+            return ""
     if getattr(page, "status", 200) != 200 and getattr(page, "status", None) is not None:
         return ""
     for attr in ("markdown", "text"):
