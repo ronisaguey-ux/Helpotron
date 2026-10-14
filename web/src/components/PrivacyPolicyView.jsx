@@ -288,6 +288,7 @@ export default function PrivacyPolicyView({ publicMode = false, onBack = null, o
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/70" />
                 <input
                   type="text"
+                  aria-label="Search data inventory fields or categories"
                   placeholder="Find a field or category..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
