@@ -73,15 +73,19 @@ logger = logging.getLogger("helpotron.hip")
 # What the last rewrite could not repair and an agent must fix by hand. A module-level
 # box rather than a changed return type, because hip_humanize is on a live chat's critical
 # path and every existing caller expects a plain string.
-_LAST_REVIEW_TODOS: dict = {"items": []}
+import contextvars
+
+_LAST_REVIEW_TODOS_VAR: contextvars.ContextVar[list] = contextvars.ContextVar(
+    "_LAST_REVIEW_TODOS_VAR", default=[]
+)
 
 
 def review_todos() -> list:
-    """Facts from the LAST rewrite that need an agent's hand, and why.
+    """Facts from the LAST rewrite in the current request context that need an agent's hand, and why.
 
     Empty means the rewrite was faithful and safe to use as-is.
     """
-    return list(_LAST_REVIEW_TODOS.get("items") or [])
+    return list(_LAST_REVIEW_TODOS_VAR.get() or [])
 
 # The preservation guard: a rewrite that changes the FACTS is discarded and the
 # original kept. See text_preservation.py for the measured fabrications behind it.
@@ -388,7 +392,7 @@ async def _humanize_chunk(chunk: str, session, rounds: int) -> Optional[str]:
             if todos:
                 logger.warning("HIP round %s needs agent review: %s",
                                i + 1, "; ".join(todos)[:200])
-                _LAST_REVIEW_TODOS["items"].extend(todos)
+                _LAST_REVIEW_TODOS_VAR.set(list(_LAST_REVIEW_TODOS_VAR.get() or []) + list(todos))
             out = fix["text"]
             if not out.strip():
                 break
@@ -415,7 +419,7 @@ async def hip_humanize(text: str, rounds: Optional[int] = None) -> Optional[str]
         return None
 
     rounds = rounds or hip_rounds()
-    _LAST_REVIEW_TODOS["items"] = []   # never report the PREVIOUS run's todo list
+    _LAST_REVIEW_TODOS_VAR.set([])   # never report the PREVIOUS run's todo list
     chunks = chunk_text(text)
     if not chunks:
         return None
