@@ -125,8 +125,8 @@ const FEATURES = [
   },
   {
     Icon: Brain,
-    title: 'An agent per assignment',
-    body: 'Every assignment gets a dedicated thread with its own files and memory, so context never bleeds between a lab report and an essay.',
+    title: 'A team of agents per assignment',
+    body: 'Every assignment gets a team of agents, each with its own role, its own files and its own memory, so context never bleeds between a lab report and an essay.',
   },
   {
     Icon: HistoryIcon,
@@ -593,8 +593,8 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
 
             <p className="font-body-md text-body-md sm:text-[18px] text-on-surface-variant max-w-xl mb-8 leading-relaxed">
               Helpotron captures your coursework, sorts it into subject bubbles, and gives
-              every assignment its own AI agent — while keeping an honest ledger of what
-              you actually completed.
+              every assignment a team of AI agents, each with its own role, while keeping an
+              honest ledger of what you actually completed.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
