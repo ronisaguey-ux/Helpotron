@@ -7,7 +7,7 @@
  * (see LEGACY_VIEWS). All existing capabilities preserved.
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useEffect, useRef, useState, lazy, Suspense } from 'react';
-import { WifiOff } from 'lucide-react';
+import { WifiOff, AlertTriangle, Eye, Lock } from 'lucide-react';
 import { api, getServer, getUserId, hasSessionIndicator, setServer, setUserId } from './api.js';
 
 /* ── EAGER: the signed-out critical path only ────────────────────────────────
@@ -120,8 +120,8 @@ class ErrorBoundary extends React.Component {
       return (
         <div className="app-background min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex items-center justify-center p-4">
           <div className="clean-card max-w-lg w-full p-8 text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-rose-600/10 text-rose-400 text-2xl font-bold flex items-center justify-center mx-auto border border-rose-500/20">
-              ⚠️
+            <div className="w-12 h-12 rounded-2xl bg-rose-600/10 text-rose-400 flex items-center justify-center mx-auto border border-rose-500/20">
+              <AlertTriangle className="w-6 h-6" aria-hidden="true" />
             </div>
             {/* 1. Showcase */}
             <h2 className="text-lg font-semibold">
@@ -789,7 +789,7 @@ export default function App() {
         {isGuest && (
           <div className="bg-amber-500/15 border-b border-amber-500/30 text-amber-200 px-6 py-2 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span>👁️</span>
+              <Eye className="w-4 h-4 shrink-0 text-amber-300" aria-hidden="true" />
               <span>
                 <strong>Guest Mode:</strong> You are exploring simulated courses and workflows.
               </span>
@@ -804,20 +804,17 @@ export default function App() {
           </div>
         )}
 
-        {/* Low Credit Warning Banner — never nags the operator (operator 08-28) */}
-        {isLoggedIn && !effectiveIsAdmin && credits > 0 && (() => {
-          const planLimit = { basic: 30, pro: 100, elite: 280 }[userPlan] || 30;
-          const pct = (credits / planLimit) * 100;
+        {/* Low Token Balance Warning Banner — never nags the operator (operator 08-28) */}
+        {isLoggedIn && !effectiveIsAdmin && !userUnlimited && tokenBalance > 0 && (() => {
+          const planLimit = { trial: 15000, testing: 10000, basic: 35000, pro: 120000, unlimited: 500000 }[userPlan] || 15000;
+          const pct = (tokenBalance / planLimit) * 100;
           if (pct < 15) {
-            const display = credits < 1
-              ? credits.toLocaleString(undefined, { maximumFractionDigits: 3 })
-              : Math.floor(credits);
             return (
               <div className="bg-rose-500/15 border-b border-rose-500/30 text-rose-200 px-6 py-2 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span>⚠️</span>
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-300" aria-hidden="true" />
                   <span>
-                    <strong>Low Credit Balance:</strong> You have {display} credits remaining.
+                    <strong>Low Token Balance:</strong> You have {Math.floor(tokenBalance).toLocaleString()} task tokens remaining.
                   </span>
                 </div>
                 <button
@@ -859,9 +856,9 @@ export default function App() {
 
           {/* Backend unreachable banner */}
           {!connected && (
-            <div className="clean-card border-rose-500/30 bg-rose-950/20 px-4 py-2.5 rounded-xl text-xs text-rose-300 text-center font-mono mb-5 flex items-center justify-center gap-2">
-              <WifiOff className="w-3.5 h-3.5 shrink-0" />
-              Backend server at {serverUrl} is unreachable — start it with <code className="text-white bg-black/40 px-1.5 py-0.5 rounded">systemctl --user start helpotron-api.service</code> (API on :5000)
+            <div className="clean-card border-rose-500/30 bg-rose-950/20 px-4 py-2.5 rounded-xl text-xs text-rose-300 text-center mb-5 flex items-center justify-center gap-2" role="status">
+              <WifiOff className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              Reconnecting to the workspace server. Your local progress is safely preserved in this tab.
             </div>
           )}
 
@@ -978,9 +975,11 @@ export default function App() {
                   {activeView === 'admin' && effectiveIsAdmin && <ControlCenterView userId={userId} />}
                   {activeView === 'admin' && !effectiveIsAdmin && (
                     <div className="p-10 text-center">
-                      <div className="text-3xl mb-3">🔒</div>
+                      <div className="w-12 h-12 rounded-2xl bg-slate-800/80 text-slate-400 flex items-center justify-center mx-auto mb-3 border border-slate-700/50">
+                        <Lock className="w-6 h-6" aria-hidden="true" />
+                      </div>
                       <div className="text-sm font-bold text-[var(--text-primary)] mb-1">Access denied</div>
-                      <div className="text-xs text-[var(--text-muted)]">The Control Center requires administrative privileges. If you need help, use the ❓ chat.</div>
+                      <div className="text-xs text-[var(--text-muted)]">The Control Center requires administrative privileges. If you need help, open the support chat.</div>
                     </div>
                   )}
                 </Suspense>
