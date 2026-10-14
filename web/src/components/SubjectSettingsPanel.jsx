@@ -564,8 +564,9 @@ export default function SubjectSettingsPanel({
                       onClick={() => handleDeleteSample(idx)}
                       className="w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-error transition-colors cursor-pointer"
                       title="Delete sample"
+                      aria-label={`Delete writing sample ${idx + 1}`}
                     >
-                      <Trash2 className="w-4 h-4 stroke-[1.75]" />
+                      <Trash2 className="w-4 h-4 stroke-[1.75]" aria-hidden="true" />
                     </button>
                   </div>
                 ))
