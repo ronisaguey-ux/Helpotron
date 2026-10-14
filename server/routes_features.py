@@ -144,8 +144,12 @@ class DetectTypeRequest(BaseModel):
 
 
 @router.post("/detect-type")
-async def detect_type(req: DetectTypeRequest):
-    return {"type": detect_assignment_type(req.prompt, req.title)}
+async def detect_type(req: DetectTypeRequest, request: Request, db: Session = Depends(get_db)):
+    import asyncio
+    await _get_feature_user(request, db)
+    prompt = (req.prompt or "").strip()[:4000]
+    title = (req.title or "").strip()[:300]
+    return {"type": await asyncio.to_thread(detect_assignment_type, prompt, title)}
 
 
 # ─── 2. GAMIFICATION ──────────────────────────────────────────────────────
@@ -171,7 +175,7 @@ async def send_friend_request(req: FriendRequestModel, request: Request, db: Ses
 
 @router.post("/friend-accept")
 async def accept_friend_request(req: FriendRequestModel, request: Request, db: Session = Depends(get_db)):
-    user = await _get_feature_user(request, db)
+    user = _bind_to_session(db, await _get_feature_user(request, db))
     result = FriendRequest.accept_request(db, user, req.target_username)
     return {"message": result}
 

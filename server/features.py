@@ -19,7 +19,7 @@ from .llm import generate_with_deepseek
 def detect_assignment_type(prompt: str, title: str = "") -> str:
     """Classify assignment type with zero-latency local heuristics: essay, quiz, discussion, coding, lab, presentation, other."""
     text = f"{title} {prompt}".lower()
-    
+
     # 1. Zero-cost instant rule-based heuristic matching
     if any(k in text for k in ["presentation", "powerpoint", "slides", "deck", ".pptx", ".ppt", ".key", "pitch deck"]):
         return "presentation"
@@ -82,38 +82,40 @@ class FriendRequest:
             return "User not found"
         if from_user.id == to_user.id:
             return "Cannot friend yourself"
-        # Store in to_user.settings as pending requests
-        settings = to_user.settings or {}
-        pending = settings.get("pending_requests", [])
+        # Store in to_user.settings as pending requests (clone dict so SQLAlchemy marks JSON dirty)
+        settings = dict(to_user.settings or {})
+        pending = list(settings.get("pending_requests", []))
         if from_user.public_id in pending:
             return "Request already sent"
         pending.append(from_user.public_id)
         settings["pending_requests"] = pending
         to_user.settings = settings
+        db.add(to_user)
         db.commit()
         return f"Friend request sent to {to_username}"
 
     @staticmethod
     def accept_request(db: Session, user: User, from_username: str) -> str:
-        settings = user.settings or {}
-        pending = settings.get("pending_requests", [])
+        settings = dict(user.settings or {})
+        pending = list(settings.get("pending_requests", []))
         if from_username not in pending:
             return "No pending request from that user"
         pending.remove(from_username)
         settings["pending_requests"] = pending
         # Add to friends list
-        friends = settings.get("friends", [])
+        friends = list(settings.get("friends", []))
         if from_username not in friends:
             friends.append(from_username)
         settings["friends"] = friends
         user.settings = settings
+        db.add(user)
         db.commit()
         return f"Accepted friend request from {from_username}"
 
     @staticmethod
     def get_friends(user: User) -> List[str]:
         settings = user.settings or {}
-        return settings.get("friends", [])
+        return list(settings.get("friends", []))
 
     @staticmethod
     def share_material(db: Session, user: User, friend_username: str, material_id: int) -> str:
@@ -124,12 +126,13 @@ class FriendRequest:
         material = db.query(StudyMaterial).filter(StudyMaterial.id == material_id, StudyMaterial.user_id == user.id).first()
         if not material:
             return "Material not found or not yours"
-        # Add to friend's shared materials (stored in settings)
-        settings = friend.settings or {}
-        shared = settings.get("shared_materials", [])
+        # Add to friend's shared materials (clone dict so SQLAlchemy marks JSON dirty)
+        settings = dict(friend.settings or {})
+        shared = list(settings.get("shared_materials", []))
         shared.append({"from": user.public_id, "material_id": material_id, "kind": material.kind, "title": f"Shared {material.kind}"})
         settings["shared_materials"] = shared
         friend.settings = settings
+        db.add(friend)
         db.commit()
         return f"Shared material with {friend_username}"
 
