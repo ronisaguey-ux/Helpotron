@@ -384,8 +384,8 @@ export default function AuthModal({
                     <Check className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold text-on-surface">An agent per assignment</div>
-                    <div className="font-mono text-[11px] text-on-surface-variant">Dedicated thread, files and memory for every task</div>
+                    <div className="text-xs font-semibold text-on-surface">A team of agents per assignment</div>
+                    <div className="font-mono text-[11px] text-on-surface-variant">Each with its own role, files and memory for every task</div>
                   </div>
                 </div>
 
