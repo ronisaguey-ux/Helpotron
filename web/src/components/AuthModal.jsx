@@ -795,6 +795,7 @@ export default function AuthModal({
                       <div>
                         <input
                           type="text"
+                          aria-label="Referral or discount code"
                           placeholder="Enter a referral or discount code"
                           value={referralCode}
                           onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
