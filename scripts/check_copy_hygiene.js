@@ -12,6 +12,8 @@ const path = require('path');
 const bannedPatterns = [
   /passed stealth/i,
   /stealth index/i,
+  /multi-detector evasion/i,
+  /detector evasion/i,
   /beats?\s+(the\s+)?ai\s+detectors?/i,
   /fool(s|ed)?\s+the\s+detector/i,
   /bypass(es|ed)?\s+detection/i,
@@ -22,7 +24,8 @@ function containsBannedCopy(text) {
   return bannedPatterns.some((re) => re.test(text));
 }
 
-// 1. Check web/src components (source check)
+// 1. Check web/index.html and web/src components (source check)
+const indexHtml = path.join(__dirname, '..', 'web', 'index.html');
 const srcDir = path.join(__dirname, '..', 'web', 'src');
 function walk(d) {
   let files = [];
@@ -34,7 +37,8 @@ function walk(d) {
   return files;
 }
 
-const srcHits = walk(srcDir).filter(f => containsBannedCopy(fs.readFileSync(f, 'utf8')));
+const candidateFiles = (fs.existsSync(indexHtml) ? [indexHtml] : []).concat(walk(srcDir));
+const srcHits = candidateFiles.filter(f => containsBannedCopy(fs.readFileSync(f, 'utf8')));
 if (srcHits.length) {
   console.error('evasion copy in source files:', srcHits);
   process.exit(1);
