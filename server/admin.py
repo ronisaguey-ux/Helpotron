@@ -250,12 +250,12 @@ async def get_user_detail(public_id: str, request: Request, db: Session = Depend
 @router.post("/user/{public_id}/credits")
 async def adjust_user_credits(
     public_id: str,
+    request: Request,
     amount: float = Query(..., description="Credit adjustment: positive to add, negative to deduct, 0 to set to 0"),
     reason: str = Query("admin adjustment"),
-    request: Request = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
-    require_admin(request)
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
@@ -281,15 +281,15 @@ async def adjust_user_credits(
 @router.post("/user/{public_id}/welcome-tokens")
 async def grant_welcome_tokens(
     public_id: str,
+    request: Request,
     amount: float = Query(300.0, description="Tokens to add to the token_balance"),
     reason: str = Query("owner-approved welcome grant"),
-    request: Request = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     """08-31 (Bob): welcome tokens are NOT automatic — every signup is
     reported to the owner, and only accounts he approves get the 300-token
     grant through this admin endpoint."""
-    require_admin(request)
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
@@ -465,14 +465,13 @@ async def confirm_manual_payment(public_id: str, body: ConfirmPaymentIn,
 # the SET-PLAN route — it has no `plan` parameter, so the plan was dropped and the
 # request set payment_verified instead. Its own route is
 # /api/admin/user/{public_id}/verify-trial-payment (server/main.py).
-async def verify_trial_payment(public_id: str, request: Request = None, db: Session = Depends(get_db)):
+async def verify_trial_payment(public_id: str, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Owner 09-06: approve the user's 1-cent trial payment verification.
 
     Manual lane — used when Stripe keys aren't configured: the user requests
     the verification (POST /api/trial/payment-verify writes a pending
     Payment), pays the cent by manual provider, and the operator confirms
     here. Idempotent."""
-    require_admin(request)
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
@@ -493,8 +492,7 @@ async def verify_trial_payment(public_id: str, request: Request = None, db: Sess
 
 
 @router.post("/user/{public_id}/plan")
-async def set_user_plan(public_id: str, plan: str, request: Request, db: Session = Depends(get_db)):
-    require_admin(request)
+async def set_user_plan(public_id: str, plan: str, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     if plan not in ["none", "basic", "pro", "elite"]:
         raise HTTPException(400, "Invalid plan")
     user = db.query(User).filter(User.public_id == public_id).first()
@@ -510,8 +508,8 @@ async def set_user_plan(public_id: str, plan: str, request: Request, db: Session
 
 
 @router.post("/user/{public_id}/reset-password")
-async def reset_user_password(public_id: str, req: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)):
-    admin = require_admin(request)
+async def reset_user_password(public_id: str, req: ResetPasswordRequest, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    admin = current_user
     from .security import validate_password_strength, is_admin_user, ADMIN_PUBLIC_ID
     if not validate_password_strength(req.new_password):
         raise HTTPException(400, "Password must be at least 8 characters, include a letter and a number")
@@ -530,8 +528,7 @@ async def reset_user_password(public_id: str, req: ResetPasswordRequest, request
 
 
 @router.post("/user/{public_id}/ban")
-async def ban_user(public_id: str, request: Request, db: Session = Depends(get_db)):
-    require_admin(request)
+async def ban_user(public_id: str, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
@@ -547,8 +544,7 @@ async def ban_user(public_id: str, request: Request, db: Session = Depends(get_d
 
 
 @router.post("/user/{public_id}/unban")
-async def unban_user(public_id: str, request: Request, db: Session = Depends(get_db)):
-    require_admin(request)
+async def unban_user(public_id: str, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
@@ -561,11 +557,10 @@ async def unban_user(public_id: str, request: Request, db: Session = Depends(get
 
 
 @router.post("/user/{public_id}/tempban")
-async def temp_ban_user(public_id: str, request: Request, hours: float = 24, db: Session = Depends(get_db)):
+async def temp_ban_user(public_id: str, request: Request, hours: float = 24, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Ban enforcement (operator 08-27): banned_until = ISO timestamp. The
     auth layer (security.is_user_banned) refuses the account until it passes;
     banned but expired = effectively unbanned."""
-    require_admin(request)
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
@@ -583,9 +578,8 @@ async def temp_ban_user(public_id: str, request: Request, hours: float = 24, db:
 
 
 @router.post("/user/{public_id}/kick")
-async def kick_user(public_id: str, request: Request, db: Session = Depends(get_db)):
+async def kick_user(public_id: str, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Revoke ALL live sessions — forces re-login without touching the account."""
-    require_admin(request)
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
@@ -594,11 +588,10 @@ async def kick_user(public_id: str, request: Request, db: Session = Depends(get_
 
 
 @router.delete("/user/{public_id}")
-async def delete_user(public_id: str, request: Request, db: Session = Depends(get_db)):
+async def delete_user(public_id: str, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Permanent account deletion: cascade via User relationships plus the
     ledger/dump tables that carry plain FK columns. Banned first so the user
     cannot slip a request in mid-deletion."""
-    require_admin(request)
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
@@ -623,11 +616,10 @@ async def delete_user(public_id: str, request: Request, db: Session = Depends(ge
 
 
 @router.get('/search')
-async def admin_universal_search(q: str, request: Request, db: Session = Depends(get_db)):
+async def admin_universal_search(q: str, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Universal admin search across users, assignments, study materials, and
     credit activity. No email column exists on User — identity fields are
     public_id / telegram_id. Admin-only (same guard as every other route)."""
-    require_admin(request)
     term = f"%{q.strip()}%"
     users = db.query(User).filter(
         User.public_id.ilike(term) | User.telegram_id.ilike(term)
