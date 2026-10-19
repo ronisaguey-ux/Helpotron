@@ -422,14 +422,38 @@ def write_user_content_file(sandbox_id: str, filename: str, content: bytes | str
 # per the plan spec. The existing SandboxManager / VirtualSubagentSandbox
 # API is unchanged; these are additive.
 
-ALLOWED_SANDBOX_DIR = Path('/tmp/helpotron_sandboxes').resolve()
-ALLOWED_SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
+def _init_allowed_sandbox_dir() -> Path:
+    base = Path('/tmp/helpotron_sandboxes')
+    if base.is_symlink():
+        raise RuntimeError(f"Refusing to use symlinked sandbox directory: {base}")
+    if base.exists():
+        st = base.stat()
+        if st.st_uid != os.getuid():
+            raise RuntimeError(f"Sandbox directory {base} is owned by UID {st.st_uid}, expected {os.getuid()}")
+        try:
+            os.chmod(base, 0o700)
+        except OSError as e:
+            raise RuntimeError(f"Failed to set mode 0700 on sandbox directory {base}: {e}")
+    else:
+        base.mkdir(parents=True, exist_ok=True, mode=0o700)
+        try:
+            os.chmod(base, 0o700)
+        except OSError:
+            pass
+    return base.resolve()
+
+
+ALLOWED_SANDBOX_DIR = _init_allowed_sandbox_dir()
 
 
 def sanitize_sandbox_path(sandbox_id: str, relative_file: str) -> Path:
     """Prevent path traversal by verifying destination is strictly inside sandbox root."""
     target_root = (ALLOWED_SANDBOX_DIR / sandbox_id).resolve()
-    target_root.mkdir(parents=True, exist_ok=True)
+    target_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        os.chmod(target_root, 0o700)
+    except OSError:
+        pass
 
     # Resolve target file path
     target_file = (target_root / relative_file).resolve()
@@ -441,7 +465,11 @@ def sanitize_sandbox_path(sandbox_id: str, relative_file: str) -> Path:
 def run_isolated_command(sandbox_id: str, command_args: list[str], timeout: int = 15) -> tuple[int, str, str]:
     """Execute command in isolated subprocess with the shell disabled."""
     sandbox_dir = (ALLOWED_SANDBOX_DIR / sandbox_id).resolve()
-    sandbox_dir.mkdir(parents=True, exist_ok=True)
+    sandbox_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        os.chmod(sandbox_dir, 0o700)
+    except OSError:
+        pass
 
     safe_env = {
         "PATH": os.environ.get("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"),
