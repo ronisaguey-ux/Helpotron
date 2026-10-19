@@ -13,6 +13,7 @@ ARE comparable to each other, which is what a rewrite loop consumes, and
 
 from __future__ import annotations
 
+import hashlib
 import math
 import os
 import pickle
@@ -22,6 +23,14 @@ from collections import Counter
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
 REF_CACHE = os.path.join(CACHE_DIR, "refmodel.pkl")
+# Recorded SHA-256 for the precomputed Brown reference corpus model artifact.
+# Pickle is retained to preserve compatibility with existing serialized RefModel instances
+# (which contain custom Python Counter objects with tuple keys) without breaking
+# downstream consumers or forcing an expensive ~10-minute recomputation.
+# Integrity is verified before unpickling to fail closed on tampering or corruption (HT-006).
+KNOWN_REF_MODEL_SHA256 = "eeaec8415aa40bf14e45fa09b2d542871a88104fd3d0930a86e193317bc0cc2a"
+REF_CACHE_SHA256 = os.path.join(CACHE_DIR, "refmodel.sha256")
+
 
 _nlp = None
 _pyphen = None
@@ -134,6 +143,29 @@ class RefModel:
 def load_ref_model(force: bool = False) -> RefModel:
     os.makedirs(CACHE_DIR, exist_ok=True)
     if os.path.exists(REF_CACHE) and not force:
+        # Verify recorded SHA-256 before unpickling to guard against untrusted deserialization (HT-006)
+        hasher = hashlib.sha256()
+        with open(REF_CACHE, "rb") as f:
+            while chunk := f.read(65536):
+                hasher.update(chunk)
+        digest = hasher.hexdigest().lower()
+
+        expected_sha = None
+        if os.path.exists(REF_CACHE_SHA256):
+            try:
+                with open(REF_CACHE_SHA256, "r", encoding="utf-8") as sf:
+                    expected_sha = sf.read().strip().split()[0].lower()
+            except Exception:
+                pass
+        if not expected_sha:
+            expected_sha = KNOWN_REF_MODEL_SHA256.lower()
+
+        if digest != expected_sha:
+            raise ValueError(
+                f"RefModel integrity check failed for {REF_CACHE}: "
+                f"expected SHA256 {expected_sha}, got {digest}. Failing closed."
+            )
+
         with open(REF_CACHE, "rb") as f:
             return pickle.load(f)
 
@@ -174,6 +206,15 @@ def load_ref_model(force: bool = False) -> RefModel:
 
     with open(REF_CACHE, "wb") as f:
         pickle.dump(m, f, protocol=4)
+
+    # Record checksum sidecar for verification
+    hasher = hashlib.sha256()
+    with open(REF_CACHE, "rb") as f:
+        while chunk := f.read(65536):
+            hasher.update(chunk)
+    with open(REF_CACHE_SHA256, "w", encoding="utf-8") as sf:
+        sf.write(f"{hasher.hexdigest()}  refmodel.pkl\n")
+
     return m
 
 
