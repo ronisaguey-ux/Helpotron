@@ -185,8 +185,22 @@ async def _cleanup_temp_files_loop(interval_seconds: int = 3600):
             now = time.time()
             for folder in ["./uploads", "./exports", "/tmp/helpotron_exports"]:
                 if os.path.exists(folder):
+                    if os.path.islink(folder):
+                        logger.warning("temp_cleanup: skipping symlinked folder: %s", folder)
+                        continue
+                    st = os.stat(folder)
+                    if folder.startswith("/tmp"):
+                        if st.st_uid != os.getuid():
+                            logger.warning("temp_cleanup: skipping folder not owned by current user: %s", folder)
+                            continue
+                        try:
+                            os.chmod(folder, 0o700)
+                        except OSError:
+                            pass
                     for fname in os.listdir(folder):
                         fpath = os.path.join(folder, fname)
+                        if os.path.islink(fpath):
+                            continue
                         if os.path.isfile(fpath) and (now - os.path.getmtime(fpath) > 86400):
                             try:
                                 os.remove(fpath)
@@ -702,7 +716,13 @@ async def list_plans():
 
 @app.get("/api/health")
 async def health_check():
-    """Health check with DB connectivity and service status."""
+    """Minimal unauthenticated health check (HT-003)."""
+    return {"status": "ok"}
+
+
+@app.get("/api/admin/health")
+async def admin_health(current_user: User = Depends(require_admin)):
+    """Health check with DB connectivity and service status behind admin auth (HT-003)."""
     from .database import SessionLocal
     db_status = "ok"
     try:
@@ -1406,22 +1426,14 @@ async def me(request: Request, db: Session = Depends(get_db)):
 
 
 @app.get("/api/admin/check")
-def admin_check(request: Request, db: Session = Depends(get_db)):
-    """Check if current user is admin (remediation BATCH-11): identity comes
-    only from a valid session cookie or Bearer token — the X-Public-ID header
-    is never an identity and no username is admin by name."""
-    from .routes_features import get_current_authenticated_user
-    try:
-        user = get_current_authenticated_user(request, db)
-    except HTTPException:
-        return {"is_admin": False, "public_id": "anon"}
-    return {"is_admin": is_admin_user(user), "public_id": user.public_id}
+def admin_check(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    """Check if current user is admin."""
+    return {"is_admin": is_admin_user(current_user), "public_id": current_user.public_id}
 
 
 @app.get("/api/admin/users")
-def get_admin_users(request: Request, db: Session = Depends(get_db)):
+def get_admin_users(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """List all registered users for admin dashboard."""
-    require_admin(request)
     users = db.query(User).all()
     return [
         {
@@ -1441,9 +1453,8 @@ def get_admin_users(request: Request, db: Session = Depends(get_db)):
 
 
 @app.get("/api/admin/analytics")
-def get_admin_analytics(request: Request, db: Session = Depends(get_db)):
+def get_admin_analytics(request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Summary metrics for admin dashboard."""
-    require_admin(request)
     total_users = db.query(User).count()
     total_assignments = db.query(Assignment).count()
     total_materials = db.query(StudyMaterial).count()
@@ -1462,94 +1473,106 @@ def get_admin_analytics(request: Request, db: Session = Depends(get_db)):
 # them at the paths the frontend uses, with the same admin guard.
 
 @app.get("/api/admin/search")
-async def admin_search(q: str, request: Request, db: Session = Depends(get_db)):
+async def admin_search(q: str, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     """Universal admin search across users, assignments, materials, credit txns."""
     from .admin import admin_universal_search
-    return await admin_universal_search(q=q, request=request, db=db)
+    return await admin_universal_search(q=q, request=request, db=db, current_user=current_user)
 
 
 @app.post("/api/admin/user/{public_id}/credits")
-async def admin_user_credits(public_id: str, amount: float, reason: str = "admin adjustment",
-                             request: Request = None, db: Session = Depends(get_db)):
+async def admin_user_credits(public_id: str, amount: float, request: Request,
+                             reason: str = "admin adjustment",
+                             db: Session = Depends(get_db),
+                             current_user: User = Depends(require_admin)):
     from .admin import adjust_user_credits
     return await adjust_user_credits(public_id=public_id, amount=amount, reason=reason,
-                                     request=request, db=db)
+                                     request=request, db=db, current_user=current_user)
 
 
 @app.post("/api/admin/user/{public_id}/welcome-tokens")
-async def admin_user_welcome_tokens(public_id: str, amount: float = WELCOME_TOKEN_BONUS,
+async def admin_user_welcome_tokens(public_id: str, request: Request,
+                                    amount: float = WELCOME_TOKEN_BONUS,
                                     reason: str = "owner-approved welcome grant",
-                                    request: Request = None, db: Session = Depends(get_db)):
+                                    db: Session = Depends(get_db),
+                                    current_user: User = Depends(require_admin)):
     """08-31 (Bob): welcome tokens are granted only after he approves the
     signup in chat — this is the endpoint the approval loop calls."""
     from .admin import grant_welcome_tokens
     return await grant_welcome_tokens(public_id=public_id, amount=amount, reason=reason,
-                                      request=request, db=db)
+                                      request=request, db=db, current_user=current_user)
 
 
 @app.post("/api/admin/user/{public_id}/plan")
 async def admin_user_plan(public_id: str, plan: str, request: Request,
-                          db: Session = Depends(get_db)):
+                          db: Session = Depends(get_db),
+                          current_user: User = Depends(require_admin)):
     from .admin import set_user_plan
-    return await set_user_plan(public_id=public_id, plan=plan, request=request, db=db)
+    return await set_user_plan(public_id=public_id, plan=plan, request=request, db=db, current_user=current_user)
 
 
 @app.post("/api/admin/user/{public_id}/verify-trial-payment")
 async def admin_verify_trial_payment(public_id: str, request: Request,
-                                     db: Session = Depends(get_db)):
+                                     db: Session = Depends(get_db),
+                                     current_user: User = Depends(require_admin)):
     """Owner 09-06: confirm a user's 1-cent trial payment verification
     (manual lane when Stripe isn't configured)."""
     from .admin import verify_trial_payment
-    return await verify_trial_payment(public_id=public_id, request=request, db=db)
+    return await verify_trial_payment(public_id=public_id, request=request, db=db, current_user=current_user)
 
 
 @app.post("/api/admin/user/{public_id}/reset-password")
 async def admin_user_reset_password(public_id: str, req: ResetPasswordRequest, request: Request,
-                                    db: Session = Depends(get_db)):
+                                    db: Session = Depends(get_db),
+                                    current_user: User = Depends(require_admin)):
     from .admin import reset_user_password
-    return await reset_user_password(public_id=public_id, req=req, request=request, db=db)
+    return await reset_user_password(public_id=public_id, req=req, request=request, db=db, current_user=current_user)
 
 
 @app.post("/api/admin/user/{public_id}/ban")
-async def admin_user_ban(public_id: str, request: Request, db: Session = Depends(get_db)):
+async def admin_user_ban(public_id: str, request: Request, db: Session = Depends(get_db),
+                         current_user: User = Depends(require_admin)):
     from .admin import ban_user
-    return await ban_user(public_id=public_id, request=request, db=db)
+    return await ban_user(public_id=public_id, request=request, db=db, current_user=current_user)
 
 
 @app.post("/api/admin/user/{public_id}/unban")
-async def admin_user_unban(public_id: str, request: Request, db: Session = Depends(get_db)):
+async def admin_user_unban(public_id: str, request: Request, db: Session = Depends(get_db),
+                           current_user: User = Depends(require_admin)):
     from .admin import unban_user
-    return await unban_user(public_id=public_id, request=request, db=db)
+    return await unban_user(public_id=public_id, request=request, db=db, current_user=current_user)
 
 
 @app.post("/api/admin/user/{public_id}/tempban")
-async def admin_user_tempban(public_id: str, hours: float = 24, request: Request = None,
-                             db: Session = Depends(get_db)):
+async def admin_user_tempban(public_id: str, request: Request, hours: float = 24,
+                             db: Session = Depends(get_db),
+                             current_user: User = Depends(require_admin)):
     from .admin import temp_ban_user
-    return await temp_ban_user(public_id=public_id, hours=hours, request=request, db=db)
+    return await temp_ban_user(public_id=public_id, hours=hours, request=request, db=db, current_user=current_user)
 
 
 @app.post("/api/admin/user/{public_id}/kick")
-async def admin_user_kick(public_id: str, request: Request = None, db: Session = Depends(get_db)):
+async def admin_user_kick(public_id: str, request: Request, db: Session = Depends(get_db),
+                          current_user: User = Depends(require_admin)):
     from .admin import kick_user
-    return await kick_user(public_id=public_id, request=request, db=db)
+    return await kick_user(public_id=public_id, request=request, db=db, current_user=current_user)
 
 
 @app.delete("/api/admin/user/{public_id}")
-async def admin_user_delete(public_id: str, request: Request = None, db: Session = Depends(get_db)):
+async def admin_user_delete(public_id: str, request: Request, db: Session = Depends(get_db),
+                            current_user: User = Depends(require_admin)):
     from .admin import delete_user
-    return await delete_user(public_id=public_id, request=request, db=db)
+    return await delete_user(public_id=public_id, request=request, db=db, current_user=current_user)
 
 
 @app.post("/api/admin/user/{public_id}/act")
-async def admin_user_act(public_id: str, request: Request, db: Session = Depends(get_db)):
+async def admin_user_act(public_id: str, request: Request, db: Session = Depends(get_db),
+                         current_user: User = Depends(require_admin)):
     """Impersonate a user for debugging: swap the session cookie to a fresh
     session of the target user. The admin's browser becomes that account until
     they log in again."""
-    from .admin import require_admin
     from .database import User
     from .security import is_admin_user, ADMIN_PUBLIC_ID
-    admin = require_admin(request)
+    admin = current_user
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")

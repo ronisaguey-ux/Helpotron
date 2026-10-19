@@ -34,6 +34,7 @@ asyncpg>=0.29.0
 # read by vision OCR instead of being dumped as raw PDF object syntax.
 firecrawl-anydoc>=0.2.4
 pypdfium2>=5.13.0
+defusedxml>=0.7.1
 # Server-side markdown + LaTeX rendering (thin-wrapper migration 2026-09-14)
 markdown-it-py>=4.0,<5.0
 latex2mathml>=3.80,<4.0
