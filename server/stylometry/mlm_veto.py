@@ -51,6 +51,10 @@ _TOK = None
 _LOCK = threading.Lock()
 
 
+# Explicit pinned revision for distilbert-base-uncased from Hugging Face API (HT-007)
+DEFAULT_MLM_REVISION = "12040accade4e8a0f71eabdb258fecc2e7e948be"
+
+
 def _load():
     """Load the masked LM once, lazily, single-threaded and quiet."""
     global _MODEL, _TOK
@@ -67,8 +71,11 @@ def _load():
             # competing with anything else on a loaded box.
             torch.set_num_threads(1)
             name = os.environ.get("MLM_MODEL", "distilbert-base-uncased")
-            _TOK = AutoTokenizer.from_pretrained(name)
-            _MODEL = AutoModelForMaskedLM.from_pretrained(name)
+            rev = os.environ.get("MLM_REVISION")
+            if not rev and name in ("distilbert-base-uncased", "distilbert/distilbert-base-uncased"):
+                rev = DEFAULT_MLM_REVISION
+            _TOK = AutoTokenizer.from_pretrained(name, revision=rev)
+            _MODEL = AutoModelForMaskedLM.from_pretrained(name, revision=rev)
             _MODEL.eval()
             return True
         except Exception as e:  # model unavailable -> veto abstains, never blocks
