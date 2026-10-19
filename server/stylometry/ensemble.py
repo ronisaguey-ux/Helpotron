@@ -72,6 +72,15 @@ MODELS = {
                "GPT-2-era, outdated, low weight"),
 }
 
+# Explicit pinned revisions (commit SHAs) retrieved from Hugging Face API to prevent supply-chain drift (HT-007)
+MODEL_REVISIONS = {
+    "Oxidane/tmr-ai-text-detector": "0ceddea903015ef99cbaa040a4d8a216aed9c683",
+    "Shushant/ADAL_AI_Detector": "b598375d7fb2e8926e5514b15a68b2819bc31a0a",
+    "coai/roberta-ai-detector-v2": "d38284c73a8bbad3526f17c2af082ffffb6fb675",
+    "Hello-SimpleAI/chatgpt-detector-roberta": "d2b342c61775d5dd0221808a79983ed3b86ffd86",
+    "openai-community/roberta-base-openai-detector": "6cba99c003b711c7fe94f8a3aa2be35a792cb6fa",
+}
+
 _loaded: dict = {}
 
 
@@ -81,8 +90,9 @@ def _load(name: str):
     import torch
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
     repo, ai_index, weight, note = MODELS[name]
-    tok = AutoTokenizer.from_pretrained(repo, cache_dir=CACHE)
-    mdl = AutoModelForSequenceClassification.from_pretrained(repo, cache_dir=CACHE)
+    rev = MODEL_REVISIONS.get(repo)
+    tok = AutoTokenizer.from_pretrained(repo, cache_dir=CACHE, revision=rev)
+    mdl = AutoModelForSequenceClassification.from_pretrained(repo, cache_dir=CACHE, revision=rev)
     mdl.eval()
     # Keep the thread count modest: this box is shared and the watchdog SIGSTOPs
     # processes that spike CPU.
