@@ -14,8 +14,12 @@ import os
 import re
 import uuid
 import zipfile
-from xml.etree import ElementTree as ET
 from datetime import datetime, timezone
+try:
+    import defusedxml.ElementTree as ET
+except ImportError:
+    from xml.etree import ElementTree as ET
+
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -287,7 +291,10 @@ class AssignmentDumpManager:
 
             try:
                 import zipfile
-                from xml.etree import ElementTree
+                try:
+                    import defusedxml.ElementTree as ElementTree
+                except ImportError:
+                    from xml.etree import ElementTree
 
                 ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
                 with zipfile.ZipFile(file_path) as z:
