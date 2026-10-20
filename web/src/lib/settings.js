@@ -21,7 +21,7 @@ export const APP_PLACES = [
   { key: 'insights', label: 'Insights' },
   { key: 'history', label: 'History' },
   { key: 'settings', label: 'Settings' },
-  { key: 'dump', label: 'Drop Assignment' },
+  { key: 'dump', label: 'Assignment Dump' },
   { key: 'datalake', label: 'Data Lake' },
   { key: 'credits', label: 'Billing' },
   { key: 'extension', label: 'Extension' },
