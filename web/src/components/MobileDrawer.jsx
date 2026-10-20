@@ -62,7 +62,7 @@ export default function MobileDrawer({
     { key: 'insights', label: 'Insights', Icon: BarChart3, group: 'Workspace Core' },
     { key: 'history', label: 'History', Icon: History, group: 'Workspace Core' },
     { key: 'library', label: 'Library', Icon: LibraryIcon, group: 'Workspace Core' },
-    { key: 'dump', label: 'Drop Assignment', Icon: Inbox, group: 'Workspace Core' },
+    { key: 'dump', label: 'Assignment Dump', Icon: Inbox, group: 'Workspace Core' },
     { key: 'datalake', label: 'Data Lake', Icon: Database, group: 'Workspace Core' },
     { key: 'settings', label: 'Settings', Icon: Settings, group: 'Platform System' },
     { key: 'credits', label: 'Billing', Icon: CreditCard, group: 'Platform System' },

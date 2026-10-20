@@ -226,7 +226,7 @@ export default function AppShell({
     library: 'Library',
     settings: 'Settings',
     credits: 'Billing',
-    dump: 'Drop Assignment',
+    dump: 'Assignment Dump',
     datalake: 'Data Lake',
     extension: 'Extension',
     guide: 'Guide',
