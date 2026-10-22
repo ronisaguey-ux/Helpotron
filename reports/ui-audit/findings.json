@@ -138,6 +138,47 @@
       "note": "This is also the brief's own quality bar: 'Every async surface has four designed states.'"
     },
     {
+      "id": "F-27",
+      "severity": "serious",
+      "status": "CONFIRMED → FIXED → DEPLOYED (commit 65f1c7e)",
+      "title": "The only serious axe violation: a 2.57:1 button on the public pricing row",
+      "symptom": "The 'Apply for free access' button (Testing plan) rendered dark green text on a medium green fill.",
+      "cause": "web/src/index.css:83, inside :root (the dark theme that is live), paired --st-sem-deepgreen #059669 with --st-on-sem-deepgreen #064E3B. The [data-theme=\"light\"] block at :248 had the correct pairing (#ECFDF5 on #047857) — the two blocks had their foregrounds the wrong way round.",
+      "evidence": "axe measured 2.57:1 against a 4.5:1 requirement, identically on /, /signup and /guide.",
+      "fix_applied": "Aligned :root to #ECFDF5 on #047857 = 5.21:1, computed not guessed. First attempt changed only the foreground and reached 3.57:1 — still failing — so the fill was darkened too.",
+      "note": "I had flagged this from the first landing screenshot as 'green on green'. The number is what made it actionable."
+    },
+    {
+      "id": "F-28",
+      "severity": "moderate",
+      "status": "CONFIRMED → FIXED → DEPLOYED (commit 6c7d12a)",
+      "title": "Every authenticated page had nested main landmarks",
+      "cause": "web/index.html:54 mounted React into <main id=\"root\"> while web/src/components/AppShell.jsx:545 renders its own <main id=\"main-content\"> inside it.",
+      "fix_applied": "Root is now a div; AnonymousLanding's outer element (which already carried id=\"main-content\", the skip-link target) became the <main> for the signed-out side.",
+      "honest_note": "My first attempt changed index.html alone and REGRESSED the landing page — it was left with no main landmark at all, which axe reported as landmark-one-main plus 42 'region' violations. Caught by re-running axe against the deployed site rather than assuming. Fixed in the same pass before reporting.",
+      "lesson": "Verify a11y fixes against the deployed page, not the diff."
+    },
+    {
+      "id": "F-29",
+      "severity": "high",
+      "status": "confirmed, unfixed",
+      "title": "Empty-state copy is written in machine language, not student language",
+      "symptom": "Opening an empty subject shows: a chip reading 'SUB-PIPELINE 00 · DORMANT', the heading 'No assignments in Mathematics yet', and the instruction 'Import course materials, paste a syllabus link, or launch an agent research thread to activate synthesis vectors.'",
+      "cost": "This is the screen a new user reaches first, and it is where they must take an action. 'Activate synthesis vectors' and 'SUB-PIPELINE 00 · DORMANT' tell a student nothing about what to do. The heading and the button ('Import Assignment') are fine; the sentence between them is not.",
+      "fix": "Rewrite in the user's words and run check-comprehension on every empty state. The Assignment Dump empty state (F-23) is already written correctly and is the model.",
+      "note": "The product vocabulary that must be KEPT is: subject bubble, assignment, Data Lake, Library, Insights, credits, Study Buddy. 'Synthesis vectors' and 'sub-pipeline' are not in that list."
+    },
+    {
+      "id": "F-30",
+      "severity": "medium",
+      "status": "confirmed, unfixed",
+      "title": "The in-app back button is disabled after drilling into a subject",
+      "symptom": "Opening a subject from the dashboard grid leaves both 'Navigate back' and 'Navigate forward' disabled, so the chrome offers no way back to the grid.",
+      "cause": "The subject drill-down does not call recordNav (web/src/App.jsx:601), so the back stack stays empty. The URL does not change either (F-07), so the browser's own back button is equally useless.",
+      "mitigation_present": "An 'All subjects' control exists inside the view, so the user is not trapped — but the global back affordance is visibly present and dead.",
+      "fix": "Record the navigation, and push a URL for it."
+    },
+    {
       "id": "F-19",
       "severity": "high",
       "status": "confirmed, unfixed",
