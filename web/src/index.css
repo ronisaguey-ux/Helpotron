@@ -80,7 +80,13 @@
   --st-sem-green:      #10B981;   --st-on-sem-green:     #064E3B;
   --st-sem-cyan:       #06B6D4;   --st-on-sem-cyan:      #164E63;
   --st-sem-indigo:     #6366F1;   --st-on-sem-indigo:    #312E81;
-  --st-sem-deepgreen:  #059669;   --st-on-sem-deepgreen: #064E3B;
+  /* 2026-10-22 (QA): --st-on-sem-deepgreen was #064E3B here — a DARK green
+   * foreground on a medium green fill. axe measured the resulting button
+   * ("Apply for free access", the Testing plan on the public pricing row) at
+   * 2.57:1 against a 4.5:1 requirement, on /, /signup and /guide. The light
+   * theme at [data-theme="light"] already pairs this fill with #ECFDF5; the two
+   * blocks had the foregrounds the wrong way round. */
+  --st-sem-deepgreen:  #047857;   --st-on-sem-deepgreen: #ECFDF5;
   --st-sem-gray:       #6B7280;   --st-on-sem-gray:      #1F2937;
   --st-sem-slate:      #64748B;   --st-on-sem-slate:     #1E293B;
 
