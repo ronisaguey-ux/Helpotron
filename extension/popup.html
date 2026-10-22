@@ -6,6 +6,7 @@
   <title>Helpotron Companion</title>
   <!-- Design system (dark-first; theme.js applies [data-theme]) -->
   <link rel="stylesheet" href="popup.css" />
+  <link rel="stylesheet" href="popup-v2.css" />
 </head>
 <body>
   <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
@@ -126,7 +127,7 @@
   <!-- ============ App bar ============ -->
   <header class="appbar">
     <img class="logo" src="assets/logo.jpeg" alt="HelpoTron logo" />
-    <div class="app-title">Helpotron</div>
+    <div class="app-title">Helpotron<span class="build-tag">2.8.3</span></div>
     <div class="spacer"></div>
     <button class="account-chip" id="accountChip" type="button" title="Account" aria-expanded="false" aria-controls="loginPanel">
       <svg class="ic"><use href="#i-user" /></svg>
@@ -160,6 +161,9 @@
       <div class="font-body-sm">Helpotron v<span id="updateVersionBadge">2.5.2</span> — download the update</div>
     </div>
     <button class="btn btn--ghost btn--sm" id="btnDownloadUpdate">Get</button>
+    <button class="icon-btn update-dismiss" id="btnUpdateDismiss" type="button" aria-label="Dismiss update notice" title="Dismiss">
+      <svg class="ic ic--xs"><use href="#i-close" /></svg>
+    </button>
   </div>
 
   <!-- ============ What's new (release notifications; popup.js renders unread, acks on Got it) ============ -->
@@ -245,74 +249,68 @@
     <div class="view-panel" id="viewLauncher" role="tabpanel" aria-labelledby="tabNavLauncher">
       <div class="option-grid" id="launcher">
 
-        <!-- SCRAPE -->
-        <section class="option-cluster" aria-label="Scrape">
-          <button class="option-card" id="option-scrape" type="button" role="button" aria-expanded="false" aria-controls="scrape-options">
-            <span class="option-icon"><svg class="ic"><use href="#i-globe" /></svg></span>
-            <span class="option-body">
-              <span class="option-title">Scrape</span>
-              <span class="option-sub">Pull the page (or the whole site) into Helpotron</span>
-            </span>
-            <svg class="ic option-chevron"><use href="#i-chevron" /></svg>
+        <!-- CAPTURE — one dominant action, everything else quiet -->
+        <section class="capture-card" aria-label="Capture this page">
+          <button class="btn btn--primary capture-primary" id="btnScrapeCurrent" type="button">
+            <svg class="ic ic--sm"><use href="#i-capture" /></svg>
+            <span>Capture this page</span>
           </button>
-          <div class="option-panel" id="scrape-options" hidden>
-            <button class="btn btn--primary" id="btnScrapeCurrent" type="button">
-              <svg class="ic"><use href="#i-capture" /></svg>
-              <span>Scrape current thing only</span>
-            </button>
-            <button class="btn btn--secondary" id="btnScrapeSite" type="button">
-              <svg class="ic"><use href="#i-globe" /></svg>
-              <span>Scrape everything on the tab</span>
-            </button>
-            <button class="btn btn--danger-outline" id="stopCrawl" type="button" style="display:none">
-              <svg class="ic"><use href="#i-stop" /></svg>
-              Stop crawl
-            </button>
 
-            <!-- Crawl progress + per-page results -->
-            <div class="crawl-progress" id="crawlProgress" role="status" style="display:none"></div>
-            <div id="crawlResultsWrap" style="display:none">
-              <span class="field-label">Pages scraped so far</span>
-              <div class="crawl-results" id="crawlResults" aria-live="polite"></div>
+          <div class="capture-row">
+            <button class="btn btn--ghost btn--sm" id="btnScrapeSite" type="button">
+              <svg class="ic ic--xs"><use href="#i-globe" /></svg>
+              <span>Whole site</span>
+            </button>
+            <button class="btn btn--danger-outline btn--sm" id="stopCrawl" type="button" style="display:none">
+              <svg class="ic ic--xs"><use href="#i-stop" /></svg>
+              <span>Stop</span>
+            </button>
+          </div>
+
+          <!-- Crawl progress + per-page results -->
+          <div class="crawl-progress" id="crawlProgress" role="status" style="display:none"></div>
+          <div id="crawlResultsWrap" style="display:none">
+            <span class="field-label">Pages scraped so far</span>
+            <div class="crawl-results" id="crawlResults" aria-live="polite"></div>
+          </div>
+
+          <!-- Unparseable page: what happened / why / what to do -->
+          <div class="error-card" id="unparseableBox" style="display:none">
+            <div class="e-title">
+              <svg class="ic ic--sm"><use href="#i-alert" /></svg>
+              Couldn't read this page
             </div>
-
-            <!-- Unparseable page -->
-            <!-- Every error surface carries three things: (1) SHOWCASE — what
-                 happened; (2) EXPLANATION — why, in words a person would use;
-                 (3) CALL TO ACTION — what to do about it. -->
-            <div class="error-card" id="unparseableBox" style="display:none">
-              <div class="e-title">
-                <svg class="ic ic--sm"><use href="#i-alert" /></svg>
-                Couldn't read this page
-              </div>
-                <div class="e-body" id="unparseableReason">The page didn't give up any text or files we could capture.</div>
-              <div class="e-actions">
-                <button class="btn btn--outline btn--sm" id="btnRetryScrape" type="button">
-                  <svg class="ic ic--sm"><use href="#i-refresh" /></svg>
-                  Try again
-                </button>
+            <div class="e-body" id="unparseableReason">The page didn't give up any text or files we could capture.</div>
+            <div class="e-actions">
+              <button class="btn btn--outline btn--sm" id="btnRetryScrape" type="button">
+                <svg class="ic ic--sm"><use href="#i-refresh" /></svg>
+                Try again
+              </button>
               <button class="btn btn--outline btn--sm" id="btnOpenDataLake" type="button">
                 <svg class="ic ic--sm"><use href="#i-folder" /></svg>
                 Open Data Lake
               </button>
-              </div>
             </div>
-
-            <!-- Success: open the created bubble -->
-            <button class="success-card" id="openAssignmentBtn" type="button" style="display:none">
-              <svg class="ic"><use href="#i-check-circle" /></svg>
-              <span>Open bubble in Helpotron</span>
-            </button>
           </div>
+
+          <!-- Success: open the created bubble -->
+          <button class="success-card" id="openAssignmentBtn" type="button" style="display:none">
+            <svg class="ic"><use href="#i-check-circle" /></svg>
+            <span>Open bubble in Helpotron</span>
+          </button>
+          <p class="capture-empty" id="captureEmpty">Nothing captured yet — this page will land in your Library.</p>
         </section>
+        <div class="shell-foot" aria-hidden="true">
+          <span class="dot"></span><span>Captures sync to your Library</span>
+        </div>
 
         <!-- AGENT CONTROL CONFIG -->
         <section class="option-cluster" aria-label="Agent Controls">
           <button class="option-card" id="option-chat" type="button" role="button" aria-expanded="false" aria-controls="chat-options">
             <span class="option-icon"><svg class="ic"><use href="#i-cursor" /></svg></span>
             <span class="option-body">
-              <span class="option-title">Agent Controls</span>
-              <span class="option-sub">Permissions &amp; screen attachment settings</span>
+              <span class="option-title">Agent permissions</span>
+              <span class="option-sub">Screen access, education mode, automation</span>
             </span>
             <svg class="ic option-chevron"><use href="#i-chevron" /></svg>
           </button>
