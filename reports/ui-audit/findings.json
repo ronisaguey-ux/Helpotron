@@ -5,15 +5,14 @@
     "target": "https://helpotron.dpdns.org",
     "repo": "/home/roni/Roni_workspace/helpotron",
     "baseline_commit": "d08cc14",
-    "status": "IN PROGRESS — appended as findings are confirmed",
+    "status": "IN PROGRESS \u2014 appended as findings are confirmed",
     "rule": "no finding rests on a screenshot alone; each carries a source citation or a measured number",
     "stage_note": "Stage 1 was read-only until the owner authorised fixing the auth outage (F-01) because the authenticated product could not be audited while sign-in was impossible. F-15 and F-17 were then also directed by the owner.",
     "qa_account": "qadesign1 (created through the real signup flow, no bypass header). DELETE AT END OF AUDIT."
   },
-
   "baseline_metrics": {
     "landing_1440": {
-      "title": "Clarion — Study Workspace, Assignment Workflow & Style Coaching",
+      "title": "Clarion \u2014 Study Workspace, Assignment Workflow & Style Coaching",
       "h1": "Your Academic Co-pilot, Redefined",
       "horizontal_overflow_px": -5,
       "tap_targets_under_32px": 9,
@@ -38,57 +37,66 @@
     },
     "lighthouse_baseline": "reports/ui-audit/metrics/before/ (gitignored, on disk): lh-home-{desktop,mobile}.json, lh-signup-{desktop,mobile}.json"
   },
-
   "findings": [
     {
       "id": "F-01",
       "severity": "critical",
-      "status": "CONFIRMED → FIXED → DEPLOYED (commit d898b9e)",
+      "status": "CONFIRMED \u2192 FIXED \u2192 DEPLOYED (commit d898b9e)",
       "title": "CSP had no frame-src, so Turnstile was blocked and NOBODY could sign up or sign in",
-      "symptom": "Signup: the captcha never rendered (0 iframes), the hidden cf-turnstile-response input stayed empty, and 'Create account' was permanently disabled. Sign-in: the button was NOT gated on the token, so a user typed their password, clicked Sign In, and got back 403 'Security check required — complete the captcha and try again' — about a captcha that was not on screen and could not be.",
+      "symptom": "Signup: the captcha never rendered (0 iframes), the hidden cf-turnstile-response input stayed empty, and 'Create account' was permanently disabled. Sign-in: the button was NOT gated on the token, so a user typed their password, clicked Sign In, and got back 403 'Security check required \u2014 complete the captcha and try again' \u2014 about a captcha that was not on screen and could not be.",
       "cause": "server/security.py:538-547 built the CSP with default-src/script-src/style-src/font-src/img-src/media-src/connect-src/frame-ancestors and never emitted frame-src. The docstring at :526 had described frame-src and worker-src as part of this policy since the Turnstile work; neither was ever in the header. With no frame-src, default-src 'self' governed frames.",
       "history": "Not a fresh regression. Before commit 9b692ac the policy was script-src 'self', which blocked the Turnstile script outright. 9b692ac opened script-src and connect-src for Cloudflare but missed the third directive, so the symptom changed rather than cleared.",
       "evidence_before": "curl -sI returned a CSP with no frame-src. Console on every auth surface: \"Framing 'https://challenges.cloudflare.com/' violates ... default-src 'self'\". Measured: signup button disabled:true with all fields valid; POST /api/login with an empty token -> 403.",
       "evidence_after": "frame-src present in the live header; Turnstile mints a 730-char token in ~6-12s; a real account (qadesign1) was created end to end through the UI with no bypass header.",
-      "cost": "Total acquisition and re-entry outage — every new signup and every returning sign-in.",
+      "cost": "Total acquisition and re-entry outage \u2014 every new signup and every returning sign-in.",
       "fix": "Added frame-src https://challenges.cloudflare.com https://*.challenges.cloudflare.com and worker-src 'self' blob: data: to the CSP. frame-ancestors 'none' untouched; no gate weakened.",
-      "note": "This was NOT in the brief's defect list and outranked everything that was."
+      "note": "This was NOT in the brief's defect list and outranked everything that was.",
+      "state": "fixed",
+      "fixed_commit": "d898b9e",
+      "severity_normalized": "critical"
     },
     {
       "id": "F-15",
       "severity": "high",
-      "status": "CONFIRMED → FIXED (built, pending deploy)",
+      "status": "CONFIRMED \u2192 FIXED (built, pending deploy)",
       "title": "One undefined font token made the entire signed-in app render in the OS system font",
       "symptom": "Owner: 'i hate the fonts in helpotron, it looks ass'. Measured cause: five different first-choice font families on a single screen.",
       "cause": "web/src/App.jsx:709 puts Tailwind's `font-sans` utility on the root .app-canvas div. --font-sans was never defined in the @theme inline block in web/src/index.css, so `font-sans` resolved to Tailwind's default OS stack and overrode the \"Inter Variable\" set on <body> for the whole application. Only components that explicitly named a font-* token (font-body-md, font-headline-lg, ...) escaped it.",
       "evidence": "Ancestor walk from a mis-rendered heading: the font boundary is exactly div.app-canvas (computed first family -apple-system) whose parent main#root computes Inter Variable. Family census on the dashboard: -apple-system x10, Inter Variable x10, ui-monospace x2, Hanken Grotesk Variable x1, JetBrains Mono Variable x2.",
       "not_the_cause": "The typefaces load correctly. @fontsource-variable/{inter,hanken-grotesk,jetbrains-mono} are installed, imported at web/src/main.jsx:4-6, shipped as woff2 in the build, and all three report status 'loaded'. The problem was never the font choice.",
       "fix": "Defined --font-sans (Inter Variable) and --font-mono (JetBrains Mono Variable) in the @theme block. Verified in the built CSS: .font-sans{font-family:Inter Variable,...}.",
-      "remaining": "The type SCALE is still incoherent — see F-16. Fixing the family is necessary but not sufficient."
+      "remaining": "The type SCALE is still incoherent \u2014 see F-16. Fixing the family is necessary but not sufficient.",
+      "state": "fixed",
+      "severity_normalized": "high"
     },
     {
       "id": "F-16",
       "severity": "medium",
       "status": "confirmed, unfixed",
-      "title": "Type hierarchy is inverted — the dashboard h1 is smaller than body text",
+      "title": "Type hierarchy is inverted \u2014 the dashboard h1 is smaller than body text",
       "symptom": "The authenticated dashboard's <h1> ('Dashboard') renders at 14px/600 while body copy renders at 16px/400. A 32px Hanken Grotesk h2 ('Your subjects') sits below it, so the visual hierarchy contradicts the document hierarchy.",
-      "evidence": "Measured on the authenticated dashboard at 1440. Also: '0 assignments present' is set in JetBrains Mono 12px — a monospace face used for prose, not data.",
+      "evidence": "Measured on the authenticated dashboard at 1440. Also: '0 assignments present' is set in JetBrains Mono 12px \u2014 a monospace face used for prose, not data.",
       "cost": "Screen readers and search engines get one outline; sighted users get a different one. The page's real title is the smallest text on it.",
-      "fix": "Decide one scale in docs/design/DIRECTION.md and apply it: h1 is the page title at display size, h2 sections below it, mono reserved for numerals and identifiers."
+      "fix": "Decide one scale in docs/design/DIRECTION.md and apply it: h1 is the page title at display size, h2 sections below it, mono reserved for numerals and identifiers.",
+      "state": "open",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-04",
       "severity": "high",
-      "status": "CONFIRMED → FIXED → DEPLOYED (commit 2fb9465)",
-      "owner_reaction": "Owner, looking at the live site mid-audit: 'why does the site look broken'. Verified it was NOT caused by any deploy of mine — a clean signed-out context measured h1 left=0 and hero padding 0px/0px, identical to the 19:27 baseline taken before the first change. All 9 referenced assets returned 200.",
+      "status": "CONFIRMED \u2192 FIXED \u2192 DEPLOYED (commit 2fb9465)",
+      "owner_reaction": "Owner, looking at the live site mid-audit: 'why does the site look broken'. Verified it was NOT caused by any deploy of mine \u2014 a clean signed-out context measured h1 left=0 and hero padding 0px/0px, identical to the 19:27 baseline taken before the first change. All 9 referenced assets returned 200.",
       "fix_applied": "Declared --spacing-container-padding: clamp(1rem, 3vw, 2.5rem) in the @theme block, alongside the --spacing-gutter-mobile/desktop tokens that already existed. Measured after: h1 left 0->40px at 1440 and 0->16px at 390; elements flush to a viewport edge 30->9 at 390; horizontal overflow unchanged at -5.",
       "title": "A second undefined utility strips the gutter off the hero, nav and footer",
       "symptom": "At 1440 the headline starts at x=0, hard against the browser edge, while every section below is inset 170-311px. At 390 the headline, body copy, CTAs and cards all touch both screen edges. It reads as unstyled.",
-      "cause": "web/src/components/AnonymousLanding.jsx uses `px-container-padding` 6 times — hero :573, nav :508, footer :667. The utility `container-padding` is defined nowhere: not in web/src/index.css, not in a tailwind config, and it does not appear in the built CSS. It compiles to nothing.",
+      "cause": "web/src/components/AnonymousLanding.jsx uses `px-container-padding` 6 times \u2014 hero :573, nav :508, footer :667. The utility `container-padding` is defined nowhere: not in web/src/index.css, not in a tailwind config, and it does not appear in the built CSS. It compiles to nothing.",
       "evidence": "Hero <section> computed padding 0px/0px with max-width 1440px; H1 left=0; H2 'What you actually get' left=170; H2 'Three steps' left=311. At 390px: h1 left=0 and 30 elements flush to a viewport edge.",
       "cost": "First impression on the highest-traffic screen, and worst on the device most students use.",
-      "fix": "Same class of bug as F-15 — an undefined token. Define it, or use the px-4 sm:px-6 pattern already present at AnonymousLanding.jsx:295.",
-      "pattern_note": "F-04 and F-15 are the same root cause twice: a Tailwind utility invented in JSX that was never defined in the theme. Worth a lint rule."
+      "fix": "Same class of bug as F-15 \u2014 an undefined token. Define it, or use the px-4 sm:px-6 pattern already present at AnonymousLanding.jsx:295.",
+      "pattern_note": "F-04 and F-15 are the same root cause twice: a Tailwind utility invented in JSX that was never defined in the theme. Worth a lint rule.",
+      "state": "fixed",
+      "fixed_commit": "2fb9465",
+      "severity_normalized": "high"
     },
     {
       "id": "F-14",
@@ -96,10 +104,12 @@
       "status": "confirmed, unfixed",
       "title": "The consent checkbox is 16px and most of its label navigates away instead of ticking it",
       "symptom": "At the last gate before account creation, clicking the words 'I agree to the Terms of Service' opens the Terms instead of agreeing. The URL becomes /?signup=1#/terms and the box stays unchecked, so 'Create account' stays disabled with no explanation.",
-      "cause": "web/src/components/AuthModal.jsx:813-831. The checkbox is w-4 h-4 (16px). Its <label htmlFor> contains two <a> elements that call e.stopPropagation() — which correctly stops the toggle but does not stop the anchor navigating.",
-      "evidence": "Measured: checkbox 16x16px; label 254x14px; the two links occupy 33% and 27% of the label width — 60% of the label does the wrong thing. Reproduced: clicking the label navigated to #/terms with consentChecked=false.",
+      "cause": "web/src/components/AuthModal.jsx:813-831. The checkbox is w-4 h-4 (16px). Its <label htmlFor> contains two <a> elements that call e.stopPropagation() \u2014 which correctly stops the toggle but does not stop the anchor navigating.",
+      "evidence": "Measured: checkbox 16x16px; label 254x14px; the two links occupy 33% and 27% of the label width \u2014 60% of the label does the wrong thing. Reproduced: clicking the label navigated to #/terms with consentChecked=false.",
       "cost": "This is the final step of signup. A user who cannot tick the box cannot create an account, and nothing on screen says why the button is dead.",
-      "fix": "Separate the affordances: make the whole row a 44px hit area that toggles, and move the Terms/Privacy links out of the label (or render them as buttons opening the modal, outside the <label>). Also explain the disabled button."
+      "fix": "Separate the affordances: make the whole row a 44px hit area that toggles, and move the Terms/Privacy links out of the label (or render them as buttons opening the modal, outside the <label>). Also explain the disabled button.",
+      "state": "open",
+      "severity_normalized": "high"
     },
     {
       "id": "F-02",
@@ -110,7 +120,9 @@
       "cause": "server/assignments.py:72 registers @router.get(\"/assignments\") with no /api prefix, shadowing the SPA catch-all. FastAPI matches it before serve_spa_frontend runs.",
       "evidence": "HTTP 401 from the live site; document.title empty; body is the JSON error; 1 console error.",
       "fix": "Drop the bare /assignments aliases (keep the /api/ ones) and add /assignments to VIEW_PATH_MAP in web/src/App.jsx.",
-      "brief_correction": "docs/UI_UX_SWEEP.md §3 lists this as SETTLED. It is half-fixed: it stopped returning data and started returning a JSON 401. The alias still shadows the SPA."
+      "brief_correction": "docs/UI_UX_SWEEP.md \u00a73 lists this as SETTLED. It is half-fixed: it stopped returning data and started returning a JSON 401. The alias still shadows the SPA.",
+      "state": "open",
+      "severity_normalized": "critical"
     },
     {
       "id": "F-03",
@@ -118,9 +130,11 @@
       "status": "confirmed, unfixed",
       "title": "An API outage silently logs the user out and destroys the session indicator",
       "symptom": "With /api/** unreachable, an authenticated visitor is shown the marketing landing page. No error, no spinner, no retry.",
-      "cause": "web/src/App.jsx:408-484. checkSession() cannot distinguish a transport failure from a 401 — catch(e){} at :428 and :459 swallow both and fall through to the same terminal 'Unauthenticated state' at :464. Then :475-479 deletes localStorage 'token', 'helpotron_csrf_token' and the csrf cookie, so hasSessionIndicator() (web/src/api.js:44) returns false on the NEXT load and the zero-request fast path skips the probe entirely.",
+      "cause": "web/src/App.jsx:408-484. checkSession() cannot distinguish a transport failure from a 401 \u2014 catch(e){} at :428 and :459 swallow both and fall through to the same terminal 'Unauthenticated state' at :464. Then :475-479 deletes localStorage 'token', 'helpotron_csrf_token' and the csrf cookie, so hasSessionIndicator() (web/src/api.js:44) returns false on the NEXT load and the zero-request fast path skips the probe entirely.",
       "aggravating": "The offline banner that would explain this is unreachable by construction: it renders inside AppShell (web/src/App.jsx:858), which only mounts when authStatus === 'authed'. The /api/health probe at :288-301 flips `connected`, but nothing renders it in the signedOut branch.",
-      "fix": "Give checkSession a third outcome. A 401 means signedOut; a network error or 5xx means 'degraded'. Render the shell with an explicit offline state and retry, and never clear the session indicator on a transport failure."
+      "fix": "Give checkSession a third outcome. A 401 means signedOut; a network error or 5xx means 'degraded'. Render the shell with an explicit offline state and retry, and never clear the session indicator on a transport failure.",
+      "state": "open",
+      "severity_normalized": "high"
     },
     {
       "id": "F-18",
@@ -130,43 +144,53 @@
       "symptom": "Owner: 'the whole ui/ux is missing alot of idle states, loading states, success states, and error states, everything needs it'.",
       "observed_so_far": [
         "Signup submit: the button label vanishes during the request, leaving a bare spinner with no text (measured buttonText='' 1.2s after click).",
-        "web/src/App.jsx:81-87 ViewSuspenseFallback is a centred 'Loading…' string — not a skeleton of the view being loaded.",
-        "web/src/App.jsx:777 reuses SessionBootScreen ('Checking session…') as the AppShell chunk fallback, so the copy describes the wrong wait.",
-        "An assignment created via API sits in pending_approval and appears in no view (brief defect 5) — the success state of a create action is absent entirely."
+        "web/src/App.jsx:81-87 ViewSuspenseFallback is a centred 'Loading\u2026' string \u2014 not a skeleton of the view being loaded.",
+        "web/src/App.jsx:777 reuses SessionBootScreen ('Checking session\u2026') as the AppShell chunk fallback, so the copy describes the wrong wait.",
+        "An assignment created via API sits in pending_approval and appears in no view (brief defect 5) \u2014 the success state of a create action is absent entirely."
       ],
       "plan": "Enumerate every async surface, record which of the four states exist today, and treat the missing ones as the single largest Stage 2 workstream. This is a system-level fix (one shared set of skeleton/empty/error primitives), not per-screen patches.",
-      "note": "This is also the brief's own quality bar: 'Every async surface has four designed states.'"
+      "note": "This is also the brief's own quality bar: 'Every async surface has four designed states.'",
+      "state": "open",
+      "severity_normalized": "high"
     },
     {
       "id": "F-27",
       "severity": "serious",
-      "status": "CONFIRMED → FIXED → DEPLOYED (commit 65f1c7e)",
+      "status": "CONFIRMED \u2192 FIXED \u2192 DEPLOYED (commit 65f1c7e)",
       "title": "The only serious axe violation: a 2.57:1 button on the public pricing row",
       "symptom": "The 'Apply for free access' button (Testing plan) rendered dark green text on a medium green fill.",
-      "cause": "web/src/index.css:83, inside :root (the dark theme that is live), paired --st-sem-deepgreen #059669 with --st-on-sem-deepgreen #064E3B. The [data-theme=\"light\"] block at :248 had the correct pairing (#ECFDF5 on #047857) — the two blocks had their foregrounds the wrong way round.",
+      "cause": "web/src/index.css:83, inside :root (the dark theme that is live), paired --st-sem-deepgreen #059669 with --st-on-sem-deepgreen #064E3B. The [data-theme=\"light\"] block at :248 had the correct pairing (#ECFDF5 on #047857) \u2014 the two blocks had their foregrounds the wrong way round.",
       "evidence": "axe measured 2.57:1 against a 4.5:1 requirement, identically on /, /signup and /guide.",
-      "fix_applied": "Aligned :root to #ECFDF5 on #047857 = 5.21:1, computed not guessed. First attempt changed only the foreground and reached 3.57:1 — still failing — so the fill was darkened too.",
-      "note": "I had flagged this from the first landing screenshot as 'green on green'. The number is what made it actionable."
+      "fix_applied": "Aligned :root to #ECFDF5 on #047857 = 5.21:1, computed not guessed. First attempt changed only the foreground and reached 3.57:1 \u2014 still failing \u2014 so the fill was darkened too.",
+      "note": "I had flagged this from the first landing screenshot as 'green on green'. The number is what made it actionable.",
+      "state": "fixed",
+      "fixed_commit": "65f1c7e",
+      "severity_normalized": "critical"
     },
     {
       "id": "F-28",
       "severity": "moderate",
-      "status": "CONFIRMED → FIXED → DEPLOYED (commit 6c7d12a)",
+      "status": "CONFIRMED \u2192 FIXED \u2192 DEPLOYED (commit 6c7d12a)",
       "title": "Every authenticated page had nested main landmarks",
       "cause": "web/index.html:54 mounted React into <main id=\"root\"> while web/src/components/AppShell.jsx:545 renders its own <main id=\"main-content\"> inside it.",
       "fix_applied": "Root is now a div; AnonymousLanding's outer element (which already carried id=\"main-content\", the skip-link target) became the <main> for the signed-out side.",
-      "honest_note": "My first attempt changed index.html alone and REGRESSED the landing page — it was left with no main landmark at all, which axe reported as landmark-one-main plus 42 'region' violations. Caught by re-running axe against the deployed site rather than assuming. Fixed in the same pass before reporting.",
-      "lesson": "Verify a11y fixes against the deployed page, not the diff."
+      "honest_note": "My first attempt changed index.html alone and REGRESSED the landing page \u2014 it was left with no main landmark at all, which axe reported as landmark-one-main plus 42 'region' violations. Caught by re-running axe against the deployed site rather than assuming. Fixed in the same pass before reporting.",
+      "lesson": "Verify a11y fixes against the deployed page, not the diff.",
+      "state": "fixed",
+      "fixed_commit": "6c7d12a",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-29",
       "severity": "high",
       "status": "confirmed, unfixed",
       "title": "Empty-state copy is written in machine language, not student language",
-      "symptom": "Opening an empty subject shows: a chip reading 'SUB-PIPELINE 00 · DORMANT', the heading 'No assignments in Mathematics yet', and the instruction 'Import course materials, paste a syllabus link, or launch an agent research thread to activate synthesis vectors.'",
-      "cost": "This is the screen a new user reaches first, and it is where they must take an action. 'Activate synthesis vectors' and 'SUB-PIPELINE 00 · DORMANT' tell a student nothing about what to do. The heading and the button ('Import Assignment') are fine; the sentence between them is not.",
+      "symptom": "Opening an empty subject shows: a chip reading 'SUB-PIPELINE 00 \u00b7 DORMANT', the heading 'No assignments in Mathematics yet', and the instruction 'Import course materials, paste a syllabus link, or launch an agent research thread to activate synthesis vectors.'",
+      "cost": "This is the screen a new user reaches first, and it is where they must take an action. 'Activate synthesis vectors' and 'SUB-PIPELINE 00 \u00b7 DORMANT' tell a student nothing about what to do. The heading and the button ('Import Assignment') are fine; the sentence between them is not.",
       "fix": "Rewrite in the user's words and run check-comprehension on every empty state. The Assignment Dump empty state (F-23) is already written correctly and is the model.",
-      "note": "The product vocabulary that must be KEPT is: subject bubble, assignment, Data Lake, Library, Insights, credits, Study Buddy. 'Synthesis vectors' and 'sub-pipeline' are not in that list."
+      "note": "The product vocabulary that must be KEPT is: subject bubble, assignment, Data Lake, Library, Insights, credits, Study Buddy. 'Synthesis vectors' and 'sub-pipeline' are not in that list.",
+      "state": "open",
+      "severity_normalized": "high"
     },
     {
       "id": "F-30",
@@ -175,19 +199,23 @@
       "title": "The in-app back button is disabled after drilling into a subject",
       "symptom": "Opening a subject from the dashboard grid leaves both 'Navigate back' and 'Navigate forward' disabled, so the chrome offers no way back to the grid.",
       "cause": "The subject drill-down does not call recordNav (web/src/App.jsx:601), so the back stack stays empty. The URL does not change either (F-07), so the browser's own back button is equally useless.",
-      "mitigation_present": "An 'All subjects' control exists inside the view, so the user is not trapped — but the global back affordance is visibly present and dead.",
-      "fix": "Record the navigation, and push a URL for it."
+      "mitigation_present": "An 'All subjects' control exists inside the view, so the user is not trapped \u2014 but the global back affordance is visibly present and dead.",
+      "fix": "Record the navigation, and push a URL for it.",
+      "state": "open",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-19",
       "severity": "high",
       "status": "confirmed, unfixed",
-      "title": "Not one skeleton exists in the product — every authed route is the same full-screen spinner",
-      "symptom": "All 11 authenticated routes sampled 350ms after navigation produced a byte-identical early DOM: the text 'Skip to main content helpotron ACADEMIC OS Checking session…', 0 skeletons, 1 spinner.",
-      "evidence": "Measured across /dashboard /agent /dump /library /insights /credits /settings /datalake /activity /extension /automation. skeletons:0 on every one. The only loading affordances in the product are web/src/App.jsx:173 SessionBootScreen and :81 ViewSuspenseFallback ('Loading…' as a centred string).",
+      "title": "Not one skeleton exists in the product \u2014 every authed route is the same full-screen spinner",
+      "symptom": "All 11 authenticated routes sampled 350ms after navigation produced a byte-identical early DOM: the text 'Skip to main content helpotron ACADEMIC OS Checking session\u2026', 0 skeletons, 1 spinner.",
+      "evidence": "Measured across /dashboard /agent /dump /library /insights /credits /settings /datalake /activity /extension /automation. skeletons:0 on every one. The only loading affordances in the product are web/src/App.jsx:173 SessionBootScreen and :81 ViewSuspenseFallback ('Loading\u2026' as a centred string).",
       "cost": "Every view entry looks like a cold boot. The copy also lies after auth resolves, because :777 reuses the session screen as the chunk fallback.",
       "fix": "One shared skeleton primitive matching each view's real layout, and separate the 'resolving session' screen from the 'loading this view' screen.",
-      "relates_to": "F-18, F-13"
+      "relates_to": "F-18, F-13",
+      "state": "open",
+      "severity_normalized": "high"
     },
     {
       "id": "F-20",
@@ -197,8 +225,10 @@
       "symptom": "The breadcrumb emits an h1 for the view name and the view emits its own h1 for its title.",
       "evidence": "/agent ['My Agent','current chat'], /dump ['Assignment Dump','Universal Assignment Dump'], /library ['Library','Library & Study Tools'], /insights ['Insights','Cognitive Insights'], /credits ['Billing','Credits & Billing'], /settings ['Settings','Settings & Preferences'], /extension ['Extension','Helpotron Companion Extension'], and /datalake which emits the SAME text twice: ['Data Lake','Data Lake'].",
       "cost": "Document-outline violation on most of the product; screen-reader users hear the page title twice.",
-      "fix": "The breadcrumb is navigation, not a heading — demote it to a span/nav and leave one h1 per view.",
-      "related": "On /dump there are also two separate breadcrumb trails on one screen: 'Helpotron / Assignment Dump' in the chrome and 'Workspace Core / Assignment Dump / TASK INTAKE' in the content."
+      "fix": "The breadcrumb is navigation, not a heading \u2014 demote it to a span/nav and leave one h1 per view.",
+      "related": "On /dump there are also two separate breadcrumb trails on one screen: 'Helpotron / Assignment Dump' in the chrome and 'Workspace Core / Assignment Dump / TASK INTAKE' in the content.",
+      "state": "open",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-21",
@@ -207,27 +237,33 @@
       "title": "/activity and /automation do not render their own views",
       "symptom": "Both routes render h1 'Dashboard' with ~470-500 characters of body text, where every other view renders 700-5000.",
       "evidence": "/activity textLen 501, h1 ['Dashboard']. /automation textLen 467, h1 ['Dashboard']. Both are mapped in web/src/App.jsx VIEW_PATH_MAP (:331, :332) to 'activity' and 'automation'.",
-      "brief_correction": "Brief defect 8 says '/automation has no h1'. It has one — it is the dashboard's. The real defect is that the view does not render.",
-      "fix": "Determine whether ActivityView and AutomationCenter are wired at all; either implement or remove the routes."
+      "brief_correction": "Brief defect 8 says '/automation has no h1'. It has one \u2014 it is the dashboard's. The real defect is that the view does not render.",
+      "fix": "Determine whether ActivityView and AutomationCenter are wired at all; either implement or remove the routes.",
+      "state": "open",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-22",
       "severity": "medium",
       "status": "confirmed, unfixed",
       "title": "A permanent red 'Low Token Balance' nag on every screen of a freshly funded account",
-      "symptom": "Immediately after granting the QA account 2,000 tokens, every one of the 11 authed routes showed 'Low Token Balance: You have 2,000 task tokens remaining. View plans →' as a red banner above the content.",
+      "symptom": "Immediately after granting the QA account 2,000 tokens, every one of the 11 authed routes showed 'Low Token Balance: You have 2,000 task tokens remaining. View plans \u2192' as a red banner above the content.",
       "cause": "web/src/App.jsx:809 computes planLimit from { trial, testing, basic, pro, unlimited }[userPlan] || 15000. New accounts are created with plan='none' (server/main.py:1379), which is not a key in that map, so every such user is measured against the trial allowance. 2000/15000 = 13.3%, under the 15% threshold at :811.",
       "cost": "Any plan-'none' user holding under 2,250 tokens is permanently told they are low, on every screen, with a buy-now CTA. It is the loudest element on the page and it is wrong.",
-      "fix": "Give 'none' an entry (or derive the limit from the account's actual allowance), and make the banner dismissible."
+      "fix": "Give 'none' an entry (or derive the limit from the account's actual allowance), and make the banner dismissible.",
+      "state": "open",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-23",
       "severity": "positive-finding",
-      "status": "confirmed working — do not 'fix'",
+      "status": "confirmed working \u2014 do not 'fix'",
       "title": "The Assignment Dump surface already does three of the four states properly",
       "detail": "Pasting an assignment and pressing Upload Text produced: the button disabling immediately, a spinner, a success toast 'Pasted assignment text uploaded!', the counter moving 'Showing 0 of 0 items' -> 'Showing 1 of 1 items', the empty state being replaced, and zero console errors. Round trip ~2.5s via POST /api/dump/upload.",
-      "gap": "The disabled button keeps the label 'Upload Text' rather than 'Uploading…', so the only progress signal is the spinner.",
-      "why_recorded": "This is the pattern the rest of the product should copy. The empty state here ('No assignment items in queue' + what to do about it) is also already correct."
+      "gap": "The disabled button keeps the label 'Upload Text' rather than 'Uploading\u2026', so the only progress signal is the spinner.",
+      "why_recorded": "This is the pattern the rest of the product should copy. The empty state here ('No assignment items in queue' + what to do about it) is also already correct.",
+      "state": "positive",
+      "severity_normalized": "info"
     },
     {
       "id": "F-24",
@@ -236,7 +272,9 @@
       "title": "A pasted assignment DID appear on the dashboard",
       "detail": "The uploaded item came back from /api/dump/list with status 'auto_routed', and the dashboard then showed '1 assignment present' on one subject card (five others still read '0 assignments present').",
       "caveat": "The brief's defect 5 concerns an assignment created through the API, which is a different path and still untested. Also, all six subject cards still show '0 ACTIVE' chips, and the assignment's title is not surfaced on the card.",
-      "action": "Re-test the API-created path before closing brief defect 5."
+      "action": "Re-test the API-created path before closing brief defect 5.",
+      "state": "stale",
+      "severity_normalized": "info"
     },
     {
       "id": "F-25",
@@ -245,7 +283,9 @@
       "title": "Cookie consent weights 'ACCEPT ALL' above 'Necessary only'",
       "symptom": "The signed-out cookie banner renders 'ACCEPT ALL' as a filled accent button and 'Necessary only' as a quiet outline.",
       "cost": "Unequal prominence on a consent choice is the pattern regulators single out, and this product's own copy leans on its privacy posture ('never sell student data', FERPA COMPLIANT chip right there in the banner).",
-      "fix": "Give both choices the same visual weight."
+      "fix": "Give both choices the same visual weight.",
+      "state": "open",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-26",
@@ -253,27 +293,33 @@
       "status": "confirmed, unfixed",
       "title": "An admin broadcast covers the top-right controls on first load of the dashboard",
       "detail": "AdminNoticePopup (web/src/App.jsx:779) opens over the header on entry, overlapping the account and notification controls until dismissed with 'Got it'.",
-      "cost": "The first thing a new user sees on their first screen is a changelog about a redesign they have no memory of."
+      "cost": "The first thing a new user sees on their first screen is a changelog about a redesign they have no memory of.",
+      "state": "open",
+      "severity_normalized": "low"
     },
     {
       "id": "F-17",
       "severity": "medium",
-      "status": "owner-directed → FIXED (built, pending deploy)",
+      "status": "owner-directed \u2192 FIXED (built, pending deploy)",
       "title": "Signup asked for a discount code before the account existed",
       "symptom": "Owner: 'it shouldnt ask for a discount code on signup only on purchase'. The signup form carried an expandable 'Discount code (optional)' field.",
-      "worse_than_cosmetic": "web/src/components/AuthModal.jsx:298-317 redeemed the code AFTER creating the account. An unrecognised code bounced the user to the sign-in tab with the message 'Account created — discount code not recognized. Sign in to continue.' — so a typo in an optional field ended the signup flow on an error, with the account already made.",
-      "fix": "Removed the field, its state, and the post-creation redemption branch. Redemption still exists post-signup at Credits → Earn (web/src/components/ReferralSection.jsx:115 → api.redeemReferralCode), so no capability was lost.",
-      "verified": "Build succeeds; the string 'Discount code (optional)' is absent from the bundle."
+      "worse_than_cosmetic": "web/src/components/AuthModal.jsx:298-317 redeemed the code AFTER creating the account. An unrecognised code bounced the user to the sign-in tab with the message 'Account created \u2014 discount code not recognized. Sign in to continue.' \u2014 so a typo in an optional field ended the signup flow on an error, with the account already made.",
+      "fix": "Removed the field, its state, and the post-creation redemption branch. Redemption still exists post-signup at Credits \u2192 Earn (web/src/components/ReferralSection.jsx:115 \u2192 api.redeemReferralCode), so no capability was lost.",
+      "verified": "Build succeeds; the string 'Discount code (optional)' is absent from the bundle.",
+      "state": "fixed",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-05",
       "severity": "medium",
       "status": "confirmed, unfixed",
       "title": "Every route shares one document title, and it names a different product",
-      "symptom": "All 15 routes tested report 'Clarion — Study Workspace, Assignment Workflow & Style Coaching'. The product is called Helpotron everywhere else.",
+      "symptom": "All 15 routes tested report 'Clarion \u2014 Study Workspace, Assignment Workflow & Style Coaching'. The product is called Helpotron everywhere else.",
       "cause": "web/index.html:9 is the only title in the app. grep for document.title across web/src returns zero matches.",
       "fix": "Set a per-view title where activeView changes (web/src/App.jsx:628 handleSelectView) and correct the base title.",
-      "brief_correction": "Brief defect 6 understates it: the single title is also the wrong brand."
+      "brief_correction": "Brief defect 6 understates it: the single title is also the wrong brand.",
+      "state": "open",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-06",
@@ -281,35 +327,43 @@
       "status": "confirmed, unfixed",
       "title": "/help renders the app's 404",
       "cause": "web/src/App.jsx:313-341 VIEW_PATH_MAP has no '/help' entry and PUBLIC_PATHS (:343) does not contain it, so resolvePath falls to setNotFoundPath at :358. A Guide view exists and /guide works.",
-      "evidence": "HTTP 200, renders 'NOT FOUND · 404 Page not found'. The footer's own 'Help Center' control points here.",
-      "fix": "Map '/help' to the guide view, or redirect server-side like /login."
+      "evidence": "HTTP 200, renders 'NOT FOUND \u00b7 404 Page not found'. The footer's own 'Help Center' control points here.",
+      "fix": "Map '/help' to the guide view, or redirect server-side like /login.",
+      "state": "open",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-07",
       "severity": "medium",
       "status": "confirmed, unfixed",
-      "title": "Authenticated navigation never changes the URL — nothing inside the app is shareable",
+      "title": "Authenticated navigation never changes the URL \u2014 nothing inside the app is shareable",
       "cause": "web/src/App.jsx:628 handleSelectView sets React state only. The only history calls are replaceState (:380, :385, :501). pushState appears solely in AnonymousLanding.jsx (:422-453), the signed-out marketing nav.",
-      "cost": "No bookmarking, sharing, or browser back/forward — the app ships its own back/forward stack (:606-624) to compensate.",
-      "fix": "pushState in handleSelectView using VIEW_PATH_MAP in reverse, and handle popstate."
+      "cost": "No bookmarking, sharing, or browser back/forward \u2014 the app ships its own back/forward stack (:606-624) to compensate.",
+      "fix": "pushState in handleSelectView using VIEW_PATH_MAP in reverse, and handle popstate.",
+      "state": "open",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-08",
       "severity": "medium",
       "status": "confirmed, unfixed",
-      "title": "Marketing nav links are cosmetic — /features and /pricing are byte-identical to /",
+      "title": "Marketing nav links are cosmetic \u2014 /features and /pricing are byte-identical to /",
       "cause": "web/src/App.jsx:343 PUBLIC_PATHS includes both, so resolvePath returns early (:352) and AnonymousLanding renders unchanged. The sections have ids (#features :624, #pricing :295) but the path never triggers a scroll.",
       "cost": "A visitor who clicks Pricing lands at the top of a 5271px page and must hunt.",
-      "brief_correction": "Brief defect 8 says '/features has no h1'. It has one — it IS the landing page. That half is stale."
+      "brief_correction": "Brief defect 8 says '/features has no h1'. It has one \u2014 it IS the landing page. That half is stale.",
+      "state": "open",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-09",
       "severity": "medium",
-      "status": "confirmed, unfixed — SEVERITY CORRECTED",
+      "status": "confirmed, unfixed \u2014 SEVERITY CORRECTED",
       "title": "Nav and footer controls are 16px tall on desktop",
       "evidence": "Measured at 1440: 9 controls under the 32px desktop floor (Features 55x16, Guide 37x16, Pricing 44x16, Sign in 43x16, Privacy Policy 89x16, Terms 107x16, Help Center 75x16, Extension Companion 162x20).",
       "correction": "My first pass reported these as failing the 44px TOUCH floor at 390px. That was an artefact of measuring in a desktop browser at a narrow width. web/src/index.css:573-577 applies min-height/min-width 44px inside @media (pointer: coarse), so a real phone DOES get 44px targets. The defect is real on desktop (16px vs the 32px floor) and on any fine-pointer device; it is NOT a touch failure.",
-      "fix": "Give the nav and footer controls padding so the hit area is >=32px regardless of pointer type; the label size can stay."
+      "fix": "Give the nav and footer controls padding so the hit area is >=32px regardless of pointer type; the label size can stay.",
+      "state": "open",
+      "severity_normalized": "medium"
     },
     {
       "id": "F-10",
@@ -317,7 +371,9 @@
       "status": "confirmed, unfixed",
       "title": "Guide, Terms, Privacy and Extension are modals wearing URLs, and each puts two h1s on the page",
       "evidence": "/guide h1s = ['Your Academic Co-pilot, Redefined', 'Helpotron Field Guide'], modalOpen true. Same for /terms, /privacy, /extension.",
-      "fix": "Demote the landing h1 on these paths, or render them as real pages."
+      "fix": "Demote the landing h1 on these paths, or render them as real pages.",
+      "state": "open",
+      "severity_normalized": "low"
     },
     {
       "id": "F-11",
@@ -325,23 +381,29 @@
       "status": "confirmed, unfixed",
       "title": "The brand logo is a 36px JPEG",
       "cause": "Two <img> load /HelpoTron_logo.jpeg at 36x36 and 24x24. A lossy raster with no transparency on a near-black ground. An SVG AnimatedLogo already exists and is imported at web/src/App.jsx:25.",
-      "note": "Not a breach of the no-AI-imagery rule — a real brand asset — but it is the only raster in the product."
+      "note": "Not a breach of the no-AI-imagery rule \u2014 a real brand asset \u2014 but it is the only raster in the product.",
+      "state": "open",
+      "severity_normalized": "low"
     },
     {
       "id": "F-12",
       "severity": "info",
       "status": "noted, not a defect",
       "title": "The skip link measures 1x1px until focused",
-      "detail": "web/src/App.jsx:714-719, sr-only + focus:not-sr-only. Correct pattern; recorded so it is not re-counted against the tap-target metric."
+      "detail": "web/src/App.jsx:714-719, sr-only + focus:not-sr-only. Correct pattern; recorded so it is not re-counted against the tap-target metric.",
+      "state": "positive",
+      "severity_normalized": "info"
     },
     {
       "id": "F-13",
       "severity": "info",
-      "status": "stale — brief defect does not reproduce",
+      "status": "stale \u2014 brief defect does not reproduce",
       "title": "The 1.5-3s landing flash on authenticated hard loads appears already fixed",
       "detail": "web/src/App.jsx:206 initialises authStatus synchronously and :767 renders SessionBootScreen while 'checking'. AnonymousLanding renders only on 'signedOut' (:769), so the marketing page cannot paint during a session probe.",
       "residual": "Weaker but real: the boot screen is a full-screen spinner rather than a shell skeleton, and :777 reuses it as the AppShell chunk fallback so the copy lies. The 1200ms retry at :439 adds a second of spinner in the cookie-race case. Folded into F-18.",
-      "brief_correction": "Re-scope defect 2 from 'landing page flash' to 'no skeleton, and the fallback copy is wrong'."
+      "brief_correction": "Re-scope defect 2 from 'landing page flash' to 'no skeleton, and the fallback copy is wrong'.",
+      "state": "stale",
+      "severity_normalized": "info"
     },
     {
       "id": "S-01",
@@ -350,12 +412,13 @@
       "title": "Turnstile in managed mode did not stop scripted account creation",
       "detail": "The QA account was created through the real UI with no bypass header. Turnstile issued a 730-char token after ~6-12s with no interactive challenge, because the client is real Chrome with a real TLS fingerprint on a residential IP. Plain curl requests to the site also returned 200 without challenge.",
       "implication": "Turnstile raises the cost of automation; it is not a wall. If the signup rate limit (20/hour per IP, server/main.py:1332) is the real control, that is worth knowing explicitly.",
-      "not_a_recommendation_to_change": "Recorded as a fact about the current posture, not a request to tighten it."
+      "not_a_recommendation_to_change": "Recorded as a fact about the current posture, not a request to tighten it.",
+      "state": "open",
+      "severity_normalized": "high"
     }
   ],
-
   "still_to_verify": [
-    "Consent gate (brief defect 3): confirmed live on screen ('STEP 2 OF 2 · CONFIRM CONSENT') and localStorage-scoped at App.jsx:400-406/588 — still need what renders behind it and the new-browser repeat",
+    "Consent gate (brief defect 3): confirmed live on screen ('STEP 2 OF 2 \u00b7 CONFIRM CONSENT') and localStorage-scoped at App.jsx:400-406/588 \u2014 still need what renders behind it and the new-browser repeat",
     "pending_approval assignments invisible in the UI (brief defect 5)",
     "/automation h1 while authenticated (brief defect 8)",
     "Rate limits under ordinary use (brief defect 7)",
@@ -363,5 +426,73 @@
     "Four-state inventory per async surface (F-18)",
     "Authenticated-route Lighthouse metrics",
     "The full authed walk: subject -> assignment dump -> generate -> history -> library -> insights -> credits -> settings -> API keys -> export"
-  ]
+  ],
+  "summary": {
+    "total": 31,
+    "by_state": {
+      "fixed": 6,
+      "open": 21,
+      "positive": 2,
+      "stale": 2
+    },
+    "by_severity": {
+      "critical": 3,
+      "high": 8,
+      "medium": 13,
+      "info": 4,
+      "low": 3
+    },
+    "open_by_severity": {
+      "medium": 11,
+      "high": 6,
+      "critical": 1,
+      "low": 3
+    },
+    "open_ids": [
+      "F-16",
+      "F-14",
+      "F-02",
+      "F-03",
+      "F-18",
+      "F-29",
+      "F-30",
+      "F-19",
+      "F-20",
+      "F-21",
+      "F-22",
+      "F-25",
+      "F-26",
+      "F-05",
+      "F-06",
+      "F-07",
+      "F-08",
+      "F-09",
+      "F-10",
+      "F-11",
+      "S-01"
+    ],
+    "fixed_ids": [
+      "F-01",
+      "F-15",
+      "F-04",
+      "F-27",
+      "F-28",
+      "F-17"
+    ],
+    "stale_ids": [
+      "F-24",
+      "F-13"
+    ],
+    "positive_ids": [
+      "F-23",
+      "F-12"
+    ],
+    "reading_order": "work open_ids by severity: critical -> high -> medium -> low. F-23 is the positive reference pattern; do not change it.",
+    "field_notes": {
+      "state": "normalized: open | fixed | stale | positive",
+      "severity_normalized": "critical | high | medium | low | info",
+      "status": "original free-text status from the outgoing agent \u2014 kept verbatim",
+      "brief_correction": "present where the original brief was wrong about this finding"
+    }
+  }
 }
