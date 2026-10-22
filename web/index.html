@@ -51,7 +51,11 @@
     </script>
   </head>
   <body class="bg-slate-950 text-slate-100 min-h-screen">
-    <main id="root"></main>
+    <!-- A div, not <main>: AppShell renders its own <main id="main-content">
+         (the skip link's target), so mounting React into a <main> gave every
+         authenticated page nested main landmarks. axe: landmark-no-duplicate-main
+         + landmark-main-is-top-level. Nothing selects #root by tag name. -->
+    <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

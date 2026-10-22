@@ -499,7 +499,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
   ];
 
   return (
-    <div id="main-content" className="min-h-screen bg-background text-on-surface font-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
+    <main id="main-content" className="min-h-screen bg-background text-on-surface font-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
       {/* ── Top bar (design: fixed header, translucent + blur, shadow past 20px) */}
       <header
         id="main-header"
@@ -843,6 +843,6 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
         <React.Suspense fallback={null}>
           <CookieBanner />
         </React.Suspense>
-      </div>
+      </main>
     );
   }
