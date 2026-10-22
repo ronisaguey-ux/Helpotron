@@ -79,7 +79,9 @@
     {
       "id": "F-04",
       "severity": "high",
-      "status": "confirmed, unfixed",
+      "status": "CONFIRMED → FIXED → DEPLOYED (commit 2fb9465)",
+      "owner_reaction": "Owner, looking at the live site mid-audit: 'why does the site look broken'. Verified it was NOT caused by any deploy of mine — a clean signed-out context measured h1 left=0 and hero padding 0px/0px, identical to the 19:27 baseline taken before the first change. All 9 referenced assets returned 200.",
+      "fix_applied": "Declared --spacing-container-padding: clamp(1rem, 3vw, 2.5rem) in the @theme block, alongside the --spacing-gutter-mobile/desktop tokens that already existed. Measured after: h1 left 0->40px at 1440 and 0->16px at 390; elements flush to a viewport edge 30->9 at 390; horizontal overflow unchanged at -5.",
       "title": "A second undefined utility strips the gutter off the hero, nav and footer",
       "symptom": "At 1440 the headline starts at x=0, hard against the browser edge, while every section below is inset 170-311px. At 390 the headline, body copy, CTAs and cards all touch both screen edges. It reads as unstyled.",
       "cause": "web/src/components/AnonymousLanding.jsx uses `px-container-padding` 6 times — hero :573, nav :508, footer :667. The utility `container-padding` is defined nowhere: not in web/src/index.css, not in a tailwind config, and it does not appear in the built CSS. It compiles to nothing.",
@@ -134,6 +136,83 @@
       ],
       "plan": "Enumerate every async surface, record which of the four states exist today, and treat the missing ones as the single largest Stage 2 workstream. This is a system-level fix (one shared set of skeleton/empty/error primitives), not per-screen patches.",
       "note": "This is also the brief's own quality bar: 'Every async surface has four designed states.'"
+    },
+    {
+      "id": "F-19",
+      "severity": "high",
+      "status": "confirmed, unfixed",
+      "title": "Not one skeleton exists in the product — every authed route is the same full-screen spinner",
+      "symptom": "All 11 authenticated routes sampled 350ms after navigation produced a byte-identical early DOM: the text 'Skip to main content helpotron ACADEMIC OS Checking session…', 0 skeletons, 1 spinner.",
+      "evidence": "Measured across /dashboard /agent /dump /library /insights /credits /settings /datalake /activity /extension /automation. skeletons:0 on every one. The only loading affordances in the product are web/src/App.jsx:173 SessionBootScreen and :81 ViewSuspenseFallback ('Loading…' as a centred string).",
+      "cost": "Every view entry looks like a cold boot. The copy also lies after auth resolves, because :777 reuses the session screen as the chunk fallback.",
+      "fix": "One shared skeleton primitive matching each view's real layout, and separate the 'resolving session' screen from the 'loading this view' screen.",
+      "relates_to": "F-18, F-13"
+    },
+    {
+      "id": "F-20",
+      "severity": "medium",
+      "status": "confirmed, unfixed",
+      "title": "Eight of eleven authed routes render two h1 elements",
+      "symptom": "The breadcrumb emits an h1 for the view name and the view emits its own h1 for its title.",
+      "evidence": "/agent ['My Agent','current chat'], /dump ['Assignment Dump','Universal Assignment Dump'], /library ['Library','Library & Study Tools'], /insights ['Insights','Cognitive Insights'], /credits ['Billing','Credits & Billing'], /settings ['Settings','Settings & Preferences'], /extension ['Extension','Helpotron Companion Extension'], and /datalake which emits the SAME text twice: ['Data Lake','Data Lake'].",
+      "cost": "Document-outline violation on most of the product; screen-reader users hear the page title twice.",
+      "fix": "The breadcrumb is navigation, not a heading — demote it to a span/nav and leave one h1 per view.",
+      "related": "On /dump there are also two separate breadcrumb trails on one screen: 'Helpotron / Assignment Dump' in the chrome and 'Workspace Core / Assignment Dump / TASK INTAKE' in the content."
+    },
+    {
+      "id": "F-21",
+      "severity": "medium",
+      "status": "confirmed, unfixed",
+      "title": "/activity and /automation do not render their own views",
+      "symptom": "Both routes render h1 'Dashboard' with ~470-500 characters of body text, where every other view renders 700-5000.",
+      "evidence": "/activity textLen 501, h1 ['Dashboard']. /automation textLen 467, h1 ['Dashboard']. Both are mapped in web/src/App.jsx VIEW_PATH_MAP (:331, :332) to 'activity' and 'automation'.",
+      "brief_correction": "Brief defect 8 says '/automation has no h1'. It has one — it is the dashboard's. The real defect is that the view does not render.",
+      "fix": "Determine whether ActivityView and AutomationCenter are wired at all; either implement or remove the routes."
+    },
+    {
+      "id": "F-22",
+      "severity": "medium",
+      "status": "confirmed, unfixed",
+      "title": "A permanent red 'Low Token Balance' nag on every screen of a freshly funded account",
+      "symptom": "Immediately after granting the QA account 2,000 tokens, every one of the 11 authed routes showed 'Low Token Balance: You have 2,000 task tokens remaining. View plans →' as a red banner above the content.",
+      "cause": "web/src/App.jsx:809 computes planLimit from { trial, testing, basic, pro, unlimited }[userPlan] || 15000. New accounts are created with plan='none' (server/main.py:1379), which is not a key in that map, so every such user is measured against the trial allowance. 2000/15000 = 13.3%, under the 15% threshold at :811.",
+      "cost": "Any plan-'none' user holding under 2,250 tokens is permanently told they are low, on every screen, with a buy-now CTA. It is the loudest element on the page and it is wrong.",
+      "fix": "Give 'none' an entry (or derive the limit from the account's actual allowance), and make the banner dismissible."
+    },
+    {
+      "id": "F-23",
+      "severity": "positive-finding",
+      "status": "confirmed working — do not 'fix'",
+      "title": "The Assignment Dump surface already does three of the four states properly",
+      "detail": "Pasting an assignment and pressing Upload Text produced: the button disabling immediately, a spinner, a success toast 'Pasted assignment text uploaded!', the counter moving 'Showing 0 of 0 items' -> 'Showing 1 of 1 items', the empty state being replaced, and zero console errors. Round trip ~2.5s via POST /api/dump/upload.",
+      "gap": "The disabled button keeps the label 'Upload Text' rather than 'Uploading…', so the only progress signal is the spinner.",
+      "why_recorded": "This is the pattern the rest of the product should copy. The empty state here ('No assignment items in queue' + what to do about it) is also already correct."
+    },
+    {
+      "id": "F-24",
+      "severity": "info",
+      "status": "brief defect 5 does NOT reproduce via the UI path",
+      "title": "A pasted assignment DID appear on the dashboard",
+      "detail": "The uploaded item came back from /api/dump/list with status 'auto_routed', and the dashboard then showed '1 assignment present' on one subject card (five others still read '0 assignments present').",
+      "caveat": "The brief's defect 5 concerns an assignment created through the API, which is a different path and still untested. Also, all six subject cards still show '0 ACTIVE' chips, and the assignment's title is not surfaced on the card.",
+      "action": "Re-test the API-created path before closing brief defect 5."
+    },
+    {
+      "id": "F-25",
+      "severity": "medium",
+      "status": "confirmed, unfixed",
+      "title": "Cookie consent weights 'ACCEPT ALL' above 'Necessary only'",
+      "symptom": "The signed-out cookie banner renders 'ACCEPT ALL' as a filled accent button and 'Necessary only' as a quiet outline.",
+      "cost": "Unequal prominence on a consent choice is the pattern regulators single out, and this product's own copy leans on its privacy posture ('never sell student data', FERPA COMPLIANT chip right there in the banner).",
+      "fix": "Give both choices the same visual weight."
+    },
+    {
+      "id": "F-26",
+      "severity": "low",
+      "status": "confirmed, unfixed",
+      "title": "An admin broadcast covers the top-right controls on first load of the dashboard",
+      "detail": "AdminNoticePopup (web/src/App.jsx:779) opens over the header on entry, overlapping the account and notification controls until dismissed with 'Got it'.",
+      "cost": "The first thing a new user sees on their first screen is a changelog about a redesign they have no memory of."
     },
     {
       "id": "F-17",
