@@ -711,14 +711,14 @@ export function AssignmentCardDashboard({
                   <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-surface-container mb-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                     <span className="font-chip-status text-[10px] text-primary uppercase tracking-widest">
-                      SUB-PIPELINE 00 · DORMANT
+                      Ready for assignments
                     </span>
                   </div>
                   <h4 className="font-title-md text-title-md font-semibold text-on-surface mb-2">
                     No assignments in {bubble.title} yet
                   </h4>
                   <p className="font-body-sm text-body-sm text-on-surface-variant max-w-md mb-6">
-                    Import course materials, paste a syllabus link, or launch an agent research thread to activate synthesis vectors.
+                    Add assignment details, upload notes, or drop a prompt to get started with this subject.
                   </p>
                   <button
                     type="button"
