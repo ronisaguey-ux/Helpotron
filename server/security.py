@@ -523,7 +523,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
       for /ws/agent/*). The framework docs pages (/docs, /redoc) are exempt —
       Swagger UI is loaded from a third-party CDN with inline bootstrap
       scripts, which a strict 'self' policy would break.
-    * X-Frame-Options DENY + frame-ancestors 'none' (belt and braces;
+    * X-Frame-Options DENY + frame-src https://challenges.cloudflare.com https://*.challenges.cloudflare.com; worker-src 'self' blob: data:; frame-ancestors 'none' (belt and braces;
       browsers that ignore the legacy header honor frame-ancestors).
     * Permissions-Policy is minimal but deliberately leaves microphone
       unlisted: the SPA's lecture recorder uses navigator.mediaDevices
@@ -536,14 +536,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     CSP = (
         "default-src 'self'; "
-        "script-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://*.challenges.cloudflare.com https://static.cloudflareinsights.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        "font-src 'self' https://fonts.gstatic.com; "
+        "font-src 'self' data: https://fonts.gstatic.com; "
         "img-src 'self' data: blob:; "
         # blob: audio: the SPA plays the /api/voice/tts response through
         # new Audio(URL.createObjectURL(...)) — default-src would block it.
         "media-src 'self' blob:; "
-        "connect-src 'self'; "
+        "connect-src 'self' https://challenges.cloudflare.com https://*.challenges.cloudflare.com https://cloudflareinsights.com data: blob:; "
         "frame-ancestors 'none'"
     )
     PERMISSIONS_POLICY = "camera=(), geolocation=(), payment=(), usb=(), display-capture=()"
