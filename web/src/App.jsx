@@ -313,6 +313,7 @@ export default function App() {
   const VIEW_PATH_MAP = {
     '/overview': ['overview', null],
     '/dashboard': ['overview', null],
+    '/assignments': ['overview', null],
     '/activity': ['activity', null],
       // /history is a Library tab now — without this the path loads the
       // removed standalone view and renders a blank page.

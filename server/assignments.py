@@ -69,7 +69,6 @@ def _get_owned_assignment(assignment_id: int, user_id: int, db: Session) -> Assi
 
 
 @router.get("/api/assignments")
-@router.get("/assignments")
 async def list_assignments(
     history: Optional[bool] = Query(None),
     current_user: User = Depends(get_current_user),
