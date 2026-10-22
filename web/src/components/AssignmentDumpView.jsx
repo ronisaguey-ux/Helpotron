@@ -319,7 +319,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
             <span className="text-primary font-medium">Assignment Dump</span>
             <span>/</span>
             <span className="font-chip-status text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-              TASK INTAKE
+              MATERIALS INTAKE
             </span>
           </div>
           <h1 className="font-headline-lg-mobile md:font-headline-lg text-title-md md:text-headline-lg text-on-surface font-semibold tracking-tight">
@@ -454,11 +454,12 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
               <span>Paste Assignment Prompt / Rubric</span>
             </div>
             <textarea
-              rows={2}
+              id="dump-paste-textarea"
+              rows={pasteText.length > 80 || pasteText.includes('\n') ? Math.min(12, Math.max(5, pasteText.split('\n').length + 1)) : 2}
               value={pasteText}
               onChange={(e) => setPasteText(e.target.value)}
               placeholder="Paste assignment description or instructions..."
-              className="w-full p-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-xs text-on-surface focus:outline-none focus:border-primary transition resize-none"
+              className="w-full p-2.5 rounded-xl bg-surface-container-lowest border border-outline-variant/30 text-xs text-on-surface focus:outline-none focus:border-primary transition resize-y font-body-sm leading-relaxed"
             />
             <button
               type="submit"
@@ -541,7 +542,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
           <UploadCloud className="w-10 h-10 text-on-surface-variant/40 mx-auto" />
           <h4 className="font-title-md text-base text-on-surface font-medium">No assignment items in queue</h4>
           <p className="font-body-sm text-xs text-on-surface-variant max-w-sm mx-auto">
-            Upload a file or paste assignment instructions above to get started with autonomous synthesis.
+            Upload a file or paste assignment instructions above to get started.
           </p>
         </div>
       ) : (
