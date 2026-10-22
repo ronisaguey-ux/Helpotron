@@ -407,6 +407,7 @@ export default function App() {
   });
 
   const checkSession = async (retryOnce = true) => {
+    let lastError = null;
     try {
       const data = await api.me();
       if (data && data.authenticated) {
@@ -427,7 +428,7 @@ export default function App() {
         return;
       }
     } catch (e) {
-      // 401 etc. — session did not verify; fall through to the retry below.
+      lastError = e;
     }
     /* Cookie-store race (08-28, operator report): right after a 200 login the
      * session cookie can land a frame AFTER the client's first /api/me probe
@@ -450,7 +451,7 @@ export default function App() {
           setTokenBalance(Number(data.token_balance ?? 0) || 0);
           setUserPlan(data.plan || 'none');
           setIsAdmin(Boolean(data.is_admin));
-        setUserUnlimited(Boolean(data.unlimited));
+          setUserUnlimited(Boolean(data.unlimited));
           const accepted = localStorage.getItem('helpotron_terms_accepted_v2') === 'true';
           if (!accepted) {
             setShowPrivacyModal(true);
@@ -458,8 +459,15 @@ export default function App() {
           return;
         }
       } catch (e) {
-        // still not there — a genuinely signed-out/stale session; fall through.
+        lastError = e;
       }
+    }
+
+    // F-03: Distinguish transport / server outages from a real 401
+    const isNetworkOr5xx = lastError && (lastError.status === 0 || !lastError.status || lastError.status >= 500);
+    if (isNetworkOr5xx) {
+      setAuthStatus('degraded');
+      return;
     }
 
     // Unauthenticated state
@@ -772,6 +780,41 @@ export default function App() {
             onOpenAuth={openAuth}
             onOpenPrivacy={() => setShowPrivacyModal(true)}
           />
+        )}
+
+        {authStatus === 'degraded' && (
+          <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-6 text-center">
+            <div className="max-w-md p-8 rounded-3xl bg-surface-container-low border border-outline-variant/30 space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+                <WifiOff className="w-6 h-6" />
+              </div>
+              <h2 className="text-xl font-bold text-on-surface">Unable to connect to Helpotron</h2>
+              <p className="text-sm text-on-surface-variant">
+                The server is temporarily unreachable or undergoing maintenance. Your session is preserved.
+              </p>
+              <div className="flex gap-3 justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthStatus('checking');
+                    checkSession();
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-primary text-on-primary font-semibold text-xs transition cursor-pointer"
+                >
+                  Retry Connection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthStatus('signedOut');
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-semibold text-xs transition cursor-pointer"
+                >
+                  Go to Home
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {authStatus === 'authed' && (
