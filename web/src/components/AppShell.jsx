@@ -53,27 +53,12 @@ const SIDEBAR_COLLAPSED_KEY = 'helpotron_sidebar_collapsed';
 
 export const getNavItems = (isAdmin = false) => [
   { key: 'overview', label: 'Dashboard', Icon: LayoutDashboard, group: 'Workspace Core' },
-  { key: 'agent', label: 'My Agent', Icon: Brain, group: 'Workspace Core' },
   { key: 'dump', label: 'Assignment Dump', Icon: Inbox, group: 'Workspace Core' },
-  { key: 'datalake', label: 'Data Lake', Icon: Database, group: 'Workspace Core' },
-  // Owner 2026-09-19 restructure — the nav is now only what a student uses:
-  //
-  //   * History + Library merged into ONE "Library" section. They were two
-  //     views of the same material.
-  //   * Insights is gone from the nav — it is a niche analytics page relevant to
-  //     ~1% of users, so it lives inside Settings.
-  //   * Billing is gone from the nav — plans and the ledger belong in Settings,
-  //     not a top-level product area.
-  //
-  // The keys still resolve (see VIEW_COMPONENTS) so deep links and the in-app
-  // search keep working; they are simply no longer advertised as destinations.
   { key: 'library', label: 'Library', Icon: LibraryIcon, group: 'Workspace Core' },
+  { key: 'agent', label: 'My Agent', Icon: Brain, group: 'Workspace Core' },
   { key: 'settings', label: 'Settings', Icon: Settings, group: 'Platform System' },
-  { key: 'extension', label: 'Extension', Icon: Puzzle, group: 'Platform System' },
-  { key: 'guide', label: 'Guide', Icon: HelpCircle, group: 'Platform System' },
   ...(isAdmin ? [
     { key: 'admin', label: 'Control Center', Icon: Shield, group: 'Administration' },
-    { key: 'monitors', label: 'Monitors', Icon: Gauge, group: 'Administration' },
   ] : []),
 ];
 
