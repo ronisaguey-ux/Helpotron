@@ -20,6 +20,7 @@ import AppearancePreview from './AppearancePreview.jsx';
 import TelegramIntegration from './TelegramIntegration.jsx';
 import TwoFactorSetup from './TwoFactorSetup.jsx';
 import ApiKeysPanel from './ApiKeysPanel.jsx';
+import AvatarCropper from './AvatarCropper.jsx';
 
 /**
  * Build a settings delta for the nested AI block.
@@ -114,6 +115,9 @@ export function SettingsSections({
   // so it is edited through its own confirm-with-password flow.
   const [profile, setProfile] = useState(null);
   const [profileBusy, setProfileBusy] = useState(false);
+  // Owner 2026-10-22: a picked file opens a crop/zoom dialog instead of being
+  // uploaded raw — nothing is sent until the square is framed.
+  const [cropFile, setCropFile] = useState(null);
   const [profileMsg, setProfileMsg] = useState('');
   const [profileErr, setProfileErr] = useState('');
   const [nameDraft, setNameDraft] = useState('');
@@ -141,14 +145,25 @@ export function SettingsSections({
     setTimeout(() => { setProfileMsg(''); setProfileErr(''); }, 6000);
   };
 
-  const handleAvatarPick = async (file) => {
+  const handleAvatarPick = (file) => {
     if (!file) return;
+    if (!/^image\/(png|jpeg)$/.test(file.type)) {
+      flash(false, 'Choose a PNG or JPG image.');
+      return;
+    }
+    setCropFile(file);
+  };
+
+  const handleAvatarCropped = async (blob) => {
+    if (!blob) return;
     setProfileBusy(true);
     try {
       // The upload endpoint writes the file AND records the URL on the account,
       // so there is no second call to make it stick.
-      const res = await api.uploadAvatar(file, 'user');
+      const cropped = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
+      const res = await api.uploadAvatar(cropped, 'user');
       setProfile((p) => ({ ...(p || {}), avatar_url: res.url }));
+      setCropFile(null);
       flash(true, 'Profile picture updated.');
     } catch (e) {
       flash(false, e?.message || 'Could not upload that image. PNG or JPG, max 5 MB.');
@@ -226,6 +241,15 @@ export function SettingsSections({
 
   return (
     <div className="flex flex-col gap-unit-6">
+      {cropFile ? (
+        <AvatarCropper
+          file={cropFile}
+          busy={profileBusy}
+          onCancel={() => { if (!profileBusy) setCropFile(null); }}
+          onDone={handleAvatarCropped}
+        />
+      ) : null}
+
       {/* ================= SECTION 1: ACCOUNT IDENTITY ================= */}
       {(section === 'all' || section === 'account') && (
         <section id="section-account" className="rounded-3xl bg-surface-container-lowest/80 border border-outline-variant/30 p-unit-6 shadow-sm flex flex-col gap-unit-5">
