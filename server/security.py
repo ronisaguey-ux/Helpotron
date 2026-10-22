@@ -544,6 +544,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # new Audio(URL.createObjectURL(...)) — default-src would block it.
         "media-src 'self' blob:; "
         "connect-src 'self' https://challenges.cloudflare.com https://*.challenges.cloudflare.com https://cloudflareinsights.com data: blob:; "
+        # 2026-10-22 (QA): Turnstile renders its challenge in an IFRAME, and this
+        # policy had no frame-src at all — so default-src 'self' governed it and
+        # the widget was blocked on every auth surface. script-src and
+        # connect-src had already been opened for Turnstile; the frame was the
+        # one directive missing, which is why the script loaded, the hidden
+        # cf-turnstile-response input stayed empty, "Create account" never
+        # enabled, and /api/login answered 403 "Security check required" for a
+        # captcha the user could not see. worker-src is listed for the same
+        # reason: Turnstile builds its worker from a blob: URL.
+        "frame-src https://challenges.cloudflare.com https://*.challenges.cloudflare.com; "
+        "worker-src 'self' blob: data:; "
         "frame-ancestors 'none'"
     )
     PERMISSIONS_POLICY = "camera=(), geolocation=(), payment=(), usb=(), display-capture=()"
