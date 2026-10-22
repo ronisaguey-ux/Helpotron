@@ -4,6 +4,45 @@
 Read this file, then `docs/design/DIRECTION.md`, then `reports/ui-audit/findings.json`.
 Everything below was measured or read in source — nothing here is assumed.
 
+**You are the next agent (AGY).** Your toolset is verified and listed in §0. Read
+§3 (traps) before your first commit — three of them each cost the previous agent a
+deploy cycle.
+
+---
+
+## 0. Your toolset — verified 2026-10-22
+
+Configured in `~/.gemini/config/mcp_config.json`, all eight enabled and reachable
+(`agy mcp list`):
+
+| MCP | Type | What it gives you here |
+|---|---|---|
+| `stitch` | http | Google Stitch screen generation — one screen per prompt, always with the no-imagery clause |
+| `better-design` | http | spacing / hierarchy / comprehension critique of a real rendered page |
+| `playwright` | stdio | drive real Chrome: routes, screenshots, four-state checks, `browser_run_code_unsafe` for multi-route sweeps |
+| `chrome-devtools` | stdio | console, network, performance traces on the real page |
+| `context7` | stdio | current docs for React 19 / Tailwind v4 / motion |
+| `commit-condom` | stdio | ask it to `plan` the atomic commit split before you stage anything |
+| `antigravity-bridge` | stdio | owner inbox / messaging from inside a session |
+| `penpot` | http | Penpot design file read/edit — **only if the owner has the stack up** (`penpot status`); it points at `localhost:4401`, and the stack is normally stopped to save RAM |
+
+Skills in `~/.gemini/skills` (load when the task matches):
+
+| Skill | Use it for |
+|---|---|
+| `impeccable` | critique/detector before a redesign, then `/polish`, `/quieter`, `/animate`, `/typeset` per screen |
+| `design-taste-frontend` | real composition direction (landing, empty states, first-run) — not for fixes |
+| `superdesign` | canvas to compare variants when two layouts are genuinely close |
+| `helpotron-design-audit` | this product's audit loop: Playwright walk, axe/Lighthouse, QA account, findings format, the open defects |
+
+CLIs on PATH: `lighthouse`, `axe` (work), `pa11y` (**broken on this box**, see §3),
+`penpot` (stack control), `stack_ctl.py` (agents), `tele-report` (message the owner on
+Telegram — he does not read this session's text).
+
+**How to start:** run `agy` in
+`/home/roni/Roni_workspace/helpotron`, read `docs/AGY-HANDOFF-PROMPT.md`, and follow it.
+Nothing here needs the owner awake except the two decisions flagged in §7.
+
 ---
 
 ## 1. What this job is
@@ -70,11 +109,14 @@ sync as of this writing — check before assuming the server is stale.
 - **`pa11y` is broken** on this box: Chrome fails with "No usable sandbox" (Ubuntu
   unprivileged-userns restriction). `--chrome-launch-config '{"args":["--no-sandbox"]}'`
   did not fix it either. Use axe; don't burn time here.
-- Playwright MCP drives real Chrome. **It is sandboxed to
-  `/home/roni/Roni_workspace/claude_worker`** — it cannot write screenshots into the
-  helpotron repo. Save to `shots/...` then `cp` them across.
+- Playwright MCP drives real Chrome. Screenshots land in **the workspace you launched
+  agy from** — save under `shots/...` there, then `cp` them into
+  `reports/ui-audit/shots/` yourself.
 - `browser_run_code_unsafe` takes `async (page) => {...}` and is far cheaper than many
   individual MCP calls for multi-route sweeps. Use it.
+- `penpot` MCP only answers while the stack is running (`penpot up` / `penpot status`).
+  It has been stopped to keep RAM free; do not start it without checking `free -m` first.
+  The owner designs there; your deliverable is still coded CSS + inline SVG.
 
 ---
 
@@ -107,7 +149,14 @@ sync as of this writing — check before assuming the server is stale.
 
 ## 4. What has already been done
 
-**22 commits, all local and unpushed**, from `876fa63` (pre-existing) to `2ba258a`.
+**24 commits, all local and unpushed**, from `876fa63` (pre-existing) to `521e2d9`.
+
+Commit convention (enforced by the hook): `type: imperative subject` ≤72 chars, ≤2 files,
+≤400 changed lines per commit. For a big file, `commit-condom` MCP `plan` proposes the
+split — use it instead of hand-splitting.
+
+Outstanding uncommitted at handoff: `reports/ui-audit/findings.json` (normalized
+`state` / `severity_normalized` / `summary` fields added for you). Commit it first.
 
 ### Deployed to production and verified live
 
@@ -202,9 +251,16 @@ spinner (nothing, then the whole message at once); no educational-mode toggle.
 
 ## 6. Findings
 
-`reports/ui-audit/findings.json` — **31 findings**, 6 fixed, 22 open, 3 stale/positive.
-Each carries a `path/file.jsx:line` citation or a measured number, plus a reproduction.
-Validate with `python3 -c "import json;print(len(json.load(open('reports/ui-audit/findings.json'))['findings']))"`.
+`reports/ui-audit/findings.json` — **31 findings**: `summary.by_state` now reads
+`{fixed: 6, open: 21, positive: 2, stale: 2}`, with each finding carrying a normalized
+`state` (`open|fixed|stale|positive`), `severity_normalized` (`critical|high|medium|low|info`)
+and `fixed_commit` where one applies. The original free-text `status` is preserved verbatim
+under its old key.
+
+**Work `summary.open_ids` in this order:** the one `critical`, then the six `high`, then
+medium, then low. Every one carries a `path/file.jsx:line` citation or a measured number,
+plus a reproduction. Validate with
+`python3 -c "import json;d=json.load(open('reports/ui-audit/findings.json'));print(d['summary']['by_state'])"`.
 
 Note **F-23** is a *positive* finding: the Assignment Dump surface already does loading,
 success and empty states correctly. It is the reference pattern. **Do not "fix" it.**
