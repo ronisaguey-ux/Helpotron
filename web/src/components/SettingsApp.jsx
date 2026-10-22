@@ -73,16 +73,33 @@ function mergeSettings(prev, delta) {
   return next;
 }
 
-export function applyAppearance(appearance) {
-  if (!appearance) return;
+export function applyAppearance(raw) {
+  if (!raw) return;
+  const appearance = raw.appearance || raw;
   const root = document.documentElement;
   if (appearance.fontScale) applyFontScale(appearance.fontScale);
-  if (appearance.theme) root.setAttribute('data-theme', appearance.theme);
-  if (appearance.accent) root.setAttribute('data-accent', appearance.accent);
-  if (appearance.density) root.setAttribute('data-density', appearance.density);
-  if (appearance.animation) root.setAttribute('data-anim', appearance.animation);
-  if (appearance.background) root.setAttribute('data-bg', appearance.background);
-  if (appearance.uiStyle) root.setAttribute('data-ui', appearance.uiStyle);
+  const theme = appearance.theme || (typeof raw.theme === 'string' && raw.theme !== 'auto' && raw.theme !== 'system' ? raw.theme : null);
+  if (theme) {
+    const targetTheme = (theme === 'auto' || theme === 'system') ? 'dark' : theme;
+    if (root.getAttribute('data-theme') !== targetTheme) {
+      root.setAttribute('data-theme', targetTheme);
+    }
+  }
+  if (appearance.accent && root.getAttribute('data-accent') !== appearance.accent) {
+    root.setAttribute('data-accent', appearance.accent);
+  }
+  if (appearance.density && root.getAttribute('data-density') !== appearance.density) {
+    root.setAttribute('data-density', appearance.density);
+  }
+  if (appearance.animation && root.getAttribute('data-anim') !== appearance.animation) {
+    root.setAttribute('data-anim', appearance.animation);
+  }
+  if (appearance.background && root.getAttribute('data-bg') !== appearance.background) {
+    root.setAttribute('data-bg', appearance.background);
+  }
+  if (appearance.uiStyle && root.getAttribute('data-ui') !== appearance.uiStyle) {
+    root.setAttribute('data-ui', appearance.uiStyle);
+  }
   if (appearance.background || appearance.uiStyle || appearance.animation) {
     root.classList.add('appearance-live');
   }
@@ -131,20 +148,22 @@ export default function SettingsApp({
   const [settings, setSettings] = useState(() => loadSettings());
   const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'dirty'
   const saveTimeoutRef = useRef(null);
+  const lastSettingsRef = useRef(null);
 
   // Synchronize settings from the backend — on mount, on every focus, and every
-  // 30s while the tab is visible. Owner (2026-10-22): "when i told my agent to
-  // edit my settings to light mode, it didng do anything" — the agent writes to
-  // the account, but this tab only ever read settings once at mount, so a change
-  // made elsewhere stayed invisible until a hard reload.
+  // 30s while the tab is visible. Stop re-running when settings have not changed.
   useEffect(() => {
     let mounted = true;
     const pull = () => {
       api.userSettings?.()
         .then((res) => {
           if (!mounted || !res?.settings) return;
+          const incoming = res.settings;
+          const incomingStr = JSON.stringify(incoming);
+          if (lastSettingsRef.current === incomingStr) return;
+          lastSettingsRef.current = incomingStr;
           setSettings((prev) => {
-            const next = { ...prev, ...res.settings };
+            const next = { ...prev, ...incoming };
             applyAppearance(next);
             applyAccessibility(next.accessibility);
             return next;

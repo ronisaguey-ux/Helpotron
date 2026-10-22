@@ -537,11 +537,10 @@ export function SettingsSections({
                 <label className="font-label-caps text-xs text-outline uppercase tracking-wider">
                   Color Mode
                 </label>
-                <div className="grid grid-cols-3 gap-unit-2 bg-surface-container-low p-1 rounded-2xl border border-outline-variant/20">
+                <div className="grid grid-cols-2 gap-unit-2 bg-surface-container-low p-1 rounded-2xl border border-outline-variant/20">
                   {[
                     { id: 'dark', label: 'Dark', icon: Moon },
                     { id: 'light', label: 'Light', icon: Sun },
-                    { id: 'system', label: 'System', icon: Laptop },
                   ].map((t) => {
                     const isSel = (settings.appearance?.theme || 'dark') === t.id;
                     const Icon = t.icon;
@@ -549,7 +548,7 @@ export function SettingsSections({
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => set({ appearance: { theme: t.id } })}
+                        onClick={() => set({ theme: t.id, appearance: { theme: t.id } })}
                         className={`py-2 rounded-xl font-label-caps text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                           isSel
                             ? 'bg-primary-container text-on-primary-container font-semibold shadow-sm'
