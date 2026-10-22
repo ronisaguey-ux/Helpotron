@@ -31,7 +31,6 @@ import {
   Shield,
   Coins,
   Cpu,
-  Ticket,
   ExternalLink,
 } from 'lucide-react';
 import { api } from '../api.js';
@@ -82,8 +81,6 @@ export default function AuthModal({
   const [signupPassConfirm, setSignupPassConfirm] = useState('');
   const [showSignupPass, setShowSignupPass] = useState(false);
   const [showSignupConfirm, setShowSignupConfirm] = useState(false);
-  const [referralOpen, setReferralOpen] = useState(false);
-  const [referralCode, setReferralCode] = useState('');
   const [consentAgreed, setConsentAgreed] = useState(false);
 
   // 2FA Challenge state
@@ -295,26 +292,10 @@ export default function AuthModal({
         // Auto-login with credentials
         const autoLogin = await api.login(id, signupPass, null, null);
         if (autoLogin && autoLogin.message === 'Logged in') {
-          // Owner 09-06: the discount code redeems a real referral code
-          // (one-time order discount — it never awards tokens). A bad code
-          // must not block the account, so fall through to a sign-in prompt.
-          const code = referralCode.trim();
-          if (code) {
-            try {
-              const refRes = await api.referralRedeem(code);
-              if (!refRes || refRes.status !== 'success') {
-                setLoginId(id);
-                setTab('login');
-                triggerError('Account created — discount code not recognized. Sign in to continue.');
-                return;
-              }
-            } catch {
-              setLoginId(id);
-              setTab('login');
-              triggerError('Account created — discount code not recognized. Sign in to continue.');
-              return;
-            }
-          }
+          // Owner 2026-10-22: a discount code belongs at the point of purchase,
+          // not in front of an account that does not exist yet. Redemption still
+          // lives in Credits → Earn (ReferralSection), where the user can see
+          // what the code is worth against a real order.
           onLoginSuccess?.(id);
         } else {
           setLoginId(id);
@@ -773,41 +754,11 @@ export default function AuthModal({
                     </div>
                   </div>
 
-                  {/* Optional Discount Code (owner 09-06: was "Institutional or Peer Pass"
-                      with a hardcoded +10,000 TOKENS award — that died here. The field now
-                      redeems a real referral code at /api/referrals/redeem, which grants a
-                      one-time order discount: 30% new user / 15% existing. No token awards.) */}
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setReferralOpen((prev) => !prev)}
-                      className="flex items-center justify-between w-full py-1 text-xs text-on-surface-variant hover:text-on-surface cursor-pointer select-none"
-                    >
-                      <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider">
-                        <Ticket className="w-3.5 h-3.5 text-secondary" />
-                        Discount code (optional)
-                      </span>
-                      <span className="font-mono text-[10px] text-on-surface-variant/70">
-                        {referralOpen ? 'hide' : 'add'}
-                      </span>
-                    </button>
-                    {referralOpen && (
-                      <div>
-                        <input
-                          type="text"
-                          aria-label="Referral or discount code"
-                          placeholder="Enter a referral or discount code"
-                          value={referralCode}
-                          onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-                          className="w-full h-10 px-3 mt-1.5 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs uppercase text-on-surface focus:outline-none focus:border-secondary transition"
-                        />
-                        <p className="text-[10px] text-on-surface-variant mt-1">
-                          A referral code grants a one-time discount on your first order. It does
-                          not add tokens.
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                  {/* A discount code used to live here. It asked a stranger for a
+                      coupon before they had an account or anything to spend it on,
+                      and a bad code bounced them to the sign-in tab with their new
+                      account already created. Redemption now happens where the
+                      money is: Credits → Earn (ReferralSection). */}
 
                   {/* Terms Consent Checkbox */}
                   <div className="flex items-start gap-2.5 pt-1 select-none">
