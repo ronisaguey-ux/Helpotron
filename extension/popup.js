@@ -1304,11 +1304,30 @@ async function init() {
   const updateBanner = document.getElementById('updateBanner');
   const updateBadge = document.getElementById('updateVersionBadge');
   const btnDownloadUpdate = document.getElementById('btnDownloadUpdate');
-  if (st.update_available && st.latest_version) {
+  const btnUpdateDismiss = document.getElementById('btnUpdateDismiss');
+  // Owner (2026-10-22): "a massive banner that i cant click away". It is now
+  // dismissible per version: dismissing 2.8.1 keeps it hidden until something
+  // newer is published, and the version comparison happens server-side (only an
+  // actually older build is told to update).
+  let dismissedVersion = '';
+  try {
+    const stored = await chrome.storage.local.get('update_dismissed_version');
+    dismissedVersion = (stored && stored.update_dismissed_version) || '';
+  } catch (e) { /* storage unavailable — banner just stays visible */ }
+  const alreadyDismissed = dismissedVersion && dismissedVersion === st.latest_version;
+  if (st.update_available && st.latest_version && !alreadyDismissed) {
     updateBanner.style.display = 'block';
     if (updateBadge) updateBadge.innerText = `v${st.latest_version}`;
   } else {
     updateBanner.style.display = 'none';
+  }
+  if (btnUpdateDismiss) {
+    btnUpdateDismiss.addEventListener('click', async () => {
+      updateBanner.style.display = 'none';
+      try {
+        await chrome.storage.local.set({ update_dismissed_version: st.latest_version || '' });
+      } catch (e) { /* non-fatal */ }
+    });
   }
   if (btnDownloadUpdate) {
     btnDownloadUpdate.addEventListener('click', async () => {
