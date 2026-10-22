@@ -761,24 +761,40 @@ export default function AuthModal({
                       money is: Credits → Earn (ReferralSection). */}
 
                   {/* Terms Consent Checkbox */}
-                  <div className="flex items-start gap-2.5 pt-1 select-none">
-                    <input
-                      type="checkbox"
-                      id="protocol-consent"
-                      checked={consentAgreed}
-                      onChange={(e) => setConsentAgreed(e.target.checked)}
-                      className="w-4 h-4 mt-0.5 rounded text-primary focus:ring-0 cursor-pointer accent-primary"
-                    />
-                    <label htmlFor="protocol-consent" className="text-[11px] text-on-surface-variant leading-tight cursor-pointer">
-                      I agree to the{' '}
-                      <a href="#/terms" className="text-primary underline underline-offset-2 hover:opacity-80" onClick={(e) => e.stopPropagation()}>
-                        Terms of Service
-                      </a>{' '}
-                      and{' '}
-                      <a href="#/privacy" className="text-primary underline underline-offset-2 hover:opacity-80" onClick={(e) => e.stopPropagation()}>
-                        Privacy Policy
-                      </a>.
-                    </label>
+                  <div className="flex flex-col gap-1 pt-1 select-none">
+                    <div className="flex items-center gap-2.5 min-h-[44px]">
+                      <input
+                        type="checkbox"
+                        id="protocol-consent"
+                        checked={consentAgreed}
+                        onChange={(e) => setConsentAgreed(e.target.checked)}
+                        className="w-5 h-5 rounded text-primary focus:ring-0 cursor-pointer accent-primary shrink-0"
+                      />
+                      <label htmlFor="protocol-consent" className="text-xs text-on-surface-variant leading-snug cursor-pointer flex-1">
+                        I agree to the Terms of Service and Privacy Policy.
+                      </label>
+                    </div>
+                    <div className="pl-7 text-[11px] text-outline flex gap-2">
+                      <a
+                        href="/terms"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Read Terms
+                      </a>
+                      <span>·</span>
+                      <a
+                        href="/privacy"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Read Privacy Policy
+                      </a>
+                    </div>
                   </div>
 
                   {/* Turnstile Captcha */}
@@ -799,6 +815,11 @@ export default function AuthModal({
                     <span>{loading ? 'Creating account...' : 'Create account'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </Button>
+                  {!consentAgreed && (
+                    <p className="text-[11px] text-outline text-center mt-1">
+                      Check the agreement box above to enable account creation.
+                    </p>
+                  )}
 
                   {/* Switch to login */}
                   <div className="pt-2 text-center text-xs">
