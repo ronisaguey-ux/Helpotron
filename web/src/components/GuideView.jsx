@@ -596,7 +596,7 @@ export default function GuideView({ onGoTo, publicMode = false }) {
         </aside>
 
         {/* Main Content Stream */}
-        <main className="flex-1 w-full min-w-0 flex flex-col gap-6 order-1 xl:order-2">
+        <div className="flex-1 w-full min-w-0 flex flex-col gap-6 order-1 xl:order-2">
           {filteredSections.length === 0 ? (
             <div className="p-12 rounded-3xl bg-surface-container-lowest/70 backdrop-blur-xl border border-outline-variant/30 text-center space-y-3">
               <Search className="w-10 h-10 text-on-surface-variant/50 mx-auto" />
@@ -807,7 +807,7 @@ export default function GuideView({ onGoTo, publicMode = false }) {
               </div>
             </div>
           )}
-        </main>
+        </div>
       </div>
     </div>
   );
