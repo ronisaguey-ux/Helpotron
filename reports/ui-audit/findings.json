@@ -72,14 +72,15 @@
     {
       "id": "F-16",
       "severity": "medium",
-      "status": "confirmed, unfixed",
+      "status": "CONFIRMED \u2192 FIXED (commit 6a3f323)",
       "title": "Type hierarchy is inverted \u2014 the dashboard h1 is smaller than body text",
       "symptom": "The authenticated dashboard's <h1> ('Dashboard') renders at 14px/600 while body copy renders at 16px/400. A 32px Hanken Grotesk h2 ('Your subjects') sits below it, so the visual hierarchy contradicts the document hierarchy.",
       "evidence": "Measured on the authenticated dashboard at 1440. Also: '0 assignments present' is set in JetBrains Mono 12px \u2014 a monospace face used for prose, not data.",
       "cost": "Screen readers and search engines get one outline; sighted users get a different one. The page's real title is the smallest text on it.",
       "fix": "Decide one scale in docs/design/DIRECTION.md and apply it: h1 is the page title at display size, h2 sections below it, mono reserved for numerals and identifiers.",
-      "state": "open",
-      "severity_normalized": "medium"
+      "state": "fixed",
+      "severity_normalized": "medium",
+      "fixed_commit": "6a3f323"
     },
     {
       "id": "F-04",
@@ -101,40 +102,43 @@
     {
       "id": "F-14",
       "severity": "high",
-      "status": "confirmed, unfixed",
+      "status": "CONFIRMED \u2192 FIXED (commit 8122697)",
       "title": "The consent checkbox is 16px and most of its label navigates away instead of ticking it",
       "symptom": "At the last gate before account creation, clicking the words 'I agree to the Terms of Service' opens the Terms instead of agreeing. The URL becomes /?signup=1#/terms and the box stays unchecked, so 'Create account' stays disabled with no explanation.",
       "cause": "web/src/components/AuthModal.jsx:813-831. The checkbox is w-4 h-4 (16px). Its <label htmlFor> contains two <a> elements that call e.stopPropagation() \u2014 which correctly stops the toggle but does not stop the anchor navigating.",
       "evidence": "Measured: checkbox 16x16px; label 254x14px; the two links occupy 33% and 27% of the label width \u2014 60% of the label does the wrong thing. Reproduced: clicking the label navigated to #/terms with consentChecked=false.",
       "cost": "This is the final step of signup. A user who cannot tick the box cannot create an account, and nothing on screen says why the button is dead.",
       "fix": "Separate the affordances: make the whole row a 44px hit area that toggles, and move the Terms/Privacy links out of the label (or render them as buttons opening the modal, outside the <label>). Also explain the disabled button.",
-      "state": "open",
-      "severity_normalized": "high"
+      "state": "fixed",
+      "severity_normalized": "high",
+      "fixed_commit": "8122697"
     },
     {
       "id": "F-02",
       "severity": "critical",
-      "status": "confirmed, unfixed",
+      "status": "CONFIRMED \u2192 FIXED (commit 9ddc66a)",
       "title": "/assignments serves raw JSON instead of the app",
       "symptom": "Navigating to /assignments renders the literal text {\"detail\":\"Not authenticated: valid session token required\"} on a blank page. No title, no shell, no way back.",
       "cause": "server/assignments.py:72 registers @router.get(\"/assignments\") with no /api prefix, shadowing the SPA catch-all. FastAPI matches it before serve_spa_frontend runs.",
       "evidence": "HTTP 401 from the live site; document.title empty; body is the JSON error; 1 console error.",
       "fix": "Drop the bare /assignments aliases (keep the /api/ ones) and add /assignments to VIEW_PATH_MAP in web/src/App.jsx.",
       "brief_correction": "docs/UI_UX_SWEEP.md \u00a73 lists this as SETTLED. It is half-fixed: it stopped returning data and started returning a JSON 401. The alias still shadows the SPA.",
-      "state": "open",
-      "severity_normalized": "critical"
+      "state": "fixed",
+      "severity_normalized": "critical",
+      "fixed_commit": "9ddc66a"
     },
     {
       "id": "F-03",
       "severity": "high",
-      "status": "confirmed, unfixed",
+      "status": "CONFIRMED \u2192 FIXED (commit b7f3fcf)",
       "title": "An API outage silently logs the user out and destroys the session indicator",
       "symptom": "With /api/** unreachable, an authenticated visitor is shown the marketing landing page. No error, no spinner, no retry.",
       "cause": "web/src/App.jsx:408-484. checkSession() cannot distinguish a transport failure from a 401 \u2014 catch(e){} at :428 and :459 swallow both and fall through to the same terminal 'Unauthenticated state' at :464. Then :475-479 deletes localStorage 'token', 'helpotron_csrf_token' and the csrf cookie, so hasSessionIndicator() (web/src/api.js:44) returns false on the NEXT load and the zero-request fast path skips the probe entirely.",
       "aggravating": "The offline banner that would explain this is unreachable by construction: it renders inside AppShell (web/src/App.jsx:858), which only mounts when authStatus === 'authed'. The /api/health probe at :288-301 flips `connected`, but nothing renders it in the signedOut branch.",
       "fix": "Give checkSession a third outcome. A 401 means signedOut; a network error or 5xx means 'degraded'. Render the shell with an explicit offline state and retry, and never clear the session indicator on a transport failure.",
-      "state": "open",
-      "severity_normalized": "high"
+      "state": "fixed",
+      "severity_normalized": "high",
+      "fixed_commit": "b7f3fcf"
     },
     {
       "id": "F-18",
@@ -183,14 +187,15 @@
     {
       "id": "F-29",
       "severity": "high",
-      "status": "confirmed, unfixed",
+      "status": "CONFIRMED \u2192 FIXED (commit 2b17dc7)",
       "title": "Empty-state copy is written in machine language, not student language",
       "symptom": "Opening an empty subject shows: a chip reading 'SUB-PIPELINE 00 \u00b7 DORMANT', the heading 'No assignments in Mathematics yet', and the instruction 'Import course materials, paste a syllabus link, or launch an agent research thread to activate synthesis vectors.'",
       "cost": "This is the screen a new user reaches first, and it is where they must take an action. 'Activate synthesis vectors' and 'SUB-PIPELINE 00 \u00b7 DORMANT' tell a student nothing about what to do. The heading and the button ('Import Assignment') are fine; the sentence between them is not.",
       "fix": "Rewrite in the user's words and run check-comprehension on every empty state. The Assignment Dump empty state (F-23) is already written correctly and is the model.",
       "note": "The product vocabulary that must be KEPT is: subject bubble, assignment, Data Lake, Library, Insights, credits, Study Buddy. 'Synthesis vectors' and 'sub-pipeline' are not in that list.",
-      "state": "open",
-      "severity_normalized": "high"
+      "state": "fixed",
+      "severity_normalized": "high",
+      "fixed_commit": "2b17dc7"
     },
     {
       "id": "F-30",
@@ -312,14 +317,15 @@
     {
       "id": "F-05",
       "severity": "medium",
-      "status": "confirmed, unfixed",
+      "status": "CONFIRMED \u2192 FIXED (commit 6f2c8d7)",
       "title": "Every route shares one document title, and it names a different product",
       "symptom": "All 15 routes tested report 'Clarion \u2014 Study Workspace, Assignment Workflow & Style Coaching'. The product is called Helpotron everywhere else.",
       "cause": "web/index.html:9 is the only title in the app. grep for document.title across web/src returns zero matches.",
       "fix": "Set a per-view title where activeView changes (web/src/App.jsx:628 handleSelectView) and correct the base title.",
       "brief_correction": "Brief defect 6 understates it: the single title is also the wrong brand.",
-      "state": "open",
-      "severity_normalized": "medium"
+      "state": "fixed",
+      "severity_normalized": "medium",
+      "fixed_commit": "6f2c8d7"
     },
     {
       "id": "F-06",
@@ -368,12 +374,13 @@
     {
       "id": "F-10",
       "severity": "low",
-      "status": "confirmed, unfixed",
+      "status": "CONFIRMED \u2192 FIXED (commit 6a3f323)",
       "title": "Guide, Terms, Privacy and Extension are modals wearing URLs, and each puts two h1s on the page",
       "evidence": "/guide h1s = ['Your Academic Co-pilot, Redefined', 'Helpotron Field Guide'], modalOpen true. Same for /terms, /privacy, /extension.",
       "fix": "Demote the landing h1 on these paths, or render them as real pages.",
-      "state": "open",
-      "severity_normalized": "low"
+      "state": "fixed",
+      "severity_normalized": "low",
+      "fixed_commit": "6a3f323"
     },
     {
       "id": "F-11",
@@ -430,8 +437,8 @@
   "summary": {
     "total": 31,
     "by_state": {
-      "fixed": 6,
-      "open": 21,
+      "fixed": 13,
+      "open": 14,
       "positive": 2,
       "stale": 2
     },
@@ -443,18 +450,12 @@
       "low": 3
     },
     "open_by_severity": {
-      "medium": 11,
-      "high": 6,
-      "critical": 1,
-      "low": 3
+      "high": 3,
+      "medium": 9,
+      "low": 2
     },
     "open_ids": [
-      "F-16",
-      "F-14",
-      "F-02",
-      "F-03",
       "F-18",
-      "F-29",
       "F-30",
       "F-19",
       "F-20",
@@ -462,22 +463,27 @@
       "F-22",
       "F-25",
       "F-26",
-      "F-05",
       "F-06",
       "F-07",
       "F-08",
       "F-09",
-      "F-10",
       "F-11",
       "S-01"
     ],
     "fixed_ids": [
       "F-01",
       "F-15",
+      "F-16",
       "F-04",
+      "F-14",
+      "F-02",
+      "F-03",
       "F-27",
       "F-28",
-      "F-17"
+      "F-29",
+      "F-17",
+      "F-05",
+      "F-10"
     ],
     "stale_ids": [
       "F-24",
