@@ -174,13 +174,13 @@ export function AssignmentDetailView({
     setSelectedDirection(dir);
     try {
       await api.chooseAssignmentDirection(assignmentId, dir, customText);
-      setNotice(`✅ Autonomous research vector set to "${dir.replace(/_/g, ' ')}".`);
+      setNotice(`✅ Direction set to "${dir.replace(/_/g, ' ')}".`);
       setTimeout(() => setNotice(''), 4000);
       // Refresh state
       const dirData = await api.getAssignmentDirection(assignmentId).catch(() => null);
       if (dirData) setDirectionInfo(dirData);
     } catch (err) {
-      setNotice(`❌ Failed to set vector: ${err.message || 'try again.'}`);
+      setNotice(`❌ Failed to set direction: ${err.message || 'try again.'}`);
       setTimeout(() => setNotice(''), 5000);
     }
   };
@@ -419,10 +419,10 @@ export function AssignmentDetailView({
                 </div>
                 <div>
                   <h3 className="font-title-md text-title-md text-on-surface font-semibold">
-                    Subagent Team Workspace Thread
+                    Execution Team
                   </h3>
                   <p className="font-code-sm text-xs text-on-surface-variant">
-                    Direct interaction lane for prompt refinement and constraint injection
+                    Collaborate directly with the team working on this assignment
                   </p>
                 </div>
               </div>
