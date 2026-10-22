@@ -632,6 +632,38 @@ export default function App() {
     setOpenAssignment(entry.assignment);
   };
 
+  const VIEW_TITLES = {
+    overview: 'Dashboard',
+    dashboard: 'Dashboard',
+    agent: 'My Agent',
+    dump: 'Assignment Dump',
+    library: 'Library',
+    settings: 'Settings',
+    credits: 'Credits & Billing',
+    billing: 'Credits & Billing',
+    insights: 'Insights',
+    notifications: 'Notifications',
+    admin: 'Control Center',
+    monitors: 'Monitors',
+    guide: 'Guide',
+    terms: 'Terms of Service',
+    privacy: 'Privacy Policy',
+    extension: 'Extension',
+  };
+
+  useEffect(() => {
+    if (authStatus !== 'authed') {
+      document.title = 'Helpotron — Academic Workspace & Assignment Workflow';
+      return;
+    }
+    if (openAssignment?.title) {
+      document.title = `${openAssignment.title} · Helpotron`;
+    } else {
+      const label = VIEW_TITLES[activeView] || 'Workspace';
+      document.title = `${label} · Helpotron`;
+    }
+  }, [activeView, openAssignment, authStatus]);
+
   /* `tab` is optional and wins over the legacy alias table, so a caller can
    * land on insights:progress without needing a `progress` alias to exist. */
   const handleSelectView = (viewKey, tab = null) => {
