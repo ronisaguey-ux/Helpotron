@@ -246,7 +246,10 @@ async def check_extension_update(req: VersionCheckRequest):
     latest = manifest.get("version", "2.0.0")
     current = req.current_version or "0.0.0"
 
-    is_outdated = current != latest
+    # 2026-10-22 (owner: "a massive banner telling me to get 2.7"): this compared
+    # with != so ANY install whose version differed from the served manifest was told it
+    # was outdated — including a newer build. Only an actually older client is outdated.
+    is_outdated = _version_tuple(current) < _version_tuple(latest)
 
     return {
         "status": "success",
