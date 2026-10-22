@@ -403,6 +403,18 @@
   --max-height-xs: var(--container-xs); --max-height-sm: var(--container-sm); --max-height-md: var(--container-md); --max-height-lg: var(--container-lg); --max-height-xl: var(--container-xl);
 
   /* Fonts — self-hosted variable families (policy: never Google CDN) */
+
+  /* 2026-10-22 (QA): --font-sans was never defined, so Tailwind's `font-sans`
+   * utility fell back to the framework's default OS stack. App.jsx puts that
+   * utility on the root .app-canvas div, which meant the whole signed-in app
+   * overrode the Inter Variable set on <body> and rendered in the operating
+   * system's UI font — only components that explicitly named a font-* token
+   * escaped it. One screen was measured with five different first-choice
+   * families. Defining the token here makes `font-sans` mean the brand body
+   * face everywhere, which is what every usage already assumed. */
+  --font-sans: "Inter Variable", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
   --font-display-xl: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
   --font-headline-lg: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
   --font-headline-lg-mobile: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
