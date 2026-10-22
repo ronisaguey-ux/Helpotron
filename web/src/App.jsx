@@ -7,7 +7,7 @@
  * (see LEGACY_VIEWS). All existing capabilities preserved.
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useEffect, useRef, useState, lazy, Suspense } from 'react';
-import { WifiOff, AlertTriangle, Eye, Lock } from 'lucide-react';
+import { WifiOff, AlertTriangle, Eye, Lock, X } from 'lucide-react';
 import { api, getServer, getUserId, hasSessionIndicator, setServer, setUserId } from './api.js';
 
 /* ── EAGER: the signed-out critical path only ────────────────────────────────
@@ -212,6 +212,7 @@ export default function App() {
   // 09-01: elite/admin users bypass the token gate server-side — the top bar
   // must render "Unlimited" usage, never "0 tokens" (owner report: RoniDev).
   const [userUnlimited, setUserUnlimited] = useState(false);
+  const [tokenNagDismissed, setTokenNagDismissed] = useState(false);
   const [openAssignment, setOpenAssignment] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   /* Back/forward navigation history — stack of {view, tab, assignment}
@@ -881,8 +882,8 @@ export default function App() {
         )}
 
         {/* Low Token Balance Warning Banner — never nags the operator (operator 08-28) */}
-        {isLoggedIn && !effectiveIsAdmin && !userUnlimited && tokenBalance > 0 && (() => {
-          const planLimit = { trial: 15000, testing: 10000, basic: 35000, pro: 120000, unlimited: 500000 }[userPlan] || 15000;
+        {isLoggedIn && !effectiveIsAdmin && !userUnlimited && !tokenNagDismissed && tokenBalance > 0 && (() => {
+          const planLimit = { none: 2000, trial: 15000, testing: 10000, basic: 35000, pro: 120000, unlimited: 500000 }[userPlan] || 2000;
           const pct = (tokenBalance / planLimit) * 100;
           if (pct < 15) {
             return (
@@ -893,13 +894,23 @@ export default function App() {
                     <strong>Low Token Balance:</strong> You have {Math.floor(tokenBalance).toLocaleString()} task tokens remaining.
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleSelectView('billing')}
-                  className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-lg text-xs transition cursor-pointer"
-                >
-                  View plans →
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectView('billing')}
+                    className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-lg text-xs transition cursor-pointer"
+                  >
+                    View plans →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTokenNagDismissed(true)}
+                    className="text-rose-300 hover:text-white p-1 rounded transition cursor-pointer"
+                    aria-label="Dismiss low token balance warning"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             );
           }
