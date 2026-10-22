@@ -313,9 +313,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # ─── rate limiting (dependency-free, in-memory) ────────────────────────────
 # Per-IP: everything, 120 req/min. Per-user (JSON POSTs): 10/min on the
 # LLM-costing paths, 30/min elsewhere. 429 with Retry-After when exceeded.
-IP_LIMIT = 120
+# 2026-10-22 (owner): 120/min per IP was shared by every request a single page
+# makes (settings fetches, 25s wallet polling, uploads), so ordinary use could
+# exhaust it and then get "rate limited" on an unrelated action such as an avatar
+# upload. Per-account budgets below are the real control; the IP bucket is now a
+# coarse flood stop for unauthenticated traffic.
+IP_LIMIT = 400
 USER_STRICT_LIMIT = 10
-USER_GENERAL_LIMIT = 30
+USER_GENERAL_LIMIT = 45
 STRICT_PATHS = ("/api/transcribe", "/api/agent/start", "/api/draft/generate")
 
 
@@ -336,8 +341,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     client = x_fwd.split(",")[0].strip()
 
         if not ratelimit.limiter.allow(f"ip:{client}", IP_LIMIT):
-            return JSONResponse({"detail": "rate limited"}, status_code=429,
-                                headers={"Retry-After": "60"})
+            retry_after = ratelimit.limiter.retry_after(f"ip:{client}", IP_LIMIT)
+            return JSONResponse(
+                {"detail": f"Too many requests from this network — try again in {retry_after or 60}s."},
+                status_code=429,
+                headers={"Retry-After": str(retry_after or 60)},
+            )
         ctype = request.headers.get("content-type", "")
         if request.method == "POST" and "application/json" in ctype:
             body_public_id = ""
@@ -428,11 +437,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 return JSONResponse({"detail": "public_id does not match authenticated user"}, status_code=403)
 
             rate_limit_user = auth_user_pid or body_public_id
-            if rate_limit_user and not ratelimit.limiter.allow(
-                    f"user:{rate_limit_user}",
-                    USER_STRICT_LIMIT if request.url.path in STRICT_PATHS else USER_GENERAL_LIMIT):
-                return JSONResponse({"detail": "rate limited"}, status_code=429,
-                                    headers={"Retry-After": "60"})
+            if rate_limit_user:
+                _limit = USER_STRICT_LIMIT if request.url.path in STRICT_PATHS else USER_GENERAL_LIMIT
+                _key = f"user:{rate_limit_user}"
+                if not ratelimit.limiter.allow(_key, _limit):
+                    _wait = ratelimit.limiter.retry_after(_key, _limit) or 60
+                    return JSONResponse(
+                        {"detail": f"That action is going a bit fast — try again in {_wait}s."},
+                        status_code=429,
+                        headers={"Retry-After": str(_wait)},
+                    )
         return await call_next(request)
 
 
@@ -1105,8 +1119,17 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
     # login must present a valid token unless the operator's test-bot bypass
     # header is present. Deny-closed: enforcement never fails open.
     if captcha_required() and not has_valid_bypass(request):
+        # 2026-10-22 (QA): a Turnstile token is single-use, and signup spends it.
+        # The client's post-signup auto-login therefore replayed a dead token and
+        # every new account saw "Security check required" AFTER being created.
+        # A caller that already presents a validated session cookie for this same
+        # account has passed the challenge once; accept that instead of demanding
+        # a token that cannot verify. No cookie, no bypass.
+        _sid = request.cookies.get(SESSION_COOKIE_NAME)
+        _sess = SessionStore.get_session(_sid) if _sid else None
+        _same_user = bool(_sess and str(_sess.get("public_id") or "") == body.public_id)
         remote_ip = request.client.host if request.client else ""
-        if not verify_turnstile_token(body.turnstile_token or "", remote_ip):
+        if not _same_user and not verify_turnstile_token(body.turnstile_token or "", remote_ip):
             raise HTTPException(
                 403, "Security check required — complete the captcha and try again."
             )
@@ -1311,7 +1334,7 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
 
 
 @app.post("/api/signup")
-def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
+def signup(body: SignupIn, request: Request, response: Response, db: Session = Depends(get_db)):
     """Create a new user account with a 7-day free trial."""
     # Same gate as /api/login (08-31, operator): once Turnstile is configured
     # every signup must present a valid token unless the operator's test-bot
@@ -1362,12 +1385,29 @@ def signup(body: SignupIn, request: Request, db: Session = Depends(get_db)):
     )
     db.add(user)
     db.commit()
+    db.refresh(user)
+    # The captcha was just satisfied by this very request, so the account is
+    # already proven: open the session here instead of asking the client to log
+    # in again with a token that siteverify has consumed.
+    session_token = SessionStore.create_session(user.id, user.public_id)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=session_token,
+        httponly=True,
+        secure=request.url.is_secure,
+        samesite="lax",
+        path="/",
+        max_age=SessionStore._session_expiry,
+    )
+    csrf_token = set_csrf_cookie(response, request)
     return {
         "message": "User created",
         "public_id": user.public_id,
         "plan": user.plan,
         "trial_expires_at": None,
         "token_balance": float(settings.get("token_balance", 0) or 0),
+        "authenticated": True,
+        "csrf_token": csrf_token,
     }
 
 
@@ -2669,7 +2709,7 @@ async def export_gdocs_route(assignment_id: int, payload: dict, current_user: Us
 # ─── Unified Safe Localhost / Production SPA Mount ───────────────────────────
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _WEB_DIST = _REPO_ROOT / "web" / "dist"
@@ -2731,6 +2771,14 @@ if _WEB_DIST.exists() and (_WEB_DIST / "index.html").exists():
         # Let FastAPI router handle any unhandled api routes with 404
         if full_path.startswith("api"):
             raise HTTPException(404, "API route not found")
+        # 2026-10-22 (QA): the SPA has no /login page — sign-in lives in the auth
+        # modal, reachable only via ?signin=1 or the nav CTA. A direct hit on
+        # /login (bookmark, password manager, old marketing link) rendered the
+        # app's own 404, so a returning user could not sign in at all. Send the
+        # three legacy spellings to the deep link the app already understands.
+        _legacy_login = {"login", "log-in", "signin", "sign-in"}
+        if full_path.strip("/").lower() in _legacy_login:
+            return RedirectResponse("/?signin=1", status_code=307)
         # Traversal / dotfile refusal lives in resolve_spa_target so it is unit-testable.
         target = resolve_spa_target(full_path)
 
