@@ -24,8 +24,8 @@ from .default_styles import get_default_style
 
 logger = logging.getLogger("helpotron.draft")
 
-# Cost in credits per draft generation (charged on success, refunded on failure)
-DRAFT_COST = 200.0
+# Cost in credits per draft generation (5x multiplier per DIRECTION #23)
+DRAFT_COST = 1000.0
 
 # Max retries for detector threshold
 MAX_RETRIES = 5
