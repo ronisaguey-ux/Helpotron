@@ -326,6 +326,51 @@ def _coerce_flag(v: Any) -> Optional[bool]:
     return None
 
 
+_THEME_ALIASES = {
+    "light": "light", "light mode": "light", "light-mode": "light", "day": "light", "white": "light",
+    "light theme": "light", "bright": "light",
+    "dark": "dark", "dark mode": "dark", "dark-mode": "dark", "night": "dark", "black": "dark",
+    "dark theme": "dark",
+    "system": "system", "auto": "system", "automatic": "system", "os": "system", "device": "system",
+    "system theme": "system",
+}
+_ACCENT_ALIASES = {
+    "cyan": "cyan", "blue": "blue", "teal": "teal", "green": "green", "emerald": "green",
+    "violet": "violet", "purple": "violet", "pink": "pink", "rose": "pink", "amber": "amber",
+    "orange": "amber", "red": "red", "neutral": "neutral", "gray": "neutral", "grey": "neutral",
+}
+_ALLOWED = {
+    "density": {"comfortable", "compact", "cozy", "spacious"},
+    "uiStyle": {"classic", "soft", "glass", "flat", "neon"},
+    "animation": {"full", "reduced", "none", "minimal"},
+    "background": {"plain", "aurora", "mesh", "grid", "noise"},
+    "language": {"en", "es", "fr", "de", "pt", "hi", "ar", "zh", "ja"},
+}
+
+
+def _canonical(value: Any, aliases: dict, allowed: Optional[set] = None) -> Optional[str]:
+    """Map a human phrase ("light mode", "Night", "Purple") onto the id the UI
+    actually switches on, or None when it is not a value we can apply.
+
+    2026-10-22 (owner): the agent stored whatever it was told — `appearance.theme
+    = "light mode"` — then reported "settings updated: theme". The UI only matches
+    `dark|light|system`, so the attribute changed to a string nothing styles and
+    the page stayed dark. A value that cannot be applied is now a failure the
+    agent has to report, never a silent success.
+    """
+    if not isinstance(value, str):
+        return None
+    s = " ".join(value.strip().lower().replace("_", " ").replace("-", " ").split())
+    if s in aliases:
+        return aliases[s]
+    compact = s.replace(" ", "")
+    if compact in aliases:
+        return aliases[compact]
+    if allowed is not None:
+        return s if s in allowed else None
+    return None
+
+
 # 09-01 (Bob): the permission prompt must say WHAT will change, not just which
 # mode is on. These labels humanize the payload keys the intent resolver emits
 # for change_settings (see the contract in routes_overlord.py) so the popup can
@@ -1285,6 +1330,7 @@ print(f"Active files: {os.listdir('.')}")
             updates = payload.get("settings", {})
             if not isinstance(updates, dict):
                 return {"action": action_type, "status": "failed", "message": "No settings provided."}
+            rejected: list[str] = []
             ai = dict(settings.get("ai") or {})
             disp = dict(settings.get("display") or {})
             ap = dict(settings.get("appearance") or {})
@@ -1330,36 +1376,65 @@ print(f"Active files: {os.listdir('.')}")
                     try:
                         ap["fontScale"] = max(1, min(100, int(v)))
                     except (TypeError, ValueError):
+                        rejected.append(f"font_scale={v!r}")
                         continue
                     applied.append("font scale")
                 elif k == "theme":
-                    settings[k] = v
-                    disp["theme"] = ap["theme"] = v
-                    applied.append("theme")
+                    canonical = _canonical(v, _THEME_ALIASES)
+                    if canonical is None:
+                        rejected.append(f"theme={v!r} (expected dark, light or system)")
+                        continue
+                    settings[k] = canonical
+                    disp["theme"] = ap["theme"] = canonical
+                    applied.append(f"theme → {canonical}")
                 elif k == "accent":
-                    ap["accent"] = v
-                    applied.append("accent")
+                    canonical = _canonical(v, _ACCENT_ALIASES)
+                    if canonical is None:
+                        rejected.append(f"accent={v!r}")
+                        continue
+                    ap["accent"] = canonical
+                    applied.append(f"accent → {canonical}")
                 elif k == "density":
-                    ap["density"] = v
-                    applied.append("density")
+                    canonical = _canonical(v, {}, _ALLOWED["density"])
+                    if canonical is None:
+                        rejected.append(f"density={v!r}")
+                        continue
+                    ap["density"] = canonical
+                    applied.append(f"density → {canonical}")
                 elif k == "compact_mode":
                     f = _coerce_flag(v)
                     if f is None:
+                        rejected.append(f"compact_mode={v!r}")
                         continue
                     disp["compact_mode"] = f
                     applied.append("compact mode")
                 elif k in ("uiStyle", "ui_style"):
-                    ap["uiStyle"] = v
-                    applied.append("UI style")
+                    canonical = _canonical(v, {}, _ALLOWED["uiStyle"])
+                    if canonical is None:
+                        rejected.append(f"uiStyle={v!r}")
+                        continue
+                    ap["uiStyle"] = canonical
+                    applied.append(f"UI style → {canonical}")
                 elif k in ("animation", "background"):
-                    ap[k] = v
-                    applied.append(k)
+                    canonical = _canonical(v, {}, _ALLOWED[k])
+                    if canonical is None:
+                        rejected.append(f"{k}={v!r}")
+                        continue
+                    ap[k] = canonical
+                    applied.append(f"{k} → {canonical}")
                 elif k == "custom_color":
-                    disp["custom_color"] = v
+                    if not (isinstance(v, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", v.strip())):
+                        rejected.append(f"custom_color={v!r} (expected #rrggbb)")
+                        continue
+                    disp["custom_color"] = v.strip()
                     applied.append("custom color")
                 elif k == "language":
-                    loc["language"] = v
-                    applied.append("language")
+                    canonical = _canonical(v, {}, _ALLOWED["language"])
+                    if canonical is None:
+                        rejected.append(f"language={v!r}")
+                        continue
+                    loc["language"] = canonical
+                    applied.append(f"language → {canonical}")
                 elif k == "timezone":
                     settings[k] = v
                     loc["timezone"] = v
@@ -1378,16 +1453,41 @@ print(f"Active files: {os.listdir('.')}")
             if loc:
                 settings["localization"] = loc
             if not applied:
-                return {"action": action_type, "status": "failed", "message": "No recognized settings in that request."}
+                reason = ("; ".join(rejected) if rejected
+                          else "No recognized settings in that request.")
+                return {
+                    "action": action_type,
+                    "status": "failed",
+                    "message": f"Nothing was changed — {reason}.",
+                }
             from sqlalchemy.orm.attributes import flag_modified
             user.settings = copy.deepcopy(settings)
             flag_modified(user, "settings")
             db.commit()
+            # Read the row back through a fresh query before claiming success:
+            # "completed" must mean the database really holds the new value.
+            db.expire_all()
+            check = db.query(User).filter(User.id == user.id).first()
+            verified_appearance = dict(((check.settings or {}).get("appearance") or {}))
+            unverified = [
+                name for name in applied
+                if name.startswith("theme →") and verified_appearance.get("theme") != ap.get("theme")
+            ]
+            if unverified:
+                return {
+                    "action": action_type,
+                    "status": "failed",
+                    "message": f"Settings did not persist: {', '.join(unverified)}.",
+                }
+            message = f"Settings updated: {', '.join(applied)}."
+            if rejected:
+                message += f" Skipped (not a value the UI can apply): {'; '.join(rejected)}."
             return {
                 "action": action_type,
                 "status": "completed",
-                "message": f"Settings updated: {', '.join(applied)}.",
+                "message": message,
                 "settings": settings,
+                "reload_required": True,
             }
 
         elif action_type == "generate_flashcards":

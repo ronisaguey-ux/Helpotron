@@ -1155,6 +1155,13 @@ async def upload_avatar(
 ):
     """Avatar upload for the user, the agent, or a subject (PNG/JPG only)."""
     user = _get_current_user(request, db)
+    # 2026-10-22 (owner): "uploading the pfp got rate limited super fast". The
+    # upload itself had no budget of its own — it rode the shared 120/min IP
+    # bucket that every settings poll also spends, so a normal session could
+    # exhaust the allowance elsewhere and then be refused here. Avatars now get
+    # a generous per-account budget with a real Retry-After.
+    from .ratelimit import check_costly
+    check_costly("avatar", request, user, limit=20, window=60.0)
     content = await file.read()
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file uploaded.")
@@ -1183,6 +1190,16 @@ async def upload_avatar(
         locked = db.query(User).filter(User.id == user.id).with_for_update().first() or user
         settings_now = dict(locked.settings or {})
         prof = dict(settings_now.get("profile") or {})
+        # Replace, don't accumulate: every re-upload used to leave its predecessor
+        # on disk forever, so a user cropping an avatar ten times left ten files.
+        previous = str(prof.get("avatar_url") or "")
+        if previous.startswith("/uploads/avatars/"):
+            old_path = _AVATAR_DIR / previous.rsplit("/", 1)[-1]
+            try:
+                if old_path.is_file():
+                    old_path.unlink()
+            except OSError:
+                pass
         prof["avatar_url"] = url
         settings_now["profile"] = prof
         locked.settings = settings_now
