@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Brain, BarChart3, History, MoreHorizontal } from 'lucide-react';
+import { LayoutDashboard, Inbox, Library as LibraryIcon, Brain } from 'lucide-react';
 
 /**
- * MobileBottomBar — LUMINOUS GLASS 5-Slot Bottom Bar (Spec 3.1.3)
- * Slots: Home / Agent / Insights / History / More
- * Touch targets >= 44px, safe area padding, review pending amber dot.
+ * MobileBottomBar — Four core destinations, always visible (DIRECTION #31).
+ * Destinations: Dashboard / Dump / Library / My Agent
+ * Touch targets >= 44px, safe area padding.
  */
 export default function MobileBottomBar({
   activeView,
   onNavigate,
-  onOpenMore,
   hasPendingReview = false,
 }) {
   const [scrolled, setScrolled] = useState(false);
@@ -23,10 +22,10 @@ export default function MobileBottomBar({
   }, []);
 
   const SLOTS = [
-    { key: 'overview', label: 'Home', Icon: LayoutDashboard, hasBadge: hasPendingReview },
-    { key: 'agent', label: 'Agent', Icon: Brain },
-    { key: 'insights', label: 'Insights', Icon: BarChart3 },
-    { key: 'history', label: 'History', Icon: History },
+    { key: 'overview', label: 'Dashboard', Icon: LayoutDashboard, hasBadge: hasPendingReview },
+    { key: 'dump', label: 'Dump', Icon: Inbox },
+    { key: 'library', label: 'Library', Icon: LibraryIcon },
+    { key: 'agent', label: 'My Agent', Icon: Brain },
   ];
 
   return (
@@ -40,7 +39,7 @@ export default function MobileBottomBar({
         'pb-safe select-none transition-shadow duration-200',
       ].filter(Boolean).join(' ')}
     >
-      <div className="grid grid-cols-5 h-14 max-w-md mx-auto items-center px-1">
+      <div className="grid grid-cols-4 h-14 max-w-md mx-auto items-center px-2">
         {SLOTS.map(({ key, label, Icon, hasBadge }) => {
           const isActive = activeView === key;
 
@@ -71,17 +70,6 @@ export default function MobileBottomBar({
             </button>
           );
         })}
-
-        {/* 5th Slot: More Sheet Trigger */}
-        <button
-          type="button"
-          onClick={onOpenMore}
-          className="flex flex-col items-center justify-center gap-0.5 rounded-xl transition cursor-pointer min-h-[44px] min-w-[44px] py-1 text-on-surface-variant hover:text-on-surface"
-          aria-label="More navigation options"
-        >
-          <MoreHorizontal className="w-5 h-5" />
-          <span className="text-[10px] font-medium leading-none tracking-tight">More</span>
-        </button>
       </div>
     </nav>
   );

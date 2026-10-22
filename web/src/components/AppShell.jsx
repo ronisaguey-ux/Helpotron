@@ -373,21 +373,8 @@ export default function AppShell({
       <div className={[sidebarCollapsed ? 'lg:pl-[90px]' : 'lg:pl-64', 'flex flex-col flex-1 transition-all duration-200'].join(' ')}>
         {/* Sticky Glass Topbar (64px) */}
         <header className="sticky top-0 z-30 h-16 bg-surface-container-lowest/70 backdrop-blur-xl border-b border-outline-variant/20 px-4 sm:px-6 flex items-center justify-between gap-3 shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
-          {/* Left: Mobile hamburger + Breadcrumb */}
+          {/* Left: Breadcrumb */}
           <div className="flex items-center gap-3 min-w-0">
-            <button
-              ref={hamburgerRef}
-              type="button"
-              onClick={() => setMobileDrawerOpen(true)}
-              className="lg:hidden p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center"
-              aria-label="Open navigation menu"
-            >
-              <div className="flex flex-col gap-1 w-4">
-                <span className="w-4 h-0.5 bg-current rounded-full" />
-                <span className="w-4 h-0.5 bg-current rounded-full" />
-                <span className="w-4 h-0.5 bg-current rounded-full" />
-              </div>
-            </button>
 
             {/* Breadcrumb / Title */}
             <div className="flex items-center gap-2 font-body-sm text-xs sm:text-sm">
@@ -549,7 +536,6 @@ export default function AppShell({
       <MobileBottomBar
         activeView={activeView}
         onNavigate={onNavigate}
-        onOpenMore={() => setMobileDrawerOpen(true)}
         hasPendingReview={unreadNotifications > 0}
       />
 
