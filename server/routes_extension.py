@@ -299,6 +299,18 @@ async def download_extension_zip():
 # inferred from the version segments; an admin can overwrite name/notes via
 # POST /api/extension/releases.
 PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
+    "2.9.0": [
+        "EXECUTION TEAM & PERFORMANCE",
+        "⚡ Execution Team integration — unified multi-agent workspace coordination.",
+        "🎨 Clean UI styling aligned with Helpotron 2.9 design system.",
+        "🛡️ Enhanced permission boundaries and secure session synchronization.",
+    ],
+    "2.9": [
+        "EXECUTION TEAM & PERFORMANCE",
+        "⚡ Execution Team integration — unified multi-agent workspace coordination.",
+        "🎨 Clean UI styling aligned with Helpotron 2.9 design system.",
+        "🛡️ Enhanced permission boundaries and secure session synchronization.",
+    ],
     "2.8.0": [
         # Grouped, in rough order of how much they change for the user. Rendered
         # verbatim by the popup's What's New, so keep each line self-contained.
@@ -449,7 +461,7 @@ PRESET_RELEASE_NOTES: Dict[str, List[str]] = {
     ],
 }
 
-RELEASE_NOTE_TEMPLATE = "Helpotron Extension updated to v{version}."
+RELEASE_NOTE_TEMPLATE = "Helpotron Extension v{version}\n• General improvements and performance updates."
 
 
 def _version_tuple(v: str) -> Tuple[int, int, int]:
