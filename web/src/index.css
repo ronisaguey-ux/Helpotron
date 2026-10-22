@@ -383,6 +383,15 @@
   --spacing-gutter-mobile: 1rem;
   --spacing-gutter-desktop: 1.5rem;
   --spacing-page-max: 75rem;
+  /* 2026-10-22 (QA): AnonymousLanding uses `px-container-padding` six times —
+   * on the nav, the mobile nav, the hero, two sections and the footer — but the
+   * token was never declared, so the utility compiled to nothing. The hero,
+   * nav and footer therefore had NO horizontal gutter at all: measured h1
+   * left=0 at 1440 while the sections below it sat at left=170, and at 390 the
+   * headline, body copy and CTAs all touched both screen edges. That is the
+   * "looks broken" first impression. Scales between the two gutter values the
+   * theme already defines: 16px on a phone, up to 40px on a wide display. */
+  --spacing-container-padding: clamp(1rem, 3vw, 2.5rem);
   /* Legacy spacing steps (xs/sm/md/lg/xl) */
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
