@@ -86,3 +86,18 @@ research/s3-harvest/
 research/s3-h*.json
 research/security_audit_findings_20260917.json
 .condom/
+
+# .mcp.json — carries a live X-Goog-Api-Key for the Stitch MCP server.
+#             Local-only config; never committed. Copy it per machine.
+.mcp.json
+
+# *.bak-<reason>-<timestamp> — editor/QA safety copies written beside the file
+#             being changed. Evidence on disk, noise in history.
+*.bak-*
+
+# reports/ui-audit/{metrics,shots}/ — regenerable audit evidence (Lighthouse
+#             JSON ~600 KB each, before/after screenshots). Same policy as
+#             artifacts/: kept on disk for inspection, never committed.
+#             The written reports (AUDIT.md, PLAN.md, REPORT.md) ARE tracked.
+/reports/ui-audit/metrics/
+/reports/ui-audit/shots/
