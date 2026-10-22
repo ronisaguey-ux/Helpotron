@@ -132,18 +132,37 @@ export default function SettingsApp({
   const [saveStatus, setSaveStatus] = useState('saved'); // 'saved' | 'saving' | 'dirty'
   const saveTimeoutRef = useRef(null);
 
-  // Synchronize initial settings from backend if available
+  // Synchronize settings from the backend — on mount, on every focus, and every
+  // 30s while the tab is visible. Owner (2026-10-22): "when i told my agent to
+  // edit my settings to light mode, it didng do anything" — the agent writes to
+  // the account, but this tab only ever read settings once at mount, so a change
+  // made elsewhere stayed invisible until a hard reload.
   useEffect(() => {
     let mounted = true;
-    api.userSettings?.()
-      .then((res) => {
-        if (mounted && res?.settings) {
-          setSettings((prev) => ({ ...prev, ...res.settings }));
-        }
-      })
-      .catch(() => {});
+    const pull = () => {
+      api.userSettings?.()
+        .then((res) => {
+          if (!mounted || !res?.settings) return;
+          setSettings((prev) => {
+            const next = { ...prev, ...res.settings };
+            applyAppearance(next);
+            applyAccessibility(next.accessibility);
+            return next;
+          });
+        })
+        .catch(() => {});
+    };
+    pull();
+    const onFocus = () => pull();
+    const onVisible = () => { if (document.visibilityState === 'visible') pull(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') pull(); }, 30000);
     return () => {
       mounted = false;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(timer);
     };
   }, []);
 
