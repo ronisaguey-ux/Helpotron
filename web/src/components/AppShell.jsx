@@ -410,9 +410,9 @@ export default function AppShell({
                   title. Just the product name. */}
               <span className="text-on-surface-variant hidden sm:inline">Helpotron</span>
               <span className="text-outline-variant/60 hidden sm:inline">/</span>
-              <h1 className="font-semibold text-on-surface truncate">
+              <span className="font-semibold text-on-surface truncate">
                 {currentNav.label}
-              </h1>
+              </span>
             </div>
 
             {/* Navigation back/forward */}
