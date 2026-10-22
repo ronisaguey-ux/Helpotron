@@ -1,0 +1,336 @@
+/* popup-v2.css — 2026-10-22 visual overhaul of the capture popup.
+ *
+ * Loaded AFTER popup.css, so this is a deliberate override layer: the markup and
+ * every JS hook stay exactly as they are, while the surfaces, type scale,
+ * spacing rhythm, buttons, tabs and inputs are re-cut to the "Obsidian
+ * Cyber-Academic" direction (Stitch project 8988589537304972768).
+ *
+ * Rules obeyed here: no images, no illustration, no gradients used as
+ * decoration — spacing, borders, one accent colour and inline SVG do the work.
+ */
+
+/* ── 1. Tokens: deeper ground, one accent, tighter radii ─────────────────── */
+:root {
+  /* ground */
+  --surface: #0f1116;
+  --surface-dim: #0a0c10;
+  --surface-bright: #23262e;
+  --surface-container-lowest: #08090d;
+  --surface-container-low: #14161c;
+  --surface-container: #171920;
+  --surface-container-high: #1e2129;
+  --surface-container-highest: #262a33;
+
+  /* ink */
+  --on-surface: #eef0f6;
+  --on-surface-variant: #a7adbd;
+  --outline: #6f7686;
+  --outline-variant: #2b2f39;
+
+  /* accent — reserved for primary action + live state */
+  --primary: #00e5f5;
+  --primary-hover: #4ff2ff;
+  --on-primary: #00232a;
+  --primary-container: #00e5f5;
+  --on-primary-container: #00232a;
+  --primary-fixed-dim: #00b9c6;
+
+  --secondary: #b9c4ff;
+  --on-secondary: #12206b;
+  --secondary-container: #2a3a8f;
+  --on-secondary-container: #e6e9ff;
+
+  --error: #ff8a80;
+  --on-error: #3a0503;
+  --error-container: #4d0c08;
+  --on-error-container: #ffdad6;
+
+  /* geometry */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px rgba(0, 0, 0, 0.45);
+  --ring: 0 0 0 2px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+
+[data-theme="light"] {
+  --surface: #f7f8fb;
+  --surface-dim: #eceef4;
+  --surface-bright: #ffffff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f2f4f9;
+  --surface-container: #eef1f7;
+  --surface-container-high: #e5e9f1;
+  --surface-container-highest: #dbe0ea;
+  --on-surface: #16181d;
+  --on-surface-variant: #4a5160;
+  --outline: #6b7280;
+  --outline-variant: #d6dae4;
+  --primary: #008b9a;
+  --primary-hover: #00a3b5;
+  --on-primary: #ffffff;
+  --primary-container: #00a3b5;
+  --on-primary-container: #ffffff;
+}
+
+/* ── 2. Shell ───────────────────────────────────────────────────────────── */
+body {
+  width: 400px;
+  background:
+    radial-gradient(1200px 240px at 50% -160px, color-mix(in srgb, var(--primary) 8%, transparent), transparent 70%),
+    var(--surface-dim);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── 3. App bar ─────────────────────────────────────────────────────────── */
+.appbar {
+  padding: 10px 12px;
+  min-height: 48px;
+  background: color-mix(in srgb, var(--surface-container-low) 88%, transparent);
+  border-bottom: 1px solid var(--outline-variant);
+  backdrop-filter: blur(12px);
+}
+.appbar .app-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+.appbar .logo {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid var(--outline-variant);
+  box-shadow: var(--shadow-card);
+}
+
+/* ── 4. Tabs as a segmented control ─────────────────────────────────────── */
+.nav-tabs,
+.tab-strip,
+.seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 8px 12px 0;
+  border-radius: var(--radius-lg);
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+}
+.nav-tab {
+  flex: 1 1 0;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--radius-md);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--on-surface-variant);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.nav-tab:hover {
+  color: var(--on-surface);
+  background: var(--surface-container-high);
+}
+.nav-tab.active {
+  color: var(--primary);
+  background: var(--surface-container-highest);
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+.nav-tab.active .ic,
+.nav-tab.active span {
+  color: var(--primary);
+}
+
+/* ── 5. Scroll body and panels ──────────────────────────────────────────── */
+.app-main {
+  padding: 12px;
+  gap: 10px;
+  scrollbar-gutter: stable;
+}
+.app-main::-webkit-scrollbar { width: 6px; }
+.app-main::-webkit-scrollbar-thumb {
+  background: var(--surface-container-highest);
+  border-radius: 999px;
+}
+.app-main::-webkit-scrollbar-thumb:hover { background: var(--outline-variant); }
+
+.option-panel,
+.card,
+.panel {
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+}
+/* The tab container is the scroll region, not a card — a border around it drew
+   one giant empty box down the whole popup. Cards live inside it. */
+.view-panel {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.option-panel { padding: 12px; }
+
+/* ── 6. Buttons ─────────────────────────────────────────────────────────── */
+.btn {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  transition: transform 90ms ease, background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--ring); }
+
+.btn--primary {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: color-mix(in srgb, var(--primary) 70%, #000);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 6px 18px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+.btn--primary:hover {
+  background: var(--primary-hover);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset, 0 8px 22px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+.btn--secondary,
+.btn--ghost {
+  background: var(--surface-container);
+  color: var(--on-surface);
+  border-color: var(--outline-variant);
+}
+.btn--secondary:hover,
+.btn--ghost:hover {
+  background: var(--surface-container-high);
+  border-color: color-mix(in srgb, var(--outline) 55%, transparent);
+}
+
+.btn--danger-outline {
+  background: transparent;
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 45%, transparent);
+}
+.btn--danger-outline:hover {
+  background: var(--error-container);
+  color: var(--on-error-container);
+}
+
+.btn--sm { height: 28px; padding: 0 10px; font-size: 11.5px; border-radius: 9px; }
+
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  color: var(--on-surface-variant);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.icon-btn:hover {
+  color: var(--on-surface);
+  background: var(--surface-container-high);
+  border-color: var(--outline-variant);
+}
+.icon-btn:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* ── 7. Inputs ──────────────────────────────────────────────────────────── */
+.input,
+textarea.input,
+select.input {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface);
+  font-size: 12px;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.input::placeholder { color: color-mix(in srgb, var(--on-surface-variant) 75%, transparent); }
+.input:focus,
+textarea.input:focus,
+select.input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--primary) 60%, transparent);
+  box-shadow: var(--ring);
+}
+textarea.input { height: auto; min-height: 72px; padding: 9px 10px; line-height: 1.45; }
+
+/* ── 8. Chips, pills, status strips ─────────────────────────────────────── */
+.chat-toggle-chip,
+.chip,
+.pill {
+  border-radius: 999px;
+  border: 1px solid var(--outline-variant);
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+}
+.chip:hover { color: var(--on-surface); border-color: color-mix(in srgb, var(--outline) 60%, transparent); }
+
+.agent-active-bar {
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--outline-variant));
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface-container-low));
+  padding: 8px 10px;
+}
+
+/* ── 9. Lists and rows share one rhythm ─────────────────────────────────── */
+.list-row,
+.history-row,
+.draft-row,
+.file-row {
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.list-row:hover,
+.history-row:hover,
+.draft-row:hover,
+.file-row:hover {
+  background: var(--surface-container-high);
+  border-color: var(--outline-variant);
+}
+
+/* ── 10. Type rhythm ────────────────────────────────────────────────────── */
+.font-body-sm { font-size: 11.5px; line-height: 1.45; color: var(--on-surface-variant); }
+h1, h2, h3, .section-title { letter-spacing: -0.01em; }
+.section-title { font-size: 12px; font-weight: 650; color: var(--on-surface); }
+
+/* ── 11. Footer / meta ──────────────────────────────────────────────────── */
+.app-footer,
+.footer {
+  border-top: 1px solid var(--outline-variant);
+  background: color-mix(in srgb, var(--surface-container-low) 92%, transparent);
+}
+
+/* ── 12. Respect reduced motion ─────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .btn, .icon-btn, .nav-tab, .list-row, .input { transition: none; }
+  .agent-active-pulse { animation: none; }
+}
