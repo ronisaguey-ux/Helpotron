@@ -42,6 +42,7 @@ if [[ "$DB_URL" != sqlite:* ]]; then
 fi
 # sqlite:///relative/path  ->  relative/path ; sqlite:////abs/path -> /abs/path
 RESOLVED_DB="${DB_URL#sqlite:///}"
+RESOLVED_DB="${RESOLVED_DB%%\?*}"
 [[ "$RESOLVED_DB" != /* ]] && RESOLVED_DB="$PROJECT_DIR/$RESOLVED_DB"
 
 if [[ ! -f "$RESOLVED_DB" ]]; then
