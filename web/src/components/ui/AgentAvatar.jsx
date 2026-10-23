@@ -23,6 +23,13 @@ export const AgentAvatar = ({
     xl: 'h-16 w-16',
   };
 
+  const sizePixels = {
+    sm: 28,
+    md: 36,
+    lg: 48,
+    xl: 64,
+  };
+
   const statusRing = {
     ready: 'ring-1 ring-emerald-500/40',
     working: 'ring-2 ring-emerald-400 shadow-[0_0_12px_rgba(34,197,94,0.6)]',
@@ -32,6 +39,7 @@ export const AgentAvatar = ({
   };
 
   const currentSize = sizeClasses[size] || sizeClasses.md;
+  const currentPx = sizePixels[size] || 36;
 
   return (
     <div className={`relative inline-flex items-center justify-center ${currentSize} ${className}`}>
@@ -55,6 +63,9 @@ export const AgentAvatar = ({
           <img
             src={src}
             alt="My Agent"
+            width={currentPx}
+            height={currentPx}
+            decoding="async"
             className="w-full h-full object-cover transition-transform duration-300 hover:scale-110"
           />
         )}

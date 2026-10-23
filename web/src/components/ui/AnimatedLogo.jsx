@@ -25,7 +25,15 @@ export const AnimatedLogo = ({
     xl: 'h-16 w-16 rounded-2xl',
   };
 
+  const sizePixels = {
+    sm: 24,
+    md: 36,
+    lg: 48,
+    xl: 64,
+  };
+
   const currentSize = sizeClasses[size] || sizeClasses.md;
+  const currentPx = sizePixels[size] || 36;
 
   return (
     <div className={`flex items-center gap-2.5 select-none group ${className}`}>
@@ -51,6 +59,9 @@ export const AnimatedLogo = ({
           <img
             src="/HelpoTron_logo.jpeg"
             alt="Helpotron Logo"
+            width={currentPx}
+            height={currentPx}
+            decoding="async"
             className={`relative ${currentSize} object-cover border border-white/10 shadow-sm transition-all duration-300 ${
               isWorking ? 'animate-aperture-pulse scale-105 border-emerald-500/60' : 'group-hover:scale-105 group-hover:border-blue-500/50'
             }`}
