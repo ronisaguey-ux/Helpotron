@@ -19,6 +19,7 @@ import time
 import uuid
 
 from .agent_prompt import sandbox_math_rule, prompt_injection_defense_rule  # standing rules
+from .metering import meter_user
 
 from fastapi import WebSocket
 
@@ -160,116 +161,133 @@ class AgentManager:
             {"role": "system", "content": AGENT_SYSTEM + "\n\n" + TOOL_DOC},
             {"role": "user", "content": f"Mission start. User instruction: {session.instruction or '(none — collect the current assignment)'}"},
         ]
-        try:
-            # The extension connects only after /api/agent/start returns — wait
-            # for it so we don't misread the handoff gap as a disconnect.
+        with meter_user(session.public_id):
             try:
-                await asyncio.wait_for(session.attached.wait(), timeout=ATTACH_TIMEOUT)
-            except asyncio.TimeoutError:
-                session.status = "disconnected"
-                session.log.append({"step": 0, "event": "extension never connected"})
-                return
-            while session.elapsed() < MAX_SESSION_SECONDS and session.steps < MAX_STEPS:
-                if session.websocket is None:
-                    session.status = "disconnected"
-                    session.log.append({"step": session.steps, "event": "extension disconnected"})
-                    return
+                # The extension connects only after /api/agent/start returns — wait
+                # for it so we don't misread the handoff gap as a disconnect.
                 try:
-                    content = await llm.call_llm(
-                        user_prompt=_agent_prompt(messages),
-                        system_prompt=AGENT_SYSTEM + "\n\n" + TOOL_DOC,
-                        user_id=session.public_id,
-                    )
-                except TypeError as _te:
-                    # Positional (system, user) is INVERTED for this signature —
-                    # call_llm(user_prompt, system_prompt, ...) — and it is what
-                    # put AGENT_SYSTEM into the user slot and the rendered
-                    # conversation into the system slot. Worse, it fired on ANY
-                    # TypeError from the call above, including one raised INSIDE
-                    # call_llm, silently retrying a different request shape.
-                    # The signature is now known and fixed, so this fallback is
-                    # gone; a TypeError here is a real bug and must surface.
-                    session.log.append({"step": session.steps,
-                                        "event": f"llm call failed: {type(_te).__name__}: {_te}"})
-                    return
-                except Exception as e:
-                    session.log.append({"step": session.steps, "event": f"llm error: {e}"})
-                    return
-                decision = llm.extract_json(content)
-                if not isinstance(decision, dict) or "tool" not in decision:
-                    messages.append({"role": "assistant", "content": content})
-                    messages.append({"role": "user", "content": "That response was not valid JSON tool call. Reply with exactly one JSON tool call."})
-                    continue
-
-                tool = decision["tool"]
-                args = decision.get("args") or {}
-                if tool == "report_unparseable":
-                    session.status = "unparseable"
-                    reason = args.get("reason", "This website cannot be automatically parsed due to proprietary layout, DRM, or missing assignment data.")
-                    session.result_text = f"⚠️ Unparseable Website: {reason} Please submit this page/syllabus to the Data Lake to earn micro-credits and help train our platform."
-                    session.log.append({"step": session.steps, "event": "report_unparseable", "detail": reason[:200]})
-                    await _send(session, {
-                        "type": "unparseable",
-                        "reason": reason,
-                        "datalake_prompt": "Submit snippet to Data Lake to earn micro-credits.",
-                    })
-                    return
-
-                if tool == "finish":
-                    session.status = "done"
-                    session.result_text = str(args.get("summary", ""))[:4000]
-                    assignment_data = args.get("assignment") or {}
-                    session.log.append({"step": session.steps, "event": "finish", "detail": session.result_text[:200]})
-                    await _send(session, {"type": "finished", "summary": session.result_text, "assignment": assignment_data})
-                    return
-
-                step = session.steps + 1
-                session.steps = step
-                command_id = f"c{step}-{uuid.uuid4().hex[:6]}"
-                session.log.append({"step": step, "event": f"tool:{tool}", "detail": json.dumps(args)[:200]})
-
-                fut = asyncio.get_running_loop().create_future()
-                session.pending[command_id] = fut
-                await _send(session, {"type": "command", "command_id": command_id, "command": {"action": tool, **args}})
-                try:
-                    result = await asyncio.wait_for(fut, timeout=COMMAND_TIMEOUT)
+                    await asyncio.wait_for(session.attached.wait(), timeout=ATTACH_TIMEOUT)
                 except asyncio.TimeoutError:
-                    session.pending.pop(command_id, None)
+                    session.status = "disconnected"
+                    session.log.append({"step": 0, "event": "extension never connected"})
+                    return
+                while session.elapsed() < MAX_SESSION_SECONDS and session.steps < MAX_STEPS:
+                    if session.websocket is None:
+                        session.status = "disconnected"
+                        session.log.append({"step": session.steps, "event": "extension disconnected"})
+                        return
+
+                    # Budget / balance gate: stop agent if token balance is exhausted
+                    try:
+                        from .credits import has_usage_balance
+                        from .database import SessionLocal, User
+                        with SessionLocal() as db_check:
+                            u = db_check.query(User).filter(User.public_id == session.public_id).first()
+                            if u and not has_usage_balance(u, db_check):
+                                session.status = "failed"
+                                session.result_text = "Daily token budget or balance exhausted."
+                                session.log.append({"step": session.steps, "event": "insufficient_balance"})
+                                await _send(session, {"type": "error", "error": session.result_text})
+                                return
+                    except Exception as _bal_err:
+                        logger.debug("Balance pre-check: %s", _bal_err)
+
+                    try:
+                        content = await llm.call_llm(
+                            user_prompt=_agent_prompt(messages),
+                            system_prompt=AGENT_SYSTEM + "\n\n" + TOOL_DOC,
+                            user_id=session.public_id,
+                        )
+                    except TypeError as _te:
+                        session.log.append({"step": session.steps,
+                                            "event": f"llm call failed: {type(_te).__name__}: {_te}"})
+                        return
+                    except Exception as e:
+                        session.log.append({"step": session.steps, "event": f"llm error: {e}"})
+                        return
+                    decision = llm.extract_json(content)
+                    if not isinstance(decision, dict) or "tool" not in decision:
+                        session.steps += 1
+                        session.log.append({"step": session.steps, "event": "invalid_tool_json"})
+                        messages.append({"role": "assistant", "content": content})
+                        messages.append({"role": "user", "content": "That response was not valid JSON tool call. Reply with exactly one JSON tool call."})
+                        if len(messages) > 20:
+                            messages = [messages[0], messages[1]] + messages[-12:]
+                        continue
+
+                    tool = decision["tool"]
+                    args = decision.get("args") or {}
+                    if tool == "report_unparseable":
+                        session.status = "unparseable"
+                        reason = args.get("reason", "This website cannot be automatically parsed due to proprietary layout, DRM, or missing assignment data.")
+                        session.result_text = f"⚠️ Unparseable Website: {reason} Please submit this page/syllabus to the Data Lake to earn micro-credits and help train our platform."
+                        session.log.append({"step": session.steps, "event": "report_unparseable", "detail": reason[:200]})
+                        await _send(session, {
+                            "type": "unparseable",
+                            "reason": reason,
+                            "datalake_prompt": "Submit snippet to Data Lake to earn micro-credits.",
+                        })
+                        return
+
+                    if tool == "finish":
+                        session.status = "done"
+                        session.result_text = str(args.get("summary", ""))[:4000]
+                        assignment_data = args.get("assignment") or {}
+                        session.log.append({"step": session.steps, "event": "finish", "detail": session.result_text[:200]})
+                        await _send(session, {"type": "finished", "summary": session.result_text, "assignment": assignment_data})
+                        return
+
+                    step = session.steps + 1
+                    session.steps = step
+                    command_id = f"c{step}-{uuid.uuid4().hex[:6]}"
+                    session.log.append({"step": step, "event": f"tool:{tool}", "detail": json.dumps(args)[:200]})
+
+                    fut = asyncio.get_running_loop().create_future()
+                    session.pending[command_id] = fut
+                    await _send(session, {"type": "command", "command_id": command_id, "command": {"action": tool, **args}})
+                    try:
+                        result = await asyncio.wait_for(fut, timeout=COMMAND_TIMEOUT)
+                    except asyncio.TimeoutError:
+                        session.pending.pop(command_id, None)
+                        messages.append({"role": "assistant", "content": json.dumps({"tool": tool, "args": args})})
+                        messages.append({"role": "user", "content": "The extension did not respond in time. If this repeats, finish."})
+                        if len(messages) > 20:
+                            messages = [messages[0], messages[1]] + messages[-12:]
+                        continue
+
+                    # 08-28 contract fix: the extension used to answer the bridge
+                    # with {"success": bool, "text": ...} while this loop read
+                    # {"ok": bool, "result": {...}} — every observation arrived as
+                    # ok:false / {} and the agent scraped blind. Accept BOTH shapes:
+                    # the extension's new {ok, result, error} plus the legacy
+                    # {success, text} so any other caller keeps working.
+                    ok = bool(result.get("ok", result.get("success", False)))
+                    page = result.get("result")
+                    if not isinstance(page, dict):
+                        page = {}
+                    if not page and isinstance(result.get("text"), str):
+                        page = {"text": result["text"]}
+                    err = result.get("error")
+                    if err is None and not ok:
+                        err = result.get("error", "command failed")
+                    obs = json.dumps({"ok": ok, "error": err, **page})
+                    if len(obs) > MAX_PAGE_CHARS:
+                        obs = (obs[:MAX_PAGE_CHARS] +
+                               f"\n[…observation truncated at {MAX_PAGE_CHARS} chars — "
+                               "the stored scrape is full; this is only the model view.]").strip()
                     messages.append({"role": "assistant", "content": json.dumps({"tool": tool, "args": args})})
-                    messages.append({"role": "user", "content": "The extension did not respond in time. If this repeats, finish."})
-                    continue
+                    messages.append({"role": "user", "content": f"Tool result: {obs}"})
+                    if len(messages) > 20:
+                        messages = [messages[0], messages[1]] + messages[-12:]
 
-                # 08-28 contract fix: the extension used to answer the bridge
-                # with {"success": bool, "text": ...} while this loop read
-                # {"ok": bool, "result": {...}} — every observation arrived as
-                # ok:false / {} and the agent scraped blind. Accept BOTH shapes:
-                # the extension's new {ok, result, error} plus the legacy
-                # {success, text} so any other caller keeps working.
-                ok = bool(result.get("ok", result.get("success", False)))
-                page = result.get("result")
-                if not isinstance(page, dict):
-                    page = {}
-                if not page and isinstance(result.get("text"), str):
-                    page = {"text": result["text"]}
-                err = result.get("error")
-                if err is None and not ok:
-                    err = result.get("error", "command failed")
-                obs = json.dumps({"ok": ok, "error": err, **page})
-                if len(obs) > MAX_PAGE_CHARS:
-                    obs = (obs[:MAX_PAGE_CHARS] +
-                           f"\n[…observation truncated at {MAX_PAGE_CHARS} chars — "
-                           "the stored scrape is full; this is only the model view.]").strip()
-                messages.append({"role": "assistant", "content": json.dumps({"tool": tool, "args": args})})
-                messages.append({"role": "user", "content": f"Tool result: {obs}"})
-
-            if session.status == "running":
-                session.status = "done"
-                session.result_text = session.result_text or "(reached step/time limit)"
-                session.log.append({"step": session.steps, "event": "limit reached"})
-        except Exception as e:
-            logger.exception("agent session %s crashed", session.session_id)
-            session.status = "failed"
-            session.log.append({"step": session.steps, "event": f"session error: {e}"})
+                if session.status == "running":
+                    session.status = "done"
+                    session.result_text = session.result_text or "(reached step/time limit)"
+                    session.log.append({"step": session.steps, "event": "limit reached"})
+            except Exception as e:
+                logger.exception("agent session %s crashed", session.session_id)
+                session.status = "failed"
+                session.log.append({"step": session.steps, "event": f"session error: {e}"})
 
 
 def _agent_prompt(messages: list[dict]) -> str:
