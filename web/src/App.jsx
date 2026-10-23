@@ -325,6 +325,7 @@ export default function App() {
     '/notifications': ['notifications', null],
     '/library': ['library', null],
     '/agent': ['agent', null],
+    '/my-agent': ['agent', null],
     '/insights': ['insights', null],
     '/credits': ['credits', null],
     '/billing': ['credits', null],

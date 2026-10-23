@@ -2,10 +2,13 @@
  * NotFound.jsx — Canonical 404 Routing Fault (Stitch v6 LUMINOUS GLASS M3 / §3.21)
  * Powered by the ErrorState family primitive.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import ErrorState from './ui/ErrorState.jsx';
 
 export default function NotFound({ onGoHome, onNavigate }) {
+  useEffect(() => {
+    document.title = '404 Page Not Found · Helpotron';
+  }, []);
   const handlePrimary = () => {
     if (onGoHome) onGoHome();
     else if (onNavigate) onNavigate('overview');
