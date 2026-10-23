@@ -1,0 +1,193 @@
+{
+  "audit": "Helpotron Full-Stack Audit Swarm v3",
+  "generated_at": "2026-10-23T22:02:00Z",
+  "target": "https://helpotron.dpdns.org (maintenance down / local git verified)",
+  "coordinator": "Antigravity",
+  "summary": {
+    "total_findings": 18,
+    "fixed": 18,
+    "blocked": 0
+  },
+  "findings": [
+    {
+      "id": "V3-A1-01",
+      "agent": "A1",
+      "category": "Routing and view-state correctness",
+      "severity": "Medium",
+      "file": "web/src/App.jsx:319-320, web/src/App.jsx:346",
+      "status": "fixed",
+      "commit": "ff2e16d",
+      "summary": "VIEW_PATH_MAP erroneously mapped /activity and /automation to overview and omitted /help, causing 404s and broken navigation."
+    },
+    {
+      "id": "V3-A1-02",
+      "agent": "A1",
+      "category": "Responsive layout and mobile overflow",
+      "severity": "High",
+      "file": "web/src/components/AppShell.jsx:90,100,377,532",
+      "status": "fixed",
+      "commit": "2110edc",
+      "summary": "Mobile drawer hamburger toggle button was omitted from topbar header, making drawer navigation unreachable on <1024px viewports."
+    },
+    {
+      "id": "V3-A1-03",
+      "agent": "A1",
+      "category": "Accessibility (keys, contrast, headings, focus order)",
+      "severity": "Medium",
+      "file": "web/src/components/PrivacyPolicyModal.jsx:50-75",
+      "status": "fixed",
+      "commit": "63a6cd5",
+      "summary": "PrivacyPolicyModal lacked Escape key listener and backdrop dismissal on optional views, creating a keyboard focus trap."
+    },
+    {
+      "id": "V3-A2-01",
+      "agent": "A2",
+      "category": "Authorization and IDOR (cross-account reads/writes, admin surfaces)",
+      "severity": "High",
+      "file": "server/routes_auth_2fa.py:402",
+      "status": "fixed",
+      "commit": "846510d",
+      "summary": "POST /api/auth/2fa/send-challenge returned raw unmasked phone numbers and differential responses, exposing PII and enabling user enumeration."
+    },
+    {
+      "id": "V3-A2-02",
+      "agent": "A2",
+      "category": "Authentication and session lifecycle",
+      "severity": "High",
+      "file": "server/auth.py:25-95",
+      "status": "fixed",
+      "commit": "ab86ef2",
+      "summary": "Broken JWT integer sub claim verification, revocation bypass, and flawed admin resolution in require_admin_user."
+    },
+    {
+      "id": "V3-A2-03",
+      "agent": "A2",
+      "category": "Copy, clarity and onboarding comprehension",
+      "severity": "High",
+      "file": "web/src/components/AuthModal.jsx:130-185, web/src/components/SessionExpiryModal.jsx:75-120",
+      "status": "fixed",
+      "commit": "7b09ef7",
+      "summary": "AuthModal locked email 2FA to 6 digits and inert resend button; SessionExpiryModal omitted 2FA handling, permanently locking out expired 2FA sessions."
+    },
+    {
+      "id": "V3-A3-01",
+      "agent": "A3",
+      "category": "Privacy and data retention",
+      "severity": "High",
+      "file": "server/privacy.py:120-195",
+      "status": "fixed",
+      "commit": "a00ef70",
+      "summary": "GDPR erasure bypassed public_id child tables (AdminMessage/Notice) and orphaned dump files, attachments, and exports on disk."
+    },
+    {
+      "id": "V3-A3-02",
+      "agent": "A3",
+      "category": "Input handling, injection and file upload edges",
+      "severity": "High",
+      "file": "server/export.py:10-45, server/user_settings_service.py:1105-1125",
+      "status": "fixed",
+      "commit": "096ec41",
+      "summary": "CSV formula injection (CWE-1236) and naive quote concatenation in flashcards and assignment history exports."
+    },
+    {
+      "id": "V3-A3-03",
+      "agent": "A3",
+      "category": "Secrets, dependencies and supply chain",
+      "severity": "Medium",
+      "file": "scrape_sidecar/requirements.txt:11-15, server/requirements.txt:20-50",
+      "status": "fixed",
+      "commit": "636f563",
+      "summary": "Unpinned scrapling dependency in sidecar and vulnerable multipart / unconstrained bounds in server dependencies."
+    },
+    {
+      "id": "V3-A3-04",
+      "agent": "A3",
+      "category": "Input handling, injection and file upload edges",
+      "severity": "Medium",
+      "file": "server/routes_dump.py:828-868",
+      "status": "fixed",
+      "commit": "4626721",
+      "summary": "DELETE /api/dump/{id} deleted database row without unlinking on-disk user assignment files."
+    },
+    {
+      "id": "V3-A4-01",
+      "agent": "A4",
+      "category": "Backend latency and error handling",
+      "severity": "High",
+      "file": "server/telegram_agent_link.py:89, server/telegram_agent_link.py:356-371",
+      "status": "fixed",
+      "commit": "8170fc4",
+      "summary": "httpx timeout mismatch (30s client vs 50s long-poll) and sequential bot polling loop causing multi-minute bot latency starvation."
+    },
+    {
+      "id": "V3-A4-02",
+      "agent": "A4",
+      "category": "Database correctness, migrations and query cost",
+      "severity": "High",
+      "file": "server/database.py:222,335,718,889,935",
+      "status": "fixed",
+      "commit": "8eaf483",
+      "summary": "Missing composite indexes on high-frequency filters (user_id + created_at/entry_date) and silent migration error swallowing in init_db."
+    },
+    {
+      "id": "V3-A4-03",
+      "agent": "A4",
+      "category": "Frontend performance (bundle, race conditions, render loops)",
+      "severity": "Medium",
+      "file": "web/src/components/AssignmentCardDashboard.jsx:161-172, web/src/components/AssignmentCardDashboard.jsx:207-239",
+      "status": "fixed",
+      "commit": "236b62c",
+      "summary": "Dual focus/visibilitychange event flood triggering duplicate simultaneous fetches, out-of-order race conditions, and unmounted state updates."
+    },
+    {
+      "id": "V3-A5-01",
+      "agent": "A5",
+      "category": "Browser extension parity with the web app",
+      "severity": "High",
+      "file": "server/routes_extension.py:223,290",
+      "status": "fixed",
+      "commit": "a9d7f02",
+      "summary": "Missing asyncio import in routes_extension caused runtime NameError crashes on extension version checks and downloads."
+    },
+    {
+      "id": "V3-A5-02",
+      "agent": "A5",
+      "category": "Infrastructure and operational safety (systemd, backups, health checks)",
+      "severity": "High",
+      "file": "deploy/helpotron-backup.service:19, scripts/backup_db.sh:44",
+      "status": "fixed",
+      "commit": "c177ee4",
+      "summary": "helpotron-backup.service missing data directory in ReadWritePaths preventing SQLite WAL backups; backup_db.sh failed on URI query params."
+    },
+    {
+      "id": "V3-A5-03",
+      "agent": "A5",
+      "category": "LLM cost and token efficiency",
+      "severity": "Critical",
+      "file": "server/agent_session.py:198-202, server/metering.py:31,69",
+      "status": "fixed",
+      "commit": "686646c",
+      "summary": "Invalid tool response retry loops failed to increment steps, burning unbounded tokens for up to 1hr; unmetered sessions and unbounded message history."
+    },
+    {
+      "id": "V3-A5-04",
+      "agent": "A5",
+      "category": "Infrastructure and operational safety (systemd, backups, health checks)",
+      "severity": "High",
+      "file": "deploy/nginx.conf:24",
+      "status": "fixed",
+      "commit": "bd73f7d",
+      "summary": "Stale Nginx Content-Security-Policy omitted Cloudflare Turnstile origins, breaking user authentication behind reverse proxy."
+    },
+    {
+      "id": "V3-A5-05",
+      "agent": "A5",
+      "category": "Browser extension parity with the web app",
+      "severity": "Medium",
+      "file": "extension/popup.js:3637,3671, extension/background.js:800-804",
+      "status": "fixed",
+      "commit": "aeff9d4",
+      "summary": "Extension popup assigned raw error objects to textContent rendering [object Object]; background.js dropped snake_case launch plan fields."
+    }
+  ]
+}
