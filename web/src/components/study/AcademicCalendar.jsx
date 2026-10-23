@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import api from "../../api.js";
 import Skeleton from "../ui/Skeleton.jsx";
+import { humanError } from "../../lib/errors.js";
 
 /**
  * UserCalendar — a calendar you can actually use (owner 2026-09-19).
@@ -76,7 +77,7 @@ export default function AcademicCalendar({ onSelectAssignment }) {
       const res = await api.request("/api/calendar/entries", { method: "GET" });
       setEntries(Array.isArray(res?.entries) ? res.entries : []);
     } catch (e) {
-      setError(String((e && e.message) || e));
+      setError(humanError(e).message);
     } finally {
       setLoading(false);
     }
@@ -164,7 +165,7 @@ export default function AcademicCalendar({ onSelectAssignment }) {
       setForm({ title: "", description: "", remind: true });
       await loadEntries();
     } catch (e) {
-      setError(String((e && e.message) || e));
+      setError(humanError(e).message);
     } finally {
       setSaving(false);
     }
@@ -176,7 +177,7 @@ export default function AcademicCalendar({ onSelectAssignment }) {
       await api.request(`/api/calendar/entries/${id}`, { method: "DELETE" });
       await loadEntries();
     } catch (e) {
-      setError(String((e && e.message) || e));
+      setError(humanError(e).message);
     } finally {
       setEntryBusyId(null);
     }
@@ -191,7 +192,7 @@ export default function AcademicCalendar({ onSelectAssignment }) {
       });
       await loadEntries();
     } catch (e) {
-      setError(String((e && e.message) || e));
+      setError(humanError(e).message);
     } finally {
       setEntryBusyId(null);
     }
