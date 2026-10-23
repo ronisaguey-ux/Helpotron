@@ -1048,53 +1048,14 @@ async def delete_user_account(request: Request, db: Session = Depends(get_db)):
     """GDPR Article 17 right-to-erasure: fully deletes the user's account,
     cascades cleanup across all scoped data, and anonymizes the data lake."""
     from .security import require_session_auth, revoke_user_jwts
+    from .privacy import delete_user_account_and_data
     require_session_auth(request)
     user = _get_current_user(request, db)
-    user_id = user.id
-    revoke_user_jwts(user_id)
-
-    # ORM-cascade-safe: groups created by the user (cascade removes
-    # memberships + shared materials), then remaining FK rows, user last.
-    for group in db.query(StudyGroup).filter(StudyGroup.created_by_id == user_id).all():
-        db.delete(group)
-    db.query(GroupMembership).filter(GroupMembership.user_id == user_id).delete(synchronize_session=False)
-    db.query(SharedMaterial).filter(SharedMaterial.shared_by_id == user_id).delete(synchronize_session=False)
-    db.query(Referral).filter(
-        or_(Referral.referrer_id == user_id, Referral.referee_id == user_id)
-    ).delete(synchronize_session=False)
-
-    from .database import (
-        ApiKey, AgentAction, AgentFile, UserSettingsScope, StudyCardState,
-        AgentChatThread, AgentChatMessage, PasswordReset, ApiUsageLog,
-        UniversalDumpItem, ClaimedTrialPhone, TrashItem, Organization
-    )
-    db.query(Organization).filter(Organization.admin_id == user_id).delete(synchronize_session=False)
-    db.query(ClaimedTrialPhone).filter(ClaimedTrialPhone.user_id == user_id).delete(synchronize_session=False)
-
-    for model in (
-        UserSession, ApiKey, Assignment, AgentAction, AgentFile, Transcript,
-        UserSettingsScope, StudyMaterial, StudyCardState, CreditTransaction,
-        Payment, DataSubmission, Draft, StudySession, AgentChatThread,
-        AgentChatMessage, PasswordReset, ApiUsageLog, UniversalDumpItem, TrashItem
-    ):
-        try:
-            db.query(model).filter(model.user_id == user_id).delete(synchronize_session=False)
-        except Exception as e:
-            logger.warning("Could not clean up %s for user %s: %s", getattr(model, '__name__', str(model)), user_id, e)
-
-    db.flush()
-    # Anonymize the data lake (telemetry / feedback / corpus / microcredits).
-    gdpr_tag = "ANONYMIZED_GDPR_DELETED"
-    rewritten = datalake_manager.anonymize_user(user.public_id, gdpr_tag) + datalake_manager.anonymize_user(str(user_id), gdpr_tag)
-    db.delete(user)
-    db.commit()
-
-    logger.info(
-        "Permanently deleted user account %s and all associated records under GDPR Article 17.",
-        user_id,
-    )
+    revoke_user_jwts(user.id)
+    res = delete_user_account_and_data(user, db)
     return {
         "status": "success",
-        "message": f"Account deleted (Article 17). Lake records anonymized: {rewritten}",
-        "anonymized_records": rewritten,
+        "message": f"Account deleted (Article 17). Lake records anonymized: {res.get('lake_records_anonymized', 0)}",
+        "anonymized_records": res.get("lake_records_anonymized", 0),
+        "details": res,
     }
