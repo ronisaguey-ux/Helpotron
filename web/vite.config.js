@@ -95,16 +95,6 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
-          // Editor + markdown families are declared in package.json but not
-          // yet imported in src; reserving chunks now means a future
-          // lazy-loaded editor/rich-view never ships in the entry chunk.
-          if (id.includes('/node_modules/@tiptap/')) return 'editor';
-          if (
-            id.includes('/node_modules/react-markdown/') ||
-            id.includes('/node_modules/rehype-') ||
-            id.includes('/node_modules/remark-') ||
-            id.includes('/node_modules/katex/')
-          ) return 'markdown';
           // react-dom must be matched before react (id path contains "react").
           if (
             id.includes('/node_modules/react/') ||
@@ -130,7 +120,7 @@ export default defineConfig({
             id.includes('/node_modules/@visx/') ||
             id.includes('/node_modules/d3-')
           ) return 'charts';
-          return 'vendor';
+          return undefined;
         },
       },
     },
