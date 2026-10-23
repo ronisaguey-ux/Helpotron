@@ -527,11 +527,22 @@ async def reset_user_password(public_id: str, req: ResetPasswordRequest, request
     return {"message": "Password reset successfully"}
 
 
+def _assert_not_protected_target(user, actor=None):
+    """Refuse destructive actions on the owner account, and on other admin
+    accounts unless the actor is the owner (V2-B2-03)."""
+    if user.public_id == ADMIN_PUBLIC_ID:
+        raise HTTPException(403, "Cannot perform destructive action on the owner account")
+    if is_admin_user(user) or getattr(user, "role", "") == "admin":
+        if actor is None or actor.public_id != ADMIN_PUBLIC_ID:
+            raise HTTPException(403, "Cannot perform destructive action on administrative accounts")
+
+
 @router.post("/user/{public_id}/ban")
 async def ban_user(public_id: str, request: Request, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
+    _assert_not_protected_target(user, current_user)
     settings = user.settings or {}
     settings["banned"] = True
     user.settings = settings
@@ -564,6 +575,7 @@ async def temp_ban_user(public_id: str, request: Request, hours: float = 24, db:
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
+    _assert_not_protected_target(user, current_user)
     until = datetime.now(timezone.utc) + timedelta(hours=max(0.1, float(hours)))
     settings = user.settings or {}
     settings["banned"] = True
@@ -595,6 +607,7 @@ async def delete_user(public_id: str, request: Request, db: Session = Depends(ge
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
+    _assert_not_protected_target(user, current_user)
     uid = user.id
     settings = dict(user.settings or {})
     settings["banned"] = True
@@ -810,10 +823,11 @@ async def change_user_password(public_id: str, req: ChangeUserPasswordRequest, r
     from signup; then revokes the user's live sessions."""
     from .recovery import verify_and_reset
 
-    require_admin(request)
+    _actor = require_admin(request)
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
+    _assert_not_protected_target(user, _actor if hasattr(_actor, "public_id") else None)
     if len(req.new_password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
     if req.recovery_code:
