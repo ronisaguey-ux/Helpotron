@@ -34,6 +34,7 @@ async def save_agent_file(user: User, filename: str, kind: str, content: bytes, 
     _AGENT_FILES_DIR.mkdir(parents=True, exist_ok=True)
     safe_name = (filename or "upload.bin").split("/")[-1][:512]
     suffix = Path(safe_name).suffix[:12]
+    disk_name = f"{uuid.uuid4().hex}{suffix}"
     disk_path = _AGENT_FILES_DIR / disk_name
     disk_path.write_bytes(content)
     try:
