@@ -1,30 +1,53 @@
 """Export utilities for study materials and deliverables."""
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import re
 from typing import Any, Dict, List
 
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def sanitize_csv_cell(value: Any) -> str:
+    """Neutralize spreadsheet formula injection (CWE-1236).
+
+    Prefixes trigger characters (=, +, -, @, \\t, \\r) with a single quote so
+    spreadsheet applications (Excel, LibreOffice Calc, Sheets) treat them
+    strictly as plain text.
+    """
+    if value is None:
+        return ""
+    text = str(value)
+    if text.startswith(_CSV_FORMULA_PREFIXES):
+        return f"'{text}"
+    return text
+
 
 def export_flashcards_quizlet(flashcards: List[Dict]) -> str:
-    """Export flashcards as Quizlet CSV format (term, definition)."""
-    lines = ["term,definition"]
+    """Export flashcards as Quizlet CSV format (term, definition) with formula sanitization."""
+    out = io.StringIO()
+    writer = csv.writer(out, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
+    writer.writerow(["term", "definition"])
     for card in flashcards:
-        q = card.get("q", "")
-        a = card.get("a", "")
-        lines.append(f'"{q}","{a}"')
-    return "\n".join(lines)
+        q = sanitize_csv_cell(card.get("q", ""))
+        a = sanitize_csv_cell(card.get("a", ""))
+        writer.writerow([q, a])
+    return out.getvalue().strip()
 
 
 def export_flashcards_anki(flashcards: List[Dict]) -> str:
-    """Export flashcards as Anki CSV format (front, back)."""
-    lines = ["front,back"]
+    """Export flashcards as Anki CSV format (front, back) with formula sanitization."""
+    out = io.StringIO()
+    writer = csv.writer(out, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
+    writer.writerow(["front", "back"])
     for card in flashcards:
-        q = card.get("q", "")
-        a = card.get("a", "")
-        lines.append(f'"{q}","{a}"')
-    return "\n".join(lines)
+        q = sanitize_csv_cell(card.get("q", ""))
+        a = sanitize_csv_cell(card.get("a", ""))
+        writer.writerow([q, a])
+    return out.getvalue().strip()
 
 
 def export_practice_test_json(practice_test: Dict) -> str:
@@ -380,15 +403,15 @@ async def generate_export_bundle(assignment_id: int, export_format: str, user: A
     safe_base = Path(ALLOWED_EXPORT_DIR).resolve()
     user_subdir = safe_base / sanitize_filename(str(getattr(user, "public_id", "anon")))
     user_subdir.mkdir(parents=True, exist_ok=True)
-    
+
     clean_fmt = sanitize_filename(export_format.lower())
     target_filename = f"assignment_{int(assignment_id)}_bundle.{clean_fmt}"
     target_path = (user_subdir / target_filename).resolve()
-    
+
     # Boundary traversal assertion
     if not str(target_path).startswith(str(safe_base)):
         raise ValueError("Path traversal attempt detected.")
-        
+
     with open(target_path, "w", encoding="utf-8") as f:
         f.write(f"# Helpotron Export Bundle - Assignment {assignment_id}\nUser: {getattr(user, 'public_id', 'user')}\nFormat: {export_format}\nGenerated Successfully.")
     return str(target_path)
@@ -423,4 +446,3 @@ async def export_to_google_doc(
         content=content,
         simulation_speed=simulation_speed
     )
-
