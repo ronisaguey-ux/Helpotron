@@ -980,6 +980,7 @@ export default function MyAgentView({
                 type="button"
                 className="w-11 h-11 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface flex items-center justify-center shrink-0 transition-colors cursor-pointer"
                 title="Attach source, proof script, or assignment file"
+                aria-label="Attach source, proof script, or assignment file"
               >
                 <Paperclip className="w-5 h-5 text-outline" />
               </button>
@@ -1007,6 +1008,7 @@ export default function MyAgentView({
                 type="button"
                 className="w-11 h-11 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-primary flex items-center justify-center shrink-0 transition-colors cursor-pointer"
                 title="Toggle audio telemetry transcription"
+                aria-label="Toggle audio telemetry transcription"
               >
                 <Mic className="w-5 h-5" />
               </button>
@@ -1021,6 +1023,7 @@ export default function MyAgentView({
                     onClick={handlePauseExecution}
                     className="w-11 h-11 rounded-full bg-secondary text-on-secondary flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(234,179,8,0.35)] hover:shadow-[0_0_28px_rgba(234,179,8,0.55)] active:scale-95 transition-all cursor-pointer"
                     title="Pause — keep what's written and continue later"
+                    aria-label="Pause agent execution"
                   >
                     <Pause className="w-5 h-5" />
                   </button>
@@ -1030,6 +1033,7 @@ export default function MyAgentView({
                     onClick={handleResume}
                     className="w-11 h-11 rounded-full bg-primary hover:bg-primary-fixed text-on-primary flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(89,216,201,0.4)] hover:shadow-[0_0_28px_rgba(89,216,201,0.6)] active:scale-95 transition-all cursor-pointer"
                     title="Resume the paused answer"
+                    aria-label="Resume paused agent execution"
                   >
                     <Play className="w-5 h-5 text-on-primary" />
                   </button>
@@ -1039,6 +1043,7 @@ export default function MyAgentView({
                     disabled={!inputQuery.trim()}
                     className="w-11 h-11 rounded-full bg-primary hover:bg-primary-fixed text-on-primary flex items-center justify-center shrink-0 shadow-[0_0_24px_rgba(89,216,201,0.4)] hover:shadow-[0_0_28px_rgba(89,216,201,0.6)] active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     title="Send to Agent"
+                    aria-label="Send prompt to agent"
                   >
                     <Send className="w-5 h-5 text-on-primary" />
                   </button>

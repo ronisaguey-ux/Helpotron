@@ -217,6 +217,7 @@ export default function WorkingDraftCard({
               onClick={onExport}
               className="w-10 h-10 rounded-xl bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant hover:text-primary flex items-center justify-center transition-colors cursor-pointer"
               title="Export JSON artifact"
+              aria-label="Export JSON artifact"
             >
               <Download className="w-4 h-4" />
             </button>
