@@ -10,11 +10,15 @@
  * ────────────────────────────────────────────────────────────────────────── */
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Cookie } from 'lucide-react';
-import { getCookieConsent, setCookieConsent } from '../lib/cookieConsent.js';
+import { getCookieConsent, setCookieConsent, applyConsentToEnvironment } from '../lib/cookieConsent.js';
 import Button from './Button.jsx';
 
 export function CookieBanner() {
   const [consent, setConsent] = useState(getCookieConsent);
+
+  useEffect(() => {
+    applyConsentToEnvironment(consent);
+  }, [consent]);
 
   useEffect(() => {
     const onConsentChanged = (e) => setConsent(e.detail);
