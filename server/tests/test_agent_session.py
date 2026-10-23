@@ -123,3 +123,20 @@ def test_agent_session_invalid_json_retries(monkeypatch):
     s = asyncio.run(scenario())
     assert s.status == "done"
     assert calls["n"] == 2  # prose attempt + retry
+
+
+def test_agent_prompt_does_not_duplicate_system_prompt():
+    """Proves V2-C4-04: _agent_prompt strips system prompt from user prompt slot."""
+    from server.agent_session import _agent_prompt, AGENT_SYSTEM, TOOL_DOC
+    messages = [
+        {"role": "system", "content": AGENT_SYSTEM + "\n\n" + TOOL_DOC},
+        {"role": "user", "content": "Mission start. User instruction: collect Hamlet prompt"},
+        {"role": "assistant", "content": '{"tool": "read_page"}'},
+        {"role": "user", "content": 'Tool result: {"ok": true, "text": "Page text"}'},
+    ]
+    prompt = _agent_prompt(messages)
+    # The system prompt / tool doc should NOT be present in user_prompt
+    assert "You are the Helpotron Universal Collection Subagent" not in prompt
+    assert "Tools (call EXACTLY one per turn" not in prompt
+    assert "collect Hamlet prompt" in prompt
+    assert "Tool result:" in prompt

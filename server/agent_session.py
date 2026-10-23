@@ -175,7 +175,11 @@ class AgentManager:
                     session.log.append({"step": session.steps, "event": "extension disconnected"})
                     return
                 try:
-                    content = await llm.call_llm(user_prompt=_agent_prompt(messages), system_prompt=AGENT_SYSTEM + "\n\n" + TOOL_DOC)
+                    content = await llm.call_llm(
+                        user_prompt=_agent_prompt(messages),
+                        system_prompt=AGENT_SYSTEM + "\n\n" + TOOL_DOC,
+                        user_id=session.public_id,
+                    )
                 except TypeError as _te:
                     # Positional (system, user) is INVERTED for this signature —
                     # call_llm(user_prompt, system_prompt, ...) — and it is what
@@ -269,16 +273,18 @@ class AgentManager:
 
 
 def _agent_prompt(messages: list[dict]) -> str:
-    """Compact prompt: mission + recent conversation tail (keeps context small)."""
-    head = messages[0]["content"] if messages else ""
-    # 08-28 fix: 6 messages x 6000 chars was too little for full-page
-    # observations (and silently truncated them into illegible fragments).
-    # Carry the last 10 turns with a 20k per-message cap — the model keeps
-    # seeing the page it is scraping across steps.
-    tail = messages[-10:]
-    return head + "\n\n--- recent ---\n" + "\n".join(
+    """Compact prompt: user mission + recent conversation tail without duplicating system prompt."""
+    # messages[0] is the system prompt, which is already passed via system_prompt parameter.
+    # The user's actual mission instruction starts at messages[1].
+    mission = messages[1]["content"] if len(messages) > 1 and messages[1].get("role") == "user" else ""
+    # Exclude system prompt from tail turns to avoid duplicating 1,500 chars on every step
+    tail = [m for m in messages if m.get("role") != "system"][-10:]
+    recent = "\n".join(
         f"{m['role'].upper()}: {m['content'][:20000]}" for m in tail
     )
+    if mission and tail and tail[0].get("content") == mission:
+        return f"--- recent ---\n{recent}"
+    return f"{mission}\n\n--- recent ---\n{recent}" if mission else recent
 
 
 async def _send(session: AgentSession, payload: dict) -> None:
