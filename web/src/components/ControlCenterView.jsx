@@ -39,6 +39,7 @@ export default function ControlCenterView({ userId = "" }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [attentionFilter, setAttentionFilter] = useState("all"); // "all" | "near-cap" | "banned" | "admin"
   const [statusFeedback, setStatusFeedback] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   // Single Action Ellipsis Menu Modal / Dialog State
   const [activeUserMenu, setActiveUserMenu] = useState(null); // user obj
@@ -53,13 +54,14 @@ export default function ControlCenterView({ userId = "" }) {
 
   const fetchUsers = async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const res = await api.adminUsers();
       const list = Array.isArray(res?.users) ? res.users : (Array.isArray(res) ? res : []);
       setUsers(list);
     } catch (err) {
       console.warn("Failed fetching users:", err);
-      setUsers([]);
+      setLoadError("Couldn't load the user directory. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -360,8 +362,23 @@ export default function ControlCenterView({ userId = "" }) {
 
             {/* Matrix View */}
             {loading ? (
-              <div className="p-12 text-center text-xs font-code-sm text-on-surface-variant">
-                Loading user directory…
+              <div className="p-6 space-y-3 animate-pulse" aria-busy="true" aria-label="Loading user directory">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <div className="w-9 h-9 rounded-full bg-surface-container-high" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3 w-1/3 bg-surface-container-high rounded" />
+                      <div className="h-3 w-1/5 bg-surface-container rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : loadError ? (
+              <div role="alert" className="p-6 flex items-center justify-between gap-3 text-xs text-error">
+                <span>{loadError}</span>
+                <button type="button" onClick={fetchUsers} className="px-3 py-1.5 rounded-xl bg-surface-container text-on-surface font-label-caps text-xs hover:bg-surface-container-high transition cursor-pointer">
+                  Retry
+                </button>
               </div>
             ) : filteredUsers.length === 0 ? (
               <div className="p-12 text-center space-y-2">
