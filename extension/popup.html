@@ -176,7 +176,7 @@
         <span id="whatsNewExpandLabel">Details</span>
         <svg class="ic ic--xs whatsnew-chevron"><use href="#i-chevron" /></svg>
       </button>
-      <button class="btn btn--primary btn--xs" id="btnWhatsNewDismiss" type="button">Got it</button>
+      <button class="btn btn--ghost btn--xs" id="btnWhatsNewDismiss" type="button">Got it</button>
     </div>
     <div class="whatsnew-body" id="whatsNewBody" hidden></div>
   </div>
@@ -219,7 +219,7 @@
       <svg class="ic ic--sm"><use href="#i-chat" /></svg>
       <span>Buddy</span>
     </button>
-    <button class="nav-tab" id="tabNavType" type="button" role="tab" aria-selected="false" aria-controls="viewType" title="Launch to Doc — humanized typing" aria-label="Launch to Doc">
+    <button class="nav-tab" id="tabNavType" type="button" role="tab" aria-selected="false" aria-controls="viewType" title="Launch to Doc — automated typing" aria-label="Launch to Doc">
       <svg class="ic ic--sm"><use href="#i-doc" /></svg>
       <span>Launch</span>
     </button>
@@ -354,7 +354,7 @@
               <div class="seg" id="modeSeg" role="group" aria-label="Permission mode for agent actions">
                 <button type="button" class="seg-btn mode-btn" data-mode="manual" aria-pressed="false">Manual</button>
                 <button type="button" class="seg-btn mode-btn" data-mode="auto" aria-pressed="false">Automatic</button>
-                <button type="button" class="seg-btn mode-btn" data-mode="yolo" aria-pressed="false">YOLO</button>
+                <button type="button" class="seg-btn mode-btn" data-mode="yolo" aria-pressed="false">Auto</button>
               </div>
               <div class="field-hint" id="modeHint">Manual — the agent asks before every action.</div>
             </div>
@@ -376,7 +376,7 @@
               <span id="modelTier" class="model-tier">(mid_lower)</span>
             </div>
 
-            <button class="btn btn--primary" id="btnOpenChat" type="button">
+            <button class="btn btn--outline" id="btnOpenChat" type="button">
               <svg class="ic"><use href="#i-chat" /></svg>
               <span>Go to Study Buddy</span>
             </button>
@@ -448,7 +448,7 @@
             <!-- No `active` class: the default jurisdiction IS "this tab", so the
                  chip only lights up once the agent is looking past the one tab it
                  would have used anyway. -->
-            <button type="button" class="chat-toggle-chip" id="chatToggleTabs" aria-haspopup="true" aria-expanded="false" title="Jurisdiction: which tabs the agent may see and act in. Pick one, several, or all of them.">
+            <button type="button" class="chat-toggle-chip" id="chatToggleTabs" aria-haspopup="true" aria-expanded="false" title="Tabs: which tabs the agent may see and act in. Pick one, several, or all of them.">
               <span class="chip-status-dot"></span>
               <span class="chip-title">Tabs: this one</span>
             </button>
@@ -466,14 +466,14 @@
             <div class="seg" id="chatModeSeg" role="group" aria-label="Permission mode for agent actions">
               <button type="button" class="seg-btn mode-btn" data-mode="manual" aria-pressed="false">Manual</button>
               <button type="button" class="seg-btn mode-btn" data-mode="auto" aria-pressed="false">Automatic</button>
-              <button type="button" class="seg-btn mode-btn" data-mode="yolo" aria-pressed="false">YOLO</button>
+              <button type="button" class="seg-btn mode-btn" data-mode="yolo" aria-pressed="false">Auto</button>
             </div>
           </div>
 
           <!-- Jurisdiction picker (hidden until the Tabs chip is pressed) -->
           <div class="tab-juris-panel" id="tabJurisdictionPanel" hidden>
             <div class="tab-juris-head">
-              <span class="field-label">Agent jurisdiction</span>
+              <span class="field-label">Tabs to include</span>
               <button type="button" class="btn-link" id="btnCloseJurisdiction">Close</button>
             </div>
             <p class="tab-juris-hint">The same actions run in every tab you select, one after another.</p>
@@ -573,10 +573,10 @@
           <span class="field-hint">No Docs tab open? One is created at docs.new automatically.</span>
         </div>
 
-        <!-- Speed and Cadence preset -->
+        <!-- Speed preset -->
         <div class="field">
-          <label class="field-label">Typing Cadence</label>
-          <div class="seg" id="ltdCadenceSeg" role="group" aria-label="Typing Cadence">
+          <label class="field-label">Typing Speed</label>
+          <div class="seg" id="ltdCadenceSeg" role="group" aria-label="Typing Speed">
             <!-- Static fallback: the server's /api/launch-to-doc/config replaces
                  this menu at runtime, so cadences can change without a rebuild.
                  data-preset carries the id the server resolves the cadence from. -->
