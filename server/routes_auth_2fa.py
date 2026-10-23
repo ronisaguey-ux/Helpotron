@@ -456,10 +456,12 @@ async def verify_two_factor_challenge(payload: TwoFactorVerifyChallengeRequest, 
 @router.post("/2fa/disable")
 async def disable_two_factor(
     payload: TwoFactorDisableRequest,
+    request: Request,
     current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db)
 ):
     """Disables 2FA on the user's account."""
+    require_session_auth(request)
     user = current_user
     if not user:
         raise HTTPException(404, "User not found.")
