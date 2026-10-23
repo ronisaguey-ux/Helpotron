@@ -17,11 +17,11 @@ email-validator>=2.3.0
 sympy>=1.12,<2.0
 PyJWT>=2.10.0,<3.0.0
 pyotp>=2.10.0
-python-multipart>=0.0.9
+python-multipart>=0.0.20,<0.1.0
 requests>=2.34.2
 aiohttp>=3.14.3
 aiofiles>=25.1.0,<26.0.0
-httpx>=0.27.0
+httpx>=0.27.0,<0.29.0
 redis>=5.0.0,<6.0.0
 pytest>=9.1.1
 pytest-asyncio>=0.23.5
@@ -46,4 +46,4 @@ pyphen>=0.15
 # Stripe (payments). server/payments.py imports this lazily inside each route,
 # so checkout/webhook raised ModuleNotFoundError only once STRIPE_SECRET_KEY was
 # set — the import audit that found this was a runtime one, not an import one.
-stripe>=11.0
+stripe>=11.0,<16.0.0

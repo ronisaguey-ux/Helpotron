@@ -10,6 +10,6 @@ yt-dlp>=2024.01.01
 feedparser>=6.0.11
 # Adaptive fetch lanes: TLS-impersonating Fetcher, StealthyFetcher (Cloudflare),
 # DynamicFetcher (JS). Needs `scrapling install` for browsers after pip install.
-scrapling[fetchers]
+scrapling[fetchers]>=0.4.15,<0.5.0
 # page.markdown() conversion (scrapling renders markdown with markdownify)
-markdownify>=1.0
+markdownify>=1.0,<2.0.0
