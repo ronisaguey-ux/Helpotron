@@ -138,7 +138,7 @@ const FEATURES = [
 const STEPS = [
   { n: '01', title: 'Create an account', body: 'A public ID and a password. No email, no card.' },
   { n: '02', title: 'Bring your coursework', body: 'Paste an assignment dump, or let the browser extension capture it.' },
-  { n: '03', title: 'Work and mark complete', body: 'Bubbles group it, your agent drafts, the ledger records it.' },
+  { n: '03', title: 'Work and mark complete', body: 'Bubbles group it, your agent drafts, and your progress is saved.' },
 ];
 
 /* Primary / secondary action styles — Stitch design tokens (09-01).
@@ -644,7 +644,7 @@ export default function AnonymousLanding({ onOpenAuth = null, onOpenPrivacy = nu
       {/* ── How it works + closing CTA ──────────────────────────────────────── */}
       <section className="max-w-[900px] mx-auto px-container-padding pb-20 sm:pb-24">
         <div className="rounded-3xl bg-surface-container-low border border-outline-variant/30 p-6 sm:p-10 text-center space-y-7">
-          <h2 className="font-headline-lg text-headline-lg tracking-tight text-on-surface">Three steps to a self-driving coursework pipeline</h2>
+          <h2 className="font-headline-lg text-headline-lg tracking-tight text-on-surface">Three steps to effortless coursework</h2>
           <ol className="grid gap-3 sm:grid-cols-3 text-left">
             {STEPS.map(({ n, title, body }) => (
               <li key={n} className="rounded-2xl bg-surface-container-lowest border border-outline-variant/20 p-4 space-y-1.5">
