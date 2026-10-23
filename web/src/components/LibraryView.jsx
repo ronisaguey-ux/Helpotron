@@ -18,6 +18,7 @@ import {
   Play,
   Layers,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 import api from "../api.js";
 import FlashcardsPlayer from "./study/FlashcardsPlayer.jsx";
@@ -58,6 +59,7 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment, i
   ); // "files" | "saved" | "study" | "calendar" | "completed"
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
   const [streakDays, setStreakDays] = useState(0);
   const [expandedMap, setExpandedMap] = useState({});
   const [feedbackNotice, setFeedbackNotice] = useState("");
@@ -68,17 +70,18 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment, i
 
   const fetchLibrary = async () => {
     setLoading(true);
+    setFetchError("");
     try {
-      const [matRes, streakRes] = await Promise.all([
-        fetch("/api/library/materials").then((r) => (r.ok ? r.json() : { materials: [] })).catch(() => ({ materials: [] })),
-        fetch("/api/study/streak").then((r) => (r.ok ? r.json() : { streak_days: 0 })).catch(() => ({ streak_days: 0 })),
-      ]);
+      const matRes = await api.request("/api/library/materials", { method: "GET" });
+      const streakRes = await fetch("/api/study/streak")
+        .then((r) => (r.ok ? r.json() : { streak_days: 0 }))
+        .catch(() => ({ streak_days: 0 }));
 
       const list = Array.isArray(matRes?.materials) ? matRes.materials : [];
       setMaterials(list);
       setStreakDays(streakRes?.streak_days || 0);
     } catch (err) {
-      console.warn("Failed fetching library materials:", err);
+      setFetchError(err?.message || "Failed to load study materials.");
     } finally {
       setLoading(false);
     }
@@ -251,8 +254,33 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment, i
       {activeTab === "files" && (
         <div className="space-y-6">
           {loading ? (
-            <div className="p-12 rounded-2xl bg-surface-container-lowest/80 border border-outline-variant/30 text-center font-code-sm text-xs text-on-surface-variant">
-              Loading your study materials…
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 animate-pulse">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <div key={i} className="rounded-3xl bg-surface-container-lowest/80 border border-outline-variant/20 p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="w-10 h-10 rounded-xl bg-surface-container-high" />
+                    <div className="w-16 h-4 bg-surface-container-high rounded-full" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-4 w-3/4 bg-surface-container-high rounded" />
+                    <div className="h-3 w-1/2 bg-surface-container rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : fetchError ? (
+            <div className="p-6 rounded-3xl bg-error-container/20 border border-error/30 text-error text-xs flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{fetchError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={fetchLibrary}
+                className="px-3 py-1.5 rounded-xl bg-surface-container text-on-surface font-label-caps text-xs hover:bg-surface-container-high transition cursor-pointer"
+              >
+                Retry
+              </button>
             </div>
           ) : materials.length === 0 ? (
             <div className="p-12 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 text-center space-y-4">
