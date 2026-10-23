@@ -312,7 +312,7 @@ export default function SettingsApp({
       </header>
 
       {/* Main Bare-Bones Sections */}
-      <main className="flex flex-col gap-unit-6">
+      <section aria-label="Settings configuration sections" className="flex flex-col gap-unit-6">
         {activeSection === 'trash' && (
           <TrashPanel onNotice={(m) => toast.info(m)} />
         )}
@@ -329,7 +329,7 @@ export default function SettingsApp({
           onGoTo={onGoTo}
           onSelectSection={setActiveSection}
         />
-      </main>
+      </section>
     </div>
   );
 }
