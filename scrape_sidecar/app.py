@@ -225,18 +225,17 @@ def _fetch_youtube(url: str) -> str:
 
 def _fetch_rss(url: str) -> str:
     """feedparser: channel title + latest items (title, date, summary, link)."""
-    from server.ssrf import is_safe_url
+    from server.ssrf import is_safe_url, create_ssrf_safe_sync_client
     if not is_safe_url(url):
         return ""
 
     import feedparser
-    import httpx
     import urllib.parse
 
-    with httpx.Client(timeout=15.0, follow_redirects=False, headers={"User-Agent": _UA}) as client:
+    with create_ssrf_safe_sync_client(timeout=15.0, headers={"User-Agent": _UA}) as client:
         cur = url
         for _ in range(5):
-            resp = client.get(cur)
+            resp = client.get(cur, follow_redirects=False)
             if resp.is_redirect:
                 nxt = urllib.parse.urljoin(cur, resp.headers.get("location", ""))
                 if not is_safe_url(nxt):
@@ -339,25 +338,25 @@ def _fetch_scrapling(url: str, mode: str) -> str:
 
 def _fetch_static(url: str) -> str:
     try:
+        from server.ssrf import is_safe_url, create_ssrf_safe_sync_client
         curr_url = url
-        for _ in range(5):
-            from server.ssrf import is_safe_url
-            if not is_safe_url(curr_url):
-                return ""
-            r = requests.get(curr_url, headers={"User-Agent": _UA,
-                                           "Accept-Language": "en-US,en;q=0.9"},
-                             timeout=_SCRAPE_TIMEOUT, allow_redirects=False)
-            if r.status_code in (301, 302, 303, 307, 308):
-                location = r.headers.get("Location", "")
-                if not location:
+        headers = {"User-Agent": _UA, "Accept-Language": "en-US,en;q=0.9"}
+        with create_ssrf_safe_sync_client(timeout=_SCRAPE_TIMEOUT, headers=headers) as client:
+            for _ in range(5):
+                if not is_safe_url(curr_url):
                     return ""
-                curr_url = urllib.parse.urljoin(curr_url, location)
-                continue
-            if r.status_code != 200:
-                return ""
-            if not _looks_like_real_page(r.text):
-                return ""
-            return r.text
+                r = client.get(curr_url, follow_redirects=False)
+                if r.status_code in (301, 302, 303, 307, 308):
+                    location = r.headers.get("Location", "")
+                    if not location:
+                        return ""
+                    curr_url = urllib.parse.urljoin(curr_url, location)
+                    continue
+                if r.status_code != 200:
+                    return ""
+                if not _looks_like_real_page(r.text):
+                    return ""
+                return r.text
         return ""
     except Exception:
         return ""
