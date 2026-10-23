@@ -118,3 +118,37 @@ def test_canvas_sync_endpoint_mocked():
             assert "| Correctness | 50 | Passes all unit tests |" in a.progress.get("rubric", "")
         finally:
             db.close()
+
+
+def test_canvas_sync_main_endpoint_commits():
+    import uuid
+    uniq = uuid.uuid4().hex[:6]
+    headers = _auth_headers(f"test_canvas_sync_{uniq}")
+    test_title = f"Matrix Inversion Lab {uniq}"
+
+    fake_profile = {"valid": True, "user_id": "123", "name": "Student", "primary_email": "s@example.com"}
+    fake_courses = [{"course_id": "8802", "name": "Linear Algebra", "course_code": "MATH-201"}]
+    fake_assignments = [{"title": test_title, "assignment_id": "9902", "description_html": "Compute eigenvalues"}]
+
+    with patch("server.canvas_sync.CanvasSyncEngine.validate_token", return_value=fake_profile), \
+         patch("server.canvas_sync.CanvasSyncEngine.fetch_active_courses", return_value=fake_courses), \
+         patch("server.canvas_sync.CanvasSyncEngine.fetch_course_assignments", return_value=fake_assignments):
+        res = client.post(
+            "/api/canvas/sync",
+            headers=headers,
+            json={
+                "base_url": "https://school.instructure.com",
+                "access_token": "canvas_token_abc"
+            }
+        )
+        assert res.status_code == 200, res.text
+        assert res.json()["imported_count"] == 1
+
+        db = SessionLocal()
+        try:
+            u = db.query(User).filter(User.public_id == f"test_canvas_sync_{uniq}").first()
+            a = db.query(Assignment).filter(Assignment.user_id == u.id, Assignment.title == test_title).first()
+            assert a is not None, "Assignment was not committed to the database"
+            assert a.status == "tracked"
+        finally:
+            db.close()
