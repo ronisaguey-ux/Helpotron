@@ -639,6 +639,9 @@ async def canvas_sync_assignments(body: CanvasSyncIn, db: Session = Depends(get_
                     imported_count += 1
                     created_assignments.append(title)
 
+        if imported_count > 0:
+            db.commit()
+
         return {
             "status": "success",
             "imported_count": imported_count,
