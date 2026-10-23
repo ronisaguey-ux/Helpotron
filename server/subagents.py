@@ -10,10 +10,10 @@ from sqlalchemy.orm import Session
 
 try:
     from .database import Assignment
-    from .llm import chat_complete
+    from .llm import chat_complete, extract_json
 except (ImportError, ValueError):
     from server.database import Assignment
-    from server.llm import chat_complete
+    from server.llm import chat_complete, extract_json
 
 
 logger = logging.getLogger("helpotron.subagents")
@@ -48,6 +48,14 @@ class AgentWorker:
 
 class SubAgentCoordinator:
     async def decompose_rubric(self, prompt: str, rubric: str, persona_ctx: str = "") -> List[Dict[str, Any]]:
+        # Fast path: if both prompt and rubric are empty, do not burn LLM tokens.
+        if not (prompt or "").strip() and not (rubric or "").strip():
+            return [
+                {"task_id": 1, "title": "Core Thesis & Argumentation", "focus": "Thesis development and primary claims"},
+                {"task_id": 2, "title": "Evidence & Citations Synthesizer", "focus": "Peer-reviewed support and APA/MLA formatting"},
+                {"task_id": 3, "title": "Rubric Alignment & Counterarguments", "focus": "Verifying grading criteria and synthesis"},
+            ]
+
         # 08-28: persona_ctx (the user's canonical agent identity/memory/files
         # block) is prepended when this decomposition runs INSIDE the agent's
         # chat path, so the sub-task output reflects the user's agent config.
@@ -56,7 +64,7 @@ class SubAgentCoordinator:
         system_prompt = head + (
             "You are an expert academic assignment decomposer, working as the above user's agent. "
             "Break the provided prompt and rubric "
-            "into discrete, non-overlapping sub-tasks for execution. Output a JSON list of tasks.\n"
+            "into discrete, non-overlapping sub-tasks for execution. Output a JSON list of tasks with keys task_id, title, focus.\n"
             + sandbox_math_rule()
             + "\n"
             + prompt_injection_defense_rule()
@@ -66,7 +74,20 @@ class SubAgentCoordinator:
             resp = await chat_complete([
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_msg},
-            ])
+            ], json_mode=True)
+            parsed = extract_json(resp)
+            task_list = parsed if isinstance(parsed, list) else (parsed.get("tasks") if isinstance(parsed, dict) else None)
+            if isinstance(task_list, list) and task_list:
+                tasks = []
+                for idx, item in enumerate(task_list):
+                    if isinstance(item, dict):
+                        tasks.append({
+                            "task_id": item.get("task_id", idx + 1),
+                            "title": str(item.get("title", f"Subtask {idx + 1}")),
+                            "focus": str(item.get("focus", item.get("description", ""))),
+                        })
+                if tasks:
+                    return tasks
             return [
                 {"task_id": 1, "title": "Core Thesis & Argumentation", "focus": "Thesis development and primary claims"},
                 {"task_id": 2, "title": "Evidence & Citations Synthesizer", "focus": "Peer-reviewed support and APA/MLA formatting"},
