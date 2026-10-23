@@ -66,23 +66,12 @@ export default function AssignmentCard({
     onSelect(item.id != null ? item : { id: cardId, name: cardTitle, subject: cardSubject, class_code: cardClassCode, status: cardStatus });
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      handleCardClick();
-    }
-  };
-
   // PENDING APPROVAL VARIANT
   if (isPending) {
     return (
       <div
-        role="button"
-        tabIndex={0}
         onClick={handleCardClick}
-        onKeyDown={handleKeyDown}
-        aria-label={`Pending Approval: ${cardTitle}`}
-        className={`group relative flex flex-col justify-between p-5 rounded-2xl bg-surface-container-lowest/80 backdrop-blur-xl border border-sem-amber/30 border-l-4 border-l-error shadow-sm hover:border-sem-amber/60 hover:shadow-md transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
+        className={`group relative flex flex-col justify-between p-5 rounded-2xl bg-surface-container-lowest/80 backdrop-blur-xl border border-sem-amber/30 border-l-4 border-l-error shadow-sm hover:border-sem-amber/60 hover:shadow-md transition-all duration-150 cursor-pointer ${className}`}
       >
         <div className="flex flex-col gap-3">
           {/* Status & Due Chips Row */}
@@ -138,12 +127,8 @@ export default function AssignmentCard({
   // DEFAULT / IN-PROGRESS VARIANT
   return (
     <div
-      role="button"
-      tabIndex={0}
       onClick={handleCardClick}
-      onKeyDown={handleKeyDown}
-      aria-label={`Assignment: ${cardTitle}`}
-      className={`group relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-surface-container-lowest/70 backdrop-blur-xl border border-outline-variant/20 hover:border-outline-variant/50 hover:shadow-md transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${className}`}
+      className={`group relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-surface-container-lowest/70 backdrop-blur-xl border border-outline-variant/20 hover:border-outline-variant/50 hover:shadow-md transition-all duration-150 cursor-pointer ${className}`}
     >
       {/* Left: Info */}
       <div className="flex-1 min-w-0 flex flex-col gap-2">
