@@ -50,6 +50,15 @@ export default function AutomationCenter() {
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-col gap-1 pb-1">
+        <h1 className="text-2xl sm:text-3xl font-bold font-headline-lg text-on-surface tracking-tight">
+          Automation Center
+        </h1>
+        <p className="text-xs text-on-surface-variant font-body-sm">
+          Scheduled agent pipelines, autonomous monitors, and recurring academic workflows.
+        </p>
+      </div>
+
       <div className="clean-card p-2 flex flex-wrap items-center gap-2">
         {tabBtn('automations', 'Automations')}
         {tabBtn('runs', 'Runs')}
