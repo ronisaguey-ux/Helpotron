@@ -222,6 +222,7 @@ export default function ControlCenterView({ userId = "" }) {
             disabled={loading}
             className="h-10 px-3.5 rounded-xl bg-surface-container-low hover:bg-surface-container text-on-surface border border-outline-variant/30 transition cursor-pointer"
             title="Refresh all data"
+            aria-label="Refresh control center data"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-primary" : "text-on-surface-variant"}`} />
           </button>
