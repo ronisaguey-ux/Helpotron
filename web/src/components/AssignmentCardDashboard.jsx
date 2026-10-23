@@ -254,13 +254,13 @@ export function AssignmentCardDashboard({
 
   const handleDeleteBubble = async (bubbleId, e) => {
     if (e) e.stopPropagation();
-    if (!window.confirm('Delete this custom subject module?')) return;
+    if (!window.confirm('Delete this custom subject?')) return;
     try {
       await api.deleteCustomBubble(bubbleId);
       setCustomBubbles((prev) => prev.filter((b) => b.id !== bubbleId));
       if (openSettingsSubjectId === bubbleId) setOpenSettingsSubjectId(null);
     } catch (e) {
-      alert('Failed to delete subject module.');
+      alert('Could not delete this subject. Please check your connection and try again.');
     }
   };
 

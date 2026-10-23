@@ -62,7 +62,7 @@ export default function AssignmentTurnInView({ userId }) {
       setHistoryList((historyRes && historyRes.history) || []);
     } catch (e) {
       console.warn('Turn-in view load failed:', e);
-      setError('Could not load assignments (server offline or not signed in).');
+      setError('Could not load assignments. Please check your connection or sign in again.');
     } finally {
       setLoading(false);
     }
@@ -80,7 +80,7 @@ export default function AssignmentTurnInView({ userId }) {
       await api.turnInAssignment(assignment.id, true);
       await fetchLists();
     } catch (e) {
-      setError('Marking as completed failed — please try again.');
+      setError('Could not mark assignment as completed. Please check your connection and try again.');
     } finally {
       setActionId(null);
     }
@@ -94,7 +94,7 @@ export default function AssignmentTurnInView({ userId }) {
       await api.turnInAssignment(assignment.id, false);
       await fetchLists();
     } catch (e) {
-      setError('Undo failed — please try again.');
+      setError('Could not restore assignment. Please check your connection and try again.');
     } finally {
       setActionId(null);
     }
