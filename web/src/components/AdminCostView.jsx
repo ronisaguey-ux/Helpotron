@@ -14,13 +14,15 @@ export default function AdminCostView() {
   const [loading, setLoading] = useState(true);
   const [statusMsg, setStatusMsg] = useState("");
   const [savingUser, setSavingUser] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const loadCosts = async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const [sumRes, usersRes] = await Promise.all([
-        api.adminCostsSummary().catch(() => null),
-        api.adminUsersCosts().catch(() => []),
+        api.adminCostsSummary(),
+        api.adminUsersCosts(),
       ]);
 
       if (sumRes) setSummary(sumRes);
@@ -34,6 +36,7 @@ export default function AdminCostView() {
       }
     } catch (err) {
       console.warn("Failed loading admin cost analytics:", err);
+      setLoadError("Couldn't load cost accounting. The figures below may be out of date. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -170,6 +173,15 @@ export default function AdminCostView() {
           <span>Refresh Accounting</span>
         </button>
       </div>
+
+      {loadError && (
+        <div role="alert" className="p-3 rounded-xl bg-error-container/20 border border-error/30 text-xs text-error flex items-center justify-between gap-3">
+          <span>{loadError}</span>
+          <button type="button" onClick={loadCosts} className="px-3 py-1.5 rounded-xl bg-surface-container text-on-surface font-label-caps text-xs hover:bg-surface-container-high transition cursor-pointer">
+            Retry
+          </button>
+        </div>
+      )}
 
       {statusMsg && (
         <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 text-xs font-code-sm text-primary">

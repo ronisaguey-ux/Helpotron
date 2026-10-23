@@ -24,9 +24,11 @@ export default function MessageAdminView({ userId }) {
   const [messageText, setMessageText] = useState('');
   const [sending, setSending] = useState(false);
   const [statusNotice, setStatusNotice] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   const fetchMessages = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const res = await api.getMyAdminMessages();
       if (res && res.messages) {
@@ -34,6 +36,7 @@ export default function MessageAdminView({ userId }) {
       }
     } catch (e) {
       console.warn('Failed to load admin messages:', e);
+      setLoadError("Couldn't load your messages with Admin. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -186,6 +189,13 @@ export default function MessageAdminView({ userId }) {
           <div className="clean-card p-12 text-center text-xs text-[var(--accent)] font-mono flex items-center justify-center gap-2">
             <RefreshCw className="w-4 h-4 animate-spin" />
             Loading messages with Admin…
+          </div>
+        ) : loadError ? (
+          <div role="alert" className="clean-card p-6 text-xs text-red-400 flex items-center justify-between gap-3">
+            <span>{loadError}</span>
+            <button type="button" onClick={fetchMessages} className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 transition cursor-pointer">
+              Retry
+            </button>
           </div>
         ) : messages.length === 0 ? (
           <SectionCard id="msgadmin-empty" padding="p-10" className="rounded-3xl text-center border-dashed border-white/10 space-y-2" title="No previous messages">
