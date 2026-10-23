@@ -252,7 +252,7 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment, i
         <div className="space-y-6">
           {loading ? (
             <div className="p-12 rounded-2xl bg-surface-container-lowest/80 border border-outline-variant/30 text-center font-code-sm text-xs text-on-surface-variant">
-              Loading synthesized study materials…
+              Loading your study materials…
             </div>
           ) : materials.length === 0 ? (
             <div className="p-12 rounded-3xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 text-center space-y-4">
@@ -260,7 +260,7 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment, i
                 <BookOpen className="w-6 h-6" />
               </div>
               <h3 className="font-title-md text-base font-semibold text-on-surface">
-                No synthesized materials yet
+                No study materials yet
               </h3>
               <p className="font-body-sm text-xs text-on-surface-variant max-w-md mx-auto">
                 Generate study guides, flashcard decks, and practice tests from any assignment or uploaded lecture note.
@@ -389,6 +389,13 @@ export default function LibraryView({ userId = "", onGoTo, onSelectAssignment, i
               <p className="font-body-sm text-xs text-on-surface-variant max-w-sm mx-auto">
                 Bookmark flashcard sets or summary notes to keep them pinned here for quick review.
               </p>
+              <button
+                type="button"
+                onClick={() => setActiveTab("all")}
+                className="h-9 px-4 rounded-xl bg-surface-container text-on-surface hover:bg-surface-container-high text-xs font-semibold cursor-pointer transition mx-auto inline-flex items-center gap-1.5"
+              >
+                Browse all materials
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

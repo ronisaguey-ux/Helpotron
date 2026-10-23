@@ -119,10 +119,10 @@ export function AnalyticsDashboard({ userId, onExplainWithAgent }) {
           <Activity className="w-6 h-6" aria-hidden="true" />
         </div>
         <h3 className="font-title-md text-base font-semibold text-on-surface">
-          No telemetry recorded yet
+          No study activity recorded yet
         </h3>
         <p className="font-body-sm text-xs text-on-surface-variant max-w-md mx-auto leading-relaxed">
-          Telemetry and learning performance metrics populate automatically as you complete assignments and study cards.
+          Study habits and completion trends will appear here as you work through assignments and review flashcards.
         </p>
         <button
           type="button"
