@@ -474,9 +474,9 @@ export function AssignmentCardDashboard({
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <h2 className="font-headline-lg text-headline-lg text-on-surface tracking-tight mb-1">
+          <h1 className="font-headline-lg text-headline-lg text-on-surface tracking-tight mb-1">
             Your subjects
-          </h2>
+          </h1>
           <p className="font-body-md text-body-md text-on-surface-variant">
             Open a subject to work on it, or dump material into one for your agent.
           </p>

@@ -77,7 +77,7 @@ export default function MessageAdminView({ userId }) {
             <MessageSquare className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Direct Channel to Admin</h2>
+            <h1 className="text-xl font-bold text-white tracking-tight">Direct Channel to Admin</h1>
             <p className="text-xs text-[var(--text-muted)]">
               Send private inquiries, bug reports, feature suggestions, or custom parser feedback directly to Platform Admin.
             </p>
