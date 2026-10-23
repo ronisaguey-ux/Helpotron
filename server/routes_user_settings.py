@@ -967,21 +967,25 @@ async def get_my_admin_notices_route(request: Request, db: Session = Depends(get
     dismissing never silences it for the others."""
     from .database import AdminNotice, AdminNoticeRead
     user = _get_current_user(request, db)
-    mine_or_broadcast = (
+
+    # 1. Fetch only unread direct notices at SQL level
+    direct_unread = (
         db.query(AdminNotice)
-        .filter((AdminNotice.user_id == user.public_id) | (AdminNotice.broadcast.is_(True)))
-        .order_by(AdminNotice.id.asc())
+        .filter(AdminNotice.user_id == user.public_id, AdminNotice.broadcast.is_(False), AdminNotice.read_at.is_(None))
         .all()
     )
-    read_ids = {
+
+    # 2. Fetch broadcast notices excluding ones already marked read by this user
+    read_broadcast_ids = {
         r.notice_id
-        for r in db.query(AdminNoticeRead).filter(AdminNoticeRead.user_id == user.public_id).all()
+        for r in db.query(AdminNoticeRead.notice_id).filter(AdminNoticeRead.user_id == user.public_id).all()
     }
-    unread = [
-        n
-        for n in mine_or_broadcast
-        if (n.broadcast and n.id not in read_ids) or (not n.broadcast and n.read_at is None)
-    ]
+    broadcast_query = db.query(AdminNotice).filter(AdminNotice.broadcast.is_(True))
+    if read_broadcast_ids:
+        broadcast_query = broadcast_query.filter(AdminNotice.id.notin_(read_broadcast_ids))
+    broadcast_unread = broadcast_query.all()
+
+    unread = sorted(direct_unread + broadcast_unread, key=lambda n: n.id)
     return {
         "status": "success",
         "unread": [
