@@ -771,13 +771,23 @@ async def send_message_to_admin_route(
 
     body = message
     if attachment is not None:
+        raw_name = attachment.filename or ""
+        ext = os.path.splitext(raw_name)[1].lower()
+        allowed_exts = {".pdf", ".docx", ".doc", ".txt", ".png", ".jpg", ".jpeg", ".webp", ".zip", ".csv"}
+        if ext not in allowed_exts:
+            raise HTTPException(400, f"Unsupported attachment format: '{ext}'. Allowed: {', '.join(sorted(allowed_exts))}")
+        content = await attachment.read()
+        if len(content) > 15 * 1024 * 1024:
+            raise HTTPException(413, "Attachment exceeds 15 MB limit")
         try:
             files_dir = Path("data/uploads/message_attachments")
             files_dir.mkdir(parents=True, exist_ok=True)
-            safe_name = Path(attachment.filename or "attachment.bin").name
+            safe_name = "".join(c for c in Path(raw_name or "attachment.bin").name if c.isalnum() or c in (".", "_", "-"))
             target = files_dir / f"{user.public_id}_{int(time.time())}_{safe_name}"
-            target.write_bytes(await attachment.read())
+            target.write_bytes(content)
             body += f"\n\n📎 Attachment: {safe_name}\n(saved: {target})"
+        except HTTPException:
+            raise
         except Exception as exc:
             raise HTTPException(400, f"Could not save attachment: {exc}")
 
