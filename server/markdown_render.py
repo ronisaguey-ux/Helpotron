@@ -30,7 +30,7 @@ from typing import List, Tuple
 import latex2mathml.converter as latex2mathml
 from markdown_it import MarkdownIt
 
-_md = MarkdownIt("commonmark").enable("table")
+_md = MarkdownIt("commonmark", {"html": False}).enable("table")
 
 # Display math first, then inline. Two passes avoid the ambiguity of trying to
 # backreference a mixed delimiter set in one regex.
