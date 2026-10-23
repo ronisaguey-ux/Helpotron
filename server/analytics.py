@@ -60,11 +60,16 @@ def get_user_analytics(db: Session, user: User) -> Dict[str, Any]:
         recent_days[day] = recent_days.get(day, 0) + s.time_spent_minutes
 
     # Most studied material kind
+    material_kinds = {m.id: m.kind for m in materials}
+    missing_material_ids = {s.material_id for s in sessions if s.material_id and s.material_id not in material_kinds}
+    if missing_material_ids:
+        for m_id, m_kind in db.query(StudyMaterial.id, StudyMaterial.kind).filter(StudyMaterial.id.in_(missing_material_ids)).all():
+            material_kinds[m_id] = m_kind
+
     kind_study_time = {}
     for s in sessions:
-        material = db.query(StudyMaterial).filter(StudyMaterial.id == s.material_id).first()
-        if material:
-            kind = material.kind
+        kind = material_kinds.get(s.material_id)
+        if kind:
             kind_study_time[kind] = kind_study_time.get(kind, 0) + s.time_spent_minutes
 
     return {
@@ -220,4 +225,3 @@ def get_study_activity_summary(db: Optional[Session] = None, user_id: Optional[i
         "study_activity_minutes_by_day": by_day,
         "next_best_action": compute_next_best_action(db, user_id),
     }
-
