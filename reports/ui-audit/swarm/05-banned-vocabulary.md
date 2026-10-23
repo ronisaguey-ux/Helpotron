@@ -398,3 +398,342 @@ KEEP "My Agent", "Agent".
 | MyAgentView.jsx:770 | `Autonomous Session` (eyebrow above the h1) | *delete the eyebrow* | BANNED (autonomous) |
 | MyAgentView.jsx:804 | `title="Open Agent Configurations Matrix"` | `Agent settings` | JUDGEMENT (matrix) |
 | MyAgentView.jsx:808 | `Configs` | `Settings` | JUDGEMENT |
+| MyAgentView.jsx:823 | `No messages yet — ask a question below to start your session.` | `No messages yet — ask it something.` | JUDGEMENT (session) |
+| MyAgentView.jsx:954 | `Answer paused — nothing was lost. Resume it, or just type a new message to carry on.` | keep — this is the model for how the rest should read | — |
+| MyAgentView.jsx:982 | `title="Attach source, proof script, or assignment file"` | `Attach a file` | JUDGEMENT (proof script) |
+| MyAgentView.jsx:1009 | `title="Toggle audio telemetry transcription"` | `Dictate instead of typing` | BANNED (telemetry) |
+| MyAgentView.jsx:1023 | `title="Pause — keep what's written and continue later"` | keep — plain | — |
+| MyAgentView.jsx:1041 | `title="Send to Agent"` | `Send` | JUDGEMENT |
+| MyAgentView.jsx:993 | `placeholder=""` (deliberately blank per a fixed bug) | consider `Ask anything…` — but check the prior bug note at :997 first | JUDGEMENT |
+
+### `web/src/components/ThreadsRail.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| ThreadsRail.jsx:189 | `No conversations yet — start one and it will live here.` | keep — plain | — |
+| ThreadsRail.jsx:24/26 | `'No messages yet'` | keep | — |
+| ThreadsRail.jsx:326 | `{/* Thread Telemetry Footer. */}` — comment only; the rendered value is a real date | comment only | BANNED (in comment) |
+
+### `web/src/components/ChatBubble.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| ChatBubble.jsx:65 | `INFERENCE FAILURE` (error bubble label) | `Didn't send` | BANNED (inference) |
+| ChatBubble.jsx:77 | `Retry Message` | `Try again` | JUDGEMENT |
+
+### `web/src/components/ThinkingBubble.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| ThinkingBubble.jsx:40 | `'Thinking…'` / `'Thought process'` | keep — plain | — |
+| ThinkingBubble.jsx:44 | `{tokens} tok` | `{tokens} tokens` | JUDGEMENT (abbreviation) |
+| ThinkingBubble.jsx:60 | `Halt` | `Stop` | JUDGEMENT |
+
+### `web/src/components/PermissionModal.jsx`
+Note: a comment at `MyAgentView.jsx:1192` says this modal is **no longer used** on the web
+surface (replaced by the inline `ApprovalCard`). Verify before investing in a rewrite.
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| PermissionModal.jsx:149 | `Agent is requesting permission to execute an operational action:` | `The agent wants to do something:` | JUDGEMENT (execute, operational) |
+| PermissionModal.jsx:156 | `{/* Key Meta Telemetry Grid */}` — comment | comment only | BANNED (in comment) |
+| PermissionModal.jsx:159 | `Action Target` | `What it will touch` | JUDGEMENT |
+| PermissionModal.jsx:~195 | `Elevated Network I/O` | `Uses the internet` | JUDGEMENT (network I/O) |
+| PermissionModal.jsx:201 | `Payload Inspection (AST diff)` | `See the details` | BANNED (payload) + JUDGEMENT (AST diff) |
+
+### `web/src/components/NewAssignmentModal.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| NewAssignmentModal.jsx:29 | `useState('BIO-309 Chiral Inversion Reactions & Synthesis')` — **a hardcoded default title that pre-fills the real form** | `''` (empty) | BANNED (synthesis) + this is fabricated content shown to a real user |
+| NewAssignmentModal.jsx:30 | `useState('BIO-309')` | `''` | JUDGEMENT |
+| NewAssignmentModal.jsx:31 | `useState('Organic Chemistry')` | `''` | JUDGEMENT |
+| NewAssignmentModal.jsx:481 | `Workspace Initialized Successfully` (h3) | `Added` | JUDGEMENT (initialized) |
+| NewAssignmentModal.jsx:484 | `{title} is registered into the synthesis pipeline.` | `{title} is ready. Open it to start.` | BANNED (synthesis, pipeline) + JUDGEMENT (registered into) |
+
+### `web/src/components/CreateSubjectDialog.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| CreateSubjectDialog.jsx:~159 | `Initialize New Subject Module` (h2) | `New subject` | JUDGEMENT (initialize, module) |
+| CreateSubjectDialog.jsx:162 | `Establish syllabus heuristics, Level 1 autonomous routing, and telemetry scope.` | `Name it and pick an icon.` | BANNED (autonomous, telemetry; "Level 1" is a sibling of banned "level 2 scope") |
+| CreateSubjectDialog.jsx:229 | `Telemetry Icon Glyph` (label) | `Icon` | BANNED (telemetry) + JUDGEMENT (glyph) |
+| CreateSubjectDialog.jsx:~232 | `SELECTED: {icon}` | `{icon}` | JUDGEMENT |
+
+### `web/src/components/QuickSettings.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| QuickSettings.jsx:106 | `Wallet Telemetry` | `Balance` — KEEP "token balance"/"credits" wording below it | BANNED (telemetry) |
+
+### `web/src/components/SessionExpiryModal.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| SessionExpiryModal.jsx:40 | `State 401` | *delete* | JUDGEMENT (raw status code as a label) |
+| SessionExpiryModal.jsx:43 | `Background sync paused / Authentication required for telemetry stream` | `You've been signed out. Sign in to carry on.` | BANNED (telemetry) |
+
+### `web/src/components/ExtensionInstallView.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| ExtensionInstallView.jsx:102 | `Zero tracking or telemetry. The Helpotron companion operates entirely in 100% local context. It only reads the specific DOM nodes of assignments you explicitly click "Synthesize" or "Scrape" on.` | `No tracking. It only reads the page when you press Scrape.` | BANNED (telemetry, Synthesize) + JUDGEMENT (DOM nodes, local context) |
+| ExtensionInstallView.jsx:~110 | `The extension pairs directly via your Server Sync Origin URL.` | `Paste your API key and it connects.` | JUDGEMENT (Server Sync Origin URL) |
+
+### `web/src/components/CreditsCostTab.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| CreditsCostTab.jsx:44 | `label: 'Research & Essay Synthesis'` | `Essays & research` | BANNED (synthesis) |
+| CreditsCostTab.jsx:46 | `label: 'AI Detection & Calibration'` | `AI detection` | JUDGEMENT (calibration) |
+| CreditsCostTab.jsx:153 | `Continuous rolling telemetry across completed model generations and synthesis tasks.` | `What you've spent, over time.` | BANNED (telemetry, synthesis) |
+| CreditsCostTab.jsx:~158 | `CONTENT-METERED` (chip) | *delete* | JUDGEMENT |
+
+### `web/src/components/TelegramIntegration.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| TelegramIntegration.jsx:~157 | `label: 'Impending Due-Date Countdown Warnings (24h / 6h)'` | `Deadline reminders` | JUDGEMENT (impending) |
+| TelegramIntegration.jsx:159 | `label: 'Agent Synthesis & Proof Completion Alerts'` | `When your work is done` | BANNED (synthesis) |
+| TelegramIntegration.jsx:~160 | `label: '2FA One-Time Login & Purchase Approval Tokens'` | `Login codes and purchase approvals` | JUDGEMENT ("Tokens" here collides with the KEEP meaning of token balance — genuinely confusing) |
+
+### `web/src/components/RouteModal.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| RouteModal.jsx:241 | `Estimated synthesis budget:` | `About:` | BANNED (synthesis) |
+
+### `web/src/components/LaunchToDocModal.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| LaunchToDocModal.jsx:26 | `description: 'Steady scholarly rhythm with organic burstiness and occasional typo corrections.'` | `An even pace, with the odd typo fixed as it goes.` | BANNED (burstiness) |
+| LaunchToDocModal.jsx:33 | `description: 'High-speed synthesis with burst deletions and continuous sentence flow.'` | `Fast, with few pauses.` | BANNED (synthesis) |
+| LaunchToDocModal.jsx:294 | `{/* Telemetry & Controls Grid */}` — comment | comment only | BANNED (in comment) |
+| LaunchToDocModal.jsx:~296 | `Speed Adjustment` | `Speed` | JUDGEMENT |
+
+### `web/src/components/AssignmentHistoryView.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| AssignmentHistoryView.jsx:83 | *(contains "ledger" — exact string NOT captured before stop)* | likely `Submission Ledger` → `History` | JUDGEMENT — **needs verification** |
+
+### `web/src/components/ui/ErrorState.jsx`
+**Already clean** — plain-English headlines and descriptions, with an explicit in-file
+rule against invented machine codes. Do not rewrite. One stale item:
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| ui/ErrorState.jsx:219 | contains `Cockpit` *(in a comment/section name — exact context NOT captured)* | — | JUDGEMENT — **needs verification** |
+
+### `web/src/components/ui/ErrorReportButton.jsx`
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| ui/ErrorReportButton.jsx:26/36 | `Payload` *(appears to be object keys / variable names — likely NOT user-facing)* | — | **needs verification** |
+| ui/ErrorReportButton.jsx:84 | `title="Send the technical details to Helpotron. They are encrypted, and nothing here is shown on screen."` | keep — plain | — |
+
+### Extension (`extension/*.html`, `extension/*.js`)
+**The extension HTML is the cleanest surface in the product** — zero banned terms in
+`popup.html`, `options.html`, `agent_mode.html`, `onboarding.html`, `recorder.html`
+(verified by grep over the full ban list). Judgement calls only:
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| popup.html:322 | `Off = unrestrained by study-only rules` | `Off = it can help with anything, not just coursework` | JUDGEMENT (unrestrained) |
+| popup.html:451 | `title="Jurisdiction: which tabs the agent may see and act in. Pick one, several, or all of them."` | `Which tabs can the agent use?` | JUDGEMENT (jurisdiction) |
+| popup.html:476 | `Agent jurisdiction` (panel heading) | `Which tabs can it use?` | JUDGEMENT (jurisdiction) |
+| popup.html:534 | `Humanized Typing into Google Docs` | `Type it into a Google Doc` | JUDGEMENT |
+| popup.html:578/579 | `Typing Cadence` (heading + aria-label) | `Typing speed` | BANNED-adjacent (cadence) |
+| popup.html:584 | `title="Balanced — the measured natural rhythm for this account"` | `Balanced — your normal typing speed` | JUDGEMENT (measured) |
+| popup.html:357/469 | `YOLO` (permission mode) | `No asking` | JUDGEMENT — may be deliberate; owner should decide |
+| popup.html:376 | `(mid_lower)` — raw machine tier identifier rendered to the user | *delete, or map to a word* | JUDGEMENT |
+| popup.html:516 | `Insufficient tokens.` | `Not enough tokens.` | JUDGEMENT |
+| popup.html:693 | `Neutral` (approval button) | `Just send my note` — the help text at :703 already has to explain it | JUDGEMENT |
+| popup.html:695 | `Approve + auto-add` / `AUTO` | `Approve, and stop asking` | JUDGEMENT |
+| popup.html:554 | `Draft Text to Type` | `What to type` | JUDGEMENT |
+| popup.html:567 | `Target Document Tab` | `Which doc` | JUDGEMENT |
+| popup.js:414 | `innerText = \`(${info.tier})\`` — renders e.g. `(mid_lower)` | map tier ids to words, or delete | JUDGEMENT |
+| popup.js:759 | `'No driveable tabs open — chrome:// and extension pages cannot be driven.'` | `The agent can't work in this kind of tab. Open a normal page.` | JUDGEMENT (driveable/driven) |
+| popup.js:1455 | `innerText = '✗ unparseable'` | `couldn't read it` | JUDGEMENT |
+| popup.js:2700 | `'⏸ Paused by user (Esc pressed)'` | `Paused` | JUDGEMENT |
+| popup.js:3004 | `` `Could not attach to this tab — ${reason}` `` | `Can't work in this tab — {reason}` | JUDGEMENT (attach) |
+| popup.js:4169 | `'Initializing typing engine…'` | `Getting ready…` | JUDGEMENT (initializing, engine) |
+| popup.js:1190/1267 | `synthesized` | comments only — **not user-facing** | — |
+| popup.js:3324 | `directive` | comment only — **not user-facing** | — |
+| popup.js:3860/3935-4003 | `cadence` / `Cadence` | mostly comments + `renderCadencePresets` identifiers; the **rendered** strings are the `popup.html:578` ones above | — |
+| agent_mode.js:692/737/2001/2010 | `armed` | **needs verification** — could be internal state or rendered | **NOT VERIFIED** |
+
+### Routes slated for deletion (DIRECTION decisions 10 + 26)
+`MonitorsView.jsx`, `ActivityView.jsx`, `AutomationCenter.jsx`, `DataLakeView.jsx`
+(folds into Library) are all marked **delete** in DIRECTION.md. Their jargon is
+catalogued below for completeness but **rewriting them is wasted work if they are
+being deleted — confirm first.**
+
+| file:line | current string | proposed replacement | flag |
+|---|---|---|---|
+| MonitorsView.jsx:136 | `title="Live telemetry connected"` | n/a — route to be deleted | BANNED (telemetry) |
+| MonitorsView.jsx:212 | `{/* … FEEDBACK-FIRST DIRECTIVE */}` (comment) | n/a | BANNED (in comment) |
+| MonitorsView.jsx:~209 | `Data Lake & Fleet Nodes` | n/a | JUDGEMENT (fleet nodes) |
+| MonitorsView.jsx:489 | `{/* Data Lake Ingestion Feed */}` (comment) | n/a | BANNED (in comment) |
+| DataLakeView.jsx:256 | `Nothing in the lake yet` (h3 — empty state) | `Nothing here yet` if kept | JUDGEMENT ("the lake" ≠ "Data Lake") |
+| AutomationCenter.jsx:64 | `icon="⚙️" title="No automations yet"` | n/a — and emoji icon breaks decision 12 | JUDGEMENT |
+| AutomationCenter.jsx:131 | `body="Schedule automations to run on a cadence."` | n/a | BANNED-adjacent (cadence) |
+| ActivityView.jsx:120 | `'No activity yet'` / `'Nothing in this category'` | n/a | — |
+
+### Admin-only surfaces (not student-facing)
+Lower priority — a student never sees these. Catalogued, not rewritten:
+`AdminAdvancedDashboard.jsx:1450,1457`, `AdminCostView.jsx:121,122,195,235`,
+`AdminToolsView.jsx:30,87,216,466`, `AdminAgentChat.jsx:61,127`, `MessageAdminView.jsx`.
+
+---
+
+## 2. Coverage — what was swept and what was NOT
+
+### FULLY READ (whole file, line by line)
+- `web/src/components/AssignmentDetailView.jsx` (558 ln)
+- `web/src/components/AssignmentCardDashboard.jsx` (842 ln)
+- `web/src/components/DirectionPicker.jsx` (234 ln)
+- `web/src/components/AgentTimeline.jsx` (206 ln)
+- `web/src/components/WorkingDraftCard.jsx` (304 ln)
+- `web/src/components/AssignmentConfigPanel.jsx` (336 ln)
+- `web/src/components/ThinkingBubble.jsx` (86 ln)
+- `web/src/components/ChatBubble.jsx` (125 ln)
+- `web/src/lib/team.js` (115 ln) — complete
+- `web/src/lib/assignmentBuckets.js` (32 ln) — complete, **clean**
+- `web/src/components/StatusChip.jsx` (59 ln) — complete, **clean** (shell only)
+- `web/src/components/ui/EmptyState.jsx` (46 ln) — complete, **clean** (shell only)
+- `web/src/components/AssignmentDumpView.jsx` — lines 1-120 and 300-872 read in full;
+  **lines 120-300 (upload/record/delete/finalize handlers) NOT read** — may hold more
+  toast and error strings.
+- `web/src/components/MyAgentView.jsx` — lines 1-130 and 740-1206 read in full;
+  lines 130-740 **grep-swept only** (string-literal grep), not read.
+- `extension/popup.html`, `options.html`, `agent_mode.html`, `onboarding.html`,
+  `recorder.html` — full text-node + attribute extraction, complete.
+
+### GREP-SWEPT ONLY (banned-term + machine-vocabulary grep hit; surrounding copy on the
+### same screen NOT reviewed)
+- `SettingsSections.jsx` — label/desc/heading grep done (≈60 hits reviewed). **The
+  1015-line file was never read in full**; the Credits/Billing and 2FA blocks and
+  anything that is a JSX text node rather than a `label:`/`desc:` key may be missed.
+- `SubjectSettingsPanel.jsx` — widgets **01, 02, 04 captured; widgets 03, 05, 06 NOT
+  captured.** This file has 6 numbered widgets and I only sampled three line ranges.
+- `GuideView.jsx` — 16 sections; only sections at lines 20-60, 125-140, 290-300, 570-585
+  sampled. **Roughly two thirds of this file is unswept** and it is the most prose-heavy
+  screen in the product.
+- `AgentConfigsSidebar.jsx` — tabs 1 and 4 sampled; **tabs 2 and 3 NOT swept.**
+- `InsightsView.jsx` — lines 1-40 read; rest unswept.
+- `AnalyticsDashboard.jsx`, `IntelligenceView.jsx`, `LibraryView.jsx`,
+  `CreditsCostTab.jsx`, `TelegramIntegration.jsx`, `RouteModal.jsx`,
+  `LaunchToDocModal.jsx`, `NewAssignmentModal.jsx`, `CreateSubjectDialog.jsx`,
+  `QuickSettings.jsx`, `SessionExpiryModal.jsx`, `ExtensionInstallView.jsx`,
+  `PermissionModal.jsx`, `ThreadsRail.jsx`, `MonitorsView.jsx` — **sampled line ranges
+  only.**
+- `web/src/lib/statusChips.js` — all `label:` and `definition:` values captured
+  (complete for those two keys).
+- `extension/popup.js` (193 KB) — grep for banned terms + grep for
+  `textContent/innerText/innerHTML/title =` assignments. **Not exhaustive**: template
+  literals built across lines, `createElement` text, and strings passed to a toast
+  helper were not enumerated.
+- `extension/background.js` (72 KB), `content.js` (107 KB), `agent_mode.js` (94 KB),
+  `server_logic.js`, `element_registry.js`, `action_stream_executor.js`,
+  `options.js`, `onboarding.js`, `theme.js`, `recorder.js` — **banned-term grep only
+  on options.js/onboarding.js/agent_mode.js/popup.js. `background.js`, `content.js`,
+  `server_logic.js`, `element_registry.js`, `action_stream_executor.js` NOT SWEPT AT
+  ALL** (they appeared in the initial file-level grep hit list, so they do contain
+  matches — unknown whether user-facing).
+
+### NEVER TOUCHED — zero sweep
+These `web/src` files were never opened and never grep-sampled for copy:
+- `App.jsx` (only line 935 seen — a comment)
+- `AppShell.jsx` (nav labels — **high value, this is on every screen**)
+- `MobileBottomBar.jsx`, `MobileDrawer.jsx` (decision 31: the new bottom bar)
+- `AnonymousLanding.jsx` (**the pre-signup page — highest-traffic surface**)
+- `AuthModal.jsx`, `RecoveryFlowModal.jsx`, `TwoFactorSetup.jsx`,
+  `TestingAccessModal.jsx`, `SegmentedOTPInput.jsx`
+- `CreditsView.jsx`, `CreditsPricingDashboard.jsx`, `BillingView.jsx`,
+  `TrialActivationCard.jsx`, `ReferralSection.jsx` (Credits = 12 actions / 549 words
+  per the census, **completely unswept**)
+- `AssignmentCard.jsx`, `AssignmentTurnInView.jsx`, `AssignmentHistoryView.jsx`
+- `SubjectTile.jsx`, `SubjectDumpModal.jsx`, `TrashPanel.jsx`
+- `EffortDial.jsx`, `ModeControl.jsx`, `ApprovalCard.jsx`, `ScopedSetting.jsx`,
+  `SettingOverrides.jsx`, `SectionCard.jsx`, `ApiKeysPanel.jsx`,
+  `AppearancePreview.jsx`, `AvatarCropper.jsx`
+- `NotificationsPanel.jsx`, `NotificationsView.jsx`, `CommandPalette.jsx`,
+  `CookieBanner.jsx`, `DemoRibbon.jsx`, `DevContactModal.jsx`,
+  `QueueNoticeBanner.jsx`, `NotFound.jsx`, `ControlCenterView.jsx`
+- `study/AcademicCalendar.jsx`, `study/FlashcardsPlayer.jsx`, `study/QuizPlayer.jsx`,
+  `study/MasteryRing.jsx` (flashcards/quiz players — student-facing)
+- `ui/*`: `Toast.jsx`, `ToastContainer.jsx`, `OfflineBanner.jsx`,
+  `DestructiveConfirmModal.jsx`, `AdminNoticePopup.jsx`, `StatusDot.jsx`, `Kbd.jsx`,
+  `os.jsx` (contains a second `EmptyState` used by AutomationCenter), `Skeleton.jsx`
+- `lib/*`: `errors.js`, `errorActions.js`, `monitors.js`, `overlay.js`,
+  `reportPayload.js`, `agentPresets.js` (**PRESET_PERSONAS descriptions are rendered in
+  the Configs sidebar — likely jargon**), `agentEvents.js` (chips partially seen),
+  `preferences.js`, `routing.js`, `settings.js`, `scopedSettings.js`, `utils.js`
+- `api.js`, `demoData.js`, `mock.js` (`mock.js` appeared in the banned-term grep)
+- `PrivacyPolicy.jsx`, `PrivacyPolicyView.jsx`, `PrivacyPolicyModal.jsx`,
+  `TermsOfServiceView.jsx` — these have banned-term hits (telemetry, inference,
+  orchestration, synthesize) but are **legal copy**; the owner's "student wouldn't say
+  it" test may not apply the same way. Needs a ruling.
+- `charts/*` — `orchestrator` hits at `line-loading-pulse.jsx:56`,
+  `time-series-chart-shell.jsx:52,183`. Almost certainly internal identifiers, but
+  **not verified.**
+
+---
+
+## 3. Strings I could not confidently rewrite
+
+1. **`YOLO`** (`popup.html:357, 469`) — a permission mode. It is slang, not jargon, so
+   it may be the owner's deliberate voice. I did not want to flatten a joke into
+   "No asking" without a ruling.
+2. **`Human Score: {n}%`** (`WorkingDraftCard.jsx:168`) and the `humanScore` default of
+   `88` at `:73`. The number has a hardcoded fallback, so the label may be describing a
+   value that was never measured. Rewriting the words without resolving whether the
+   number is real would make a fabricated claim read more confidently.
+3. **`Educational mode`** — used as a label in `SubjectSettingsPanel.jsx:267`, in the
+   extension (`Edu: ON`), and as a flag throughout. It is not on the ban list and not
+   in the KEEP list. It may be learned vocabulary. Needs a ruling before I rename it.
+4. **`Data Lake Sync`** (`DirectionPicker.jsx:204`) — "Data Lake" is KEEP, "Sync" is
+   not. I proposed "Saved to Data Lake" but the real question is whether the user needs
+   to be told this at all.
+5. **`2FA One-Time Login & Purchase Approval Tokens`**
+   (`TelegramIntegration.jsx:~160`) — the word "Tokens" here means one-time codes, which
+   directly collides with the KEEP meaning of "token balance". Any rewrite has to pick a
+   different noun, and I was not sure which one the product uses elsewhere.
+6. **`Submission Ledger`** (`AssignmentDetailView.jsx:225`, and probably
+   `AssignmentHistoryView.jsx:83`) — I proposed "History", but there may be a distinction
+   between the History *view* and a *ledger* concept I did not have time to check.
+7. **`TRACKED`** status (`statusChips.js:107`) — I could not find what user action
+   produces this status, so I could not tell whether it means "we are watching it",
+   "you bookmarked it", or something else. Rewriting the label without knowing would
+   guess.
+8. **`(mid_lower)`** (`popup.js:414`, `popup.html:376`) — a raw model-tier id printed to
+   the user. There is no plain-English mapping table I found, so I could not propose the
+   replacement words, only say that the raw id must not ship.
+9. **The `statusChips.js` `definition` strings** — I verified nothing renders them today.
+   They are either dead code to delete or a planned tooltip. Which one changes whether
+   they need rewriting at all.
+10. **Privacy Policy / Terms copy** — `telemetry`, `inference`, `orchestration`,
+    `synthesize` all appear in `PrivacyPolicyView.jsx`, `PrivacyPolicyModal.jsx`,
+    `TermsOfServiceView.jsx`. Legal text has different constraints; I flagged but did
+    not rewrite.
+
+---
+
+## 4. Counts
+
+| | |
+|---|---|
+| Strings catalogued needing a rewrite | **218** |
+| — of which BANNED-term (hard requirement) | **86** |
+| — of which JUDGEMENT-call | **132** |
+| Grep hits confirmed as comments / variable names only (no change needed) | 31 |
+| Files with at least one rewrite needed | 36 |
+| Files confirmed already clean | 5 (`ui/ErrorState.jsx`, `ui/EmptyState.jsx`, `StatusChip.jsx`, `lib/assignmentBuckets.js`, `extension/*.html` for banned terms) |
+| Dead/duplicate file flagged for deletion instead of rewrite | 1 (`web/src/lib/statusChips.jsx` — nothing imports it) |
+
+The 218 is a **floor, not a total.** The largest unswept student-facing surfaces are
+`AnonymousLanding.jsx`, `AppShell.jsx` (nav, on every screen), the whole Credits/Billing
+family, `GuideView.jsx` (two thirds unread), `lib/agentPresets.js`, and the three big
+extension content scripts. Expect the real number to land meaningfully higher.
