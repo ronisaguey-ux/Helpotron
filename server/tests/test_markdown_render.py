@@ -50,3 +50,11 @@ def test_empty_returns_empty():
 def test_mixed_math_and_text_preserves_order():
     out = render_reply("first $a+b$ middle **bold** last $c-d$")
     assert out.index("math") < out.index("bold") < out.rindex("math")
+
+
+def test_raw_html_is_escaped():
+    out = render_reply("<script>alert(1)</script><img src=x onerror=alert(1)>")
+    assert "<script>" not in out
+    assert "<img" not in out
+    assert "&lt;script&gt;" in out
+    assert "&lt;img" in out
