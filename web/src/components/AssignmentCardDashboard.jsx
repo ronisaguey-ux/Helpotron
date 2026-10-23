@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Button from './Button';
 import LaunchToDocModal from './LaunchToDocModal';
 import NewAssignmentModal from './NewAssignmentModal';
@@ -153,15 +153,30 @@ export function AssignmentCardDashboard({
   const [bubbleExporting, setBubbleExporting] = useState(false);
   const [exportingAll, setExportingAll] = useState(false);
 
+  const mountedRef = useRef(true);
+  const fetchRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     fetchDashboardData();
     fetchCustomBubbles();
   }, [userId, retryCount]);
 
-  // Refetch when window regains focus
+  // Refetch when window regains focus (throttled to avoid visibilitychange + focus double-fire storm)
   useEffect(() => {
+    let lastRefetch = 0;
     const refetch = () => {
-      if (document.visibilityState === 'visible') fetchDashboardData();
+      const now = Date.now();
+      if (document.visibilityState === 'visible' && now - lastRefetch > 1000) {
+        lastRefetch = now;
+        fetchDashboardData();
+      }
     };
     document.addEventListener('visibilitychange', refetch);
     window.addEventListener('focus', refetch);
@@ -188,6 +203,7 @@ export function AssignmentCardDashboard({
   async function fetchCustomBubbles() {
     try {
       const data = await api.getCustomBubbles();
+      if (!mountedRef.current) return;
       if (data?.bubbles) {
         const seen = new Set();
         setCustomBubbles(
@@ -200,18 +216,23 @@ export function AssignmentCardDashboard({
         );
       }
     } catch (e) {
-      console.warn('Failed to load custom bubbles:', e);
+      if (mountedRef.current) console.warn('Failed to load custom bubbles:', e);
     }
   }
 
   async function fetchDashboardData() {
-    setLoading(true);
-    setFetchError(null);
+    const reqId = ++fetchRequestIdRef.current;
+    if (mountedRef.current) {
+      setLoading(true);
+      setFetchError(null);
+    }
     try {
       const [cardsData, turnedInRes] = await Promise.all([
         api.assignmentCards(),
         api.getTurnedInAssignments().catch(() => null),
       ]);
+
+      if (!mountedRef.current || reqId !== fetchRequestIdRef.current) return;
 
       if (cardsData?.cards) {
         setCards(normalizeCards(cardsData.cards));
@@ -230,11 +251,14 @@ export function AssignmentCardDashboard({
         )
       );
     } catch (err) {
+      if (!mountedRef.current || reqId !== fetchRequestIdRef.current) return;
       console.error('Error loading dashboard data:', err);
       setFetchError(err?.message || 'Upstream telemetry service timed out.');
     } finally {
-      setLoading(false);
-      setRetrying(false);
+      if (mountedRef.current && reqId === fetchRequestIdRef.current) {
+        setLoading(false);
+        setRetrying(false);
+      }
     }
   }
 
