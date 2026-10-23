@@ -129,13 +129,16 @@ async def classify_assignment_meta(source_text: str, file_name: str) -> dict:
     }
     try:
         from .llm import call_llm, extract_json
+        from .agent_prompt import prompt_injection_defense_rule
+        framed_text = f"<untrusted_assignment_content>\n{(source_text or 'The user pasted an assignment.')[:5000]}\n</untrusted_assignment_content>"
         raw = await call_llm(
-            user_prompt=(source_text or "The user pasted an assignment.")[:5000],
+            user_prompt=framed_text,
             system_prompt=(
                 "Classify this academic assignment text. Output ONE LINE of JSON only: "
                 '{"subject": "<real academic subject, e.g. American History>", '
                 '"title": "<short title, max 60 chars>", "course_code": "<e.g. HIST-101 or GEN-101>"}. '
-                "The subject must be a concrete academic field, never 'General Academic'."
+                "The subject must be a concrete academic field, never 'General Academic'.\n\n"
+                + prompt_injection_defense_rule()
             ),
             effort_score=25, max_tokens=220, response_format="json_object", model="flash",
         )
