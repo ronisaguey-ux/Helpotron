@@ -6,8 +6,11 @@ through the session factory here; nothing else constructs connections.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any, Generator, Optional
+
+logger = logging.getLogger("helpotron.database")
 
 from sqlalchemy import Index, JSON, DateTime, Float, ForeignKey, Integer, String, Text, Boolean, UniqueConstraint, create_engine, event
 from sqlalchemy.ext.mutable import MutableDict
@@ -219,6 +222,10 @@ class Assignment(Base):
     turned_in: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", index=True)
     turned_in_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
+    __table_args__ = (
+        Index("ix_assignments_user_created", "user_id", "created_at"),
+    )
+
     user = relationship("User", back_populates="assignments")
     transcripts = relationship("Transcript", back_populates="assignment")
     materials = relationship("StudyMaterial", back_populates="assignment")
@@ -327,6 +334,10 @@ class StudyMaterial(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     saved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     shared_with: Mapped[list] = mapped_column(JSON, default=list)  # list of user IDs
+
+    __table_args__ = (
+        Index("ix_study_materials_user_created", "user_id", "created_at"),
+    )
 
     user = relationship("User", back_populates="materials")
     assignment = relationship("Assignment", back_populates="materials")
@@ -707,6 +718,11 @@ class UniversalDumpItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
+    __table_args__ = (
+        Index("ix_universal_dump_items_user_created", "user_id", "created_at"),
+        Index("ix_universal_dump_items_user_matched", "user_id", "matched_assignment_id"),
+    )
+
     user = relationship("User")
     matched_assignment = relationship("Assignment")
 
@@ -873,11 +889,17 @@ def init_db() -> None:
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_assignments_status ON assignments (status)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_assignments_turned_in ON assignments (turned_in)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_assignments_turned_in_at ON assignments (turned_in_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_assignments_user_created ON assignments (user_id, created_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_universal_dump_items_user_created ON universal_dump_items (user_id, created_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_universal_dump_items_user_matched ON universal_dump_items (user_id, matched_assignment_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_study_materials_user_created ON study_materials (user_id, created_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_calendar_entries_user_date ON calendar_entries (user_id, entry_date)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_calendar_entries_upcoming ON calendar_entries (user_id, remind, reminded_at, entry_date)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_study_card_user_due ON study_card_states (user_id, due)"))
 
                 conn.commit()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("init_db migration step error: %s", e)
 
 
 class CalendarEntry(Base):
@@ -912,6 +934,11 @@ class CalendarEntry(Base):
     # announced twice — and so "what is still pending" is answerable.
     reminded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    __table_args__ = (
+        Index("ix_calendar_entries_user_date", "user_id", "entry_date"),
+        Index("ix_calendar_entries_upcoming", "user_id", "remind", "reminded_at", "entry_date"),
+    )
 
     user = relationship("User", back_populates="calendar_entries")
 
