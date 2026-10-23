@@ -215,6 +215,7 @@ export default function App() {
   const [tokenNagDismissed, setTokenNagDismissed] = useState(false);
   const [openAssignment, setOpenAssignment] = useState(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const sessionCheckSeqRef = useRef(0);
   /* Back/forward navigation history — stack of {view, tab, assignment}
    * snapshots so the top-left chevrons can step through the session. */
   const [navBack, setNavBack] = useState([]);
@@ -407,9 +408,11 @@ export default function App() {
   });
 
   const checkSession = async (retryOnce = true) => {
+    const seq = ++sessionCheckSeqRef.current;
     let lastError = null;
     try {
       const data = await api.me();
+      if (seq !== sessionCheckSeqRef.current) return;
       if (data && data.authenticated) {
         setIsLoggedIn(true);
         setIsGuest(false);
@@ -430,6 +433,7 @@ export default function App() {
     } catch (e) {
       lastError = e;
     }
+    if (seq !== sessionCheckSeqRef.current) return;
     /* Cookie-store race (08-28, operator report): right after a 200 login the
      * session cookie can land a frame AFTER the client's first /api/me probe
      * (Safari/WebKit is the classic case) — the immediate `me()` 401s, the
@@ -439,8 +443,10 @@ export default function App() {
      * case; the verified-401 path is unchanged. */
     if (retryOnce) {
       await new Promise((r) => setTimeout(r, 1200));
+      if (seq !== sessionCheckSeqRef.current) return;
       try {
         const data = await api.me();
+        if (seq !== sessionCheckSeqRef.current) return;
         if (data && data.authenticated) {
           setIsLoggedIn(true);
           setIsGuest(false);
@@ -462,6 +468,7 @@ export default function App() {
         lastError = e;
       }
     }
+    if (seq !== sessionCheckSeqRef.current) return;
 
     // F-03: Distinguish transport / server outages from a real 401
     const isNetworkOr5xx = lastError && (lastError.status === 0 || !lastError.status || lastError.status >= 500);
