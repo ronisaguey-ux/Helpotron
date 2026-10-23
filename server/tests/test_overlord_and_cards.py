@@ -415,3 +415,41 @@ def test_surface_read_actions():
         assert dl["status"] == "completed"
     finally:
         db.close()
+
+
+def test_compact_chat_history_chronology(monkeypatch):
+    """Proves V2-C4-03: compact_chat_history prepends summary so newest messages follow."""
+    import asyncio
+    from server.overlord_agent import overlord_agent
+    from server.database import User
+
+    test_user = User(public_id="usr_compactor_test", plan="basic", settings={})
+    target_key = "thread_test_compaction"
+    overlord_agent.forget_chat_history(target_key, user_id=test_user.id)
+
+    # Add 45 messages to exceed max_messages
+    for i in range(45):
+        overlord_agent.add_chat_message(
+            target_key,
+            sender="user" if i % 2 == 0 else "overlord",
+            text=f"Turn message {i}",
+            user_id=test_user.id,
+        )
+
+    # Mock call_llm so compaction produces a summary
+    async def mock_call_llm(*args, **kwargs):
+        return "Compacted key facts from early turns."
+
+    monkeypatch.setattr("server.llm.call_llm", mock_call_llm)
+
+    res = asyncio.run(overlord_agent.compact_chat_history(user=test_user, target_key=target_key, max_messages=40))
+    assert res is not None
+    assert "Compacted" in res
+
+    history = overlord_agent.get_chat_history(target_key, user=test_user)
+    # The summary MUST be the first message (index 0)
+    assert len(history) == 11  # 1 summary + 10 newest
+    assert history[0]["metadata"].get("compacted") is True
+    assert "Earlier context compacted" in history[0]["text"]
+    # The last message MUST be Turn 44 (the newest turn)
+    assert history[-1]["text"] == "Turn message 44"

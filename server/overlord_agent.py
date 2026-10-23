@@ -769,15 +769,18 @@ class OverlordAgent:
                 summary = None
 
         if summary:
-            self._chat_histories[k] = newest + [{
+            # Chronological order: the summary summarizes `oldest`, so it belongs at the START of history.
+            summary_ts = oldest[-1].get("timestamp") if oldest and oldest[-1].get("timestamp") else datetime.now(timezone.utc).isoformat()
+            summary_msg = {
                 "id": f"summary_{uuid.uuid4().hex[:8]}",
                 "sender": "overlord",
                 "text": f"🧹 Earlier context compacted: {summary}",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": summary_ts,
                 "suggested_actions": [],
                 "subagent_logs": [],
                 "metadata": {"compacted": True},
-            }]
+            }
+            self._chat_histories[k] = [summary_msg] + newest
             return f"Compacted {len(oldest)} messages into a summary."
         self._chat_histories[k] = newest[-15:]
         return f"LLM summary unavailable — trimmed to the newest {len(newest[-15:])} messages."
