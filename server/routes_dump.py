@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
@@ -15,6 +17,8 @@ from .database import Assignment, Draft, StudyMaterial, Transcript, UniversalDum
 from .routes_features import get_current_authenticated_user
 from .security import is_admin_user
 from .credits import debit_tokens_atomic, is_unmetered, task_tokens_to_usd, TOKENS_PER_USD
+
+logger = logging.getLogger("helpotron.dump")
 
 router = APIRouter(prefix="/api/dump", tags=["assignment_dump"])
 
@@ -837,6 +841,7 @@ async def delete_dump_item(
         raise HTTPException(status_code=404, detail="Dump item not found.")
     if item.user_id != current_user.id and not is_admin_user(current_user):
         raise HTTPException(status_code=403, detail="Cannot delete dump items owned by another user")
+    file_to_unlink = item.file_path
     # Operator 08-26: deleting a dumped item must also remove the assignment
     # it created — otherwise the "in progress" bubble lingers forever. Only
     # cascade assignments the dump itself created (progress.created_from_dump).
@@ -862,6 +867,15 @@ async def delete_dump_item(
             db.delete(assignment)
     db.delete(item)
     db.commit()
+
+    if file_to_unlink:
+        try:
+            fp = Path(file_to_unlink).resolve()
+            if fp.exists() and fp.is_file():
+                fp.unlink()
+        except OSError as e:
+            logger.warning("Could not unlink dump file %s: %s", file_to_unlink, e)
+
     return {
         "status": "success",
         "message": f"Dump item {dump_id} deleted." + (f" (linked assignment '{cascaded}' removed too)" if cascaded else ""),
