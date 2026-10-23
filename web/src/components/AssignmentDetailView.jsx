@@ -44,6 +44,7 @@ export function AssignmentDetailView({
   const [full, setFull] = useState(null);
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   // Modals & Chat
   // Owner 2026-09-19: "Launch to Doc" is a HAND-OFF, not a typing stream. It
@@ -96,18 +97,17 @@ export function AssignmentDetailView({
   const assignmentId = assignment?.id;
 
   // Load assignment full view & chat history
-  useEffect(() => {
+  const loadAssignmentData = useCallback(() => {
     if (!assignmentId) return;
-    let cancelled = false;
     setLoading(true);
+    setLoadError('');
 
     Promise.all([
-      api.assignmentFullView(assignmentId).catch(() => null),
-      api.agentChatHistory(assignmentId).catch(() => null),
+      api.assignmentFullView(assignmentId),
+      api.agentChatHistory(assignmentId).catch(() => ({ chat: [] })),
       api.getAssignmentDirection(assignmentId).catch(() => null),
     ])
       .then(([fullData, chatData, dirData]) => {
-        if (cancelled) return;
         if (fullData?.assignment) setFull(fullData.assignment);
         if (Array.isArray(fullData?.materials)) setMaterials(fullData.materials);
 
@@ -122,14 +122,17 @@ export function AssignmentDetailView({
           if (dirData.direction) setSelectedDirection(dirData.direction);
         }
       })
+      .catch((err) => {
+        setLoadError(err?.message || 'Failed to load assignment details.');
+      })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       });
-
-    return () => {
-      cancelled = true;
-    };
   }, [assignmentId]);
+
+  useEffect(() => {
+    loadAssignmentData();
+  }, [loadAssignmentData]);
 
   // Scroll chat into view on update
   useEffect(() => {
@@ -396,6 +399,22 @@ export function AssignmentDetailView({
           </div>
         </div>
       </div>
+
+      {loadError && (
+        <div className="p-4 rounded-2xl bg-error-container/20 border border-error/30 text-error text-xs flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{loadError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={loadAssignmentData}
+            className="px-3 py-1.5 rounded-xl bg-surface-container text-on-surface font-label-caps text-xs hover:bg-surface-container-high transition cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* CORE WORKSPACE BENTO GRID (12 Cols: Left 7 Cols, Right 5 Cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
