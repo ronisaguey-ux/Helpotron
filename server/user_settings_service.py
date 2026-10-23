@@ -27,9 +27,11 @@ from sqlalchemy.orm import Session
 try:
     from .database import Assignment, StudyMaterial, Transcript, User, get_db
     from .default_styles import DEFAULT_STYLES, ACADEMIC_LEVELS, get_default_style
+    from .export import sanitize_csv_cell
 except (ImportError, ValueError):
     from server.database import Assignment, StudyMaterial, Transcript, User, get_db
     from server.default_styles import DEFAULT_STYLES, ACADEMIC_LEVELS, get_default_style
+    from server.export import sanitize_csv_cell
 
 
 def persist_user_settings(db, user, settings=None) -> dict:
@@ -1106,16 +1108,16 @@ class UserSettingsService:
     def export_history_csv(db: Session, user: User) -> str:
         history = UserSettingsService.query_assignment_history(db, user)
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
         writer.writerow(["Assignment ID", "Title", "Subject", "Due Date", "Status", "Grade", "AI Detection Score", "Created At"])
         for h in history:
             writer.writerow([
                 h["id"],
-                h["title"],
-                h["subject"],
+                sanitize_csv_cell(h["title"]),
+                sanitize_csv_cell(h["subject"]),
                 h["due_date"],
-                h["status"],
-                h["grade"] or "Not graded",
+                sanitize_csv_cell(h["status"]),
+                sanitize_csv_cell(h["grade"] or "Not graded"),
                 f"{h['score_ai']}%" if h["score_ai"] is not None else "",
                 h["created_at"],
             ])
