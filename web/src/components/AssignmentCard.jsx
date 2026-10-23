@@ -14,7 +14,7 @@ function getActionLabel(status) {
   const s = String(status || '').toLowerCase();
   if (s.includes('pending') || s.includes('review')) return 'Review Now';
   if (s.includes('humaniz') || s.includes('draft')) return 'View Draft';
-  return 'Continue';
+  return 'Open Assignment';
 }
 
 /**

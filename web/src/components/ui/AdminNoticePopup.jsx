@@ -133,7 +133,7 @@ export default function AdminNoticePopup({ isLoggedIn }) {
             onClick={dismiss}
             className="inline-flex items-center justify-center min-h-10 px-4 rounded-[var(--radius-sm)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition cursor-pointer"
           >
-            Got it
+            Dismiss
           </button>
         </div>
       </div>
