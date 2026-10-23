@@ -475,10 +475,11 @@ async def _execute_finalize(
     # 2. Generate real content for study kinds via OpenRouter.
     if action in GENERATING_ACTIONS:
         from .llm import call_llm, extract_json
+        from .agent_prompt import prompt_injection_defense_rule
 
         source_text = (item.extracted_text or "").strip()
         kind = GENERATING_ACTIONS[action]
-        sys_prompt = FINALIZE_PROMPTS[action]
+        sys_prompt = f"{FINALIZE_PROMPTS[action]}\n\n{prompt_injection_defense_rule()}"
 
         FINALIZE_CHUNK_CHARS = 8000
         FINALIZE_MAX_CHUNKS = 12
@@ -494,8 +495,9 @@ async def _execute_finalize(
         errors = 0
         for idx, chunk in enumerate(chunks):
             try:
+                framed_chunk = f"<untrusted_assignment_content>\n{chunk}\n</untrusted_assignment_content>"
                 raw = await call_llm(
-                    user_prompt=chunk,
+                    user_prompt=framed_chunk,
                     system_prompt=sys_prompt,
                     effort="medium",
                     effort_score=25,
