@@ -171,12 +171,11 @@ async def create_draft_task(
     if not user:
         raise ValueError("User not found")
     # Charge task tokens upfront (refunded on failure)
-    from .credits import get_token_balance, set_token_balance, is_unmetered
+    from .credits import get_token_balance, debit_tokens_atomic, is_unmetered
     if not is_unmetered(user):
         if get_token_balance(user) < DRAFT_COST:
             raise ValueError("Insufficient tokens")
-        set_token_balance(user, get_token_balance(user) - DRAFT_COST)
-        db.commit()
+        debit_tokens_atomic(db, user_id, DRAFT_COST, allow_negative=False)
 
     draft = Draft(
         user_id=user_id,
@@ -297,7 +296,12 @@ async def _draft_workflow_async(draft_id: int) -> None:
                     # We'll just let the generation retry with the same inputs; the model will vary.
                     pass
 
-        # Exhausted retries: mark as risky
+        # Exhausted retries: if no draft text was ever generated (all attempts threw exceptions),
+        # fail the draft and raise so tokens are refunded.
+        if not getattr(draft, "draft_text", None):
+            raise RuntimeError(f"Draft generation failed after {MAX_RETRIES} attempts: {draft.last_error or 'upstream LLM failure'}")
+
+        # If text was generated but failed detector thresholds, mark as risky
         draft.status = "risky"
         draft.retries_left = 0
         db.commit()
@@ -311,12 +315,12 @@ async def _draft_workflow_async(draft_id: int) -> None:
         draft.status = "failed"
         draft.last_error = str(e)
         db.commit()
-        # Refund tokens on failure
+        # Refund tokens atomically on failure
         user = db.get(User, draft.user_id)
         if user:
-            from .credits import get_token_balance, set_token_balance
-            set_token_balance(user, get_token_balance(user) + DRAFT_COST)
-            db.commit()
+            from .credits import credit_tokens_atomic, is_unmetered
+            if not is_unmetered(user):
+                credit_tokens_atomic(db, draft.user_id, DRAFT_COST)
     finally:
         db.close()
 
