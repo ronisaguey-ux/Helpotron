@@ -2,6 +2,7 @@
 and the extension mini-chatbox (operator task 08-28)."""
 from __future__ import annotations
 
+import asyncio
 import html
 import io
 import json
