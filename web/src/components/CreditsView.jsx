@@ -7,6 +7,7 @@ import {
   TrendingUp,
   RotateCcw,
   Sparkles,
+  AlertCircle,
 } from 'lucide-react';
 import api from '../api.js';
 import BillingView from './BillingView.jsx';
@@ -22,18 +23,19 @@ export default function CreditsView({ userId = '', initialTab = 'plans', userCre
   const [credits, setCredits] = useState(null);
   const [plan, setPlan] = useState('basic');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const fetchBalance = () => {
     setLoading(true);
+    setError('');
     api.dashboard(userId)
       .then((d) => {
         setCredits(typeof d.credits === 'number' ? d.credits : 0);
         setTokens(Number(d.settings?.token_balance ?? 0));
         setPlan(typeof d.plan === 'string' ? d.plan : 'basic');
       })
-      .catch(() => {
-        setCredits(0);
-        setTokens(0);
+      .catch((err) => {
+        setError(err?.message || 'Failed to sync balance with server');
       })
       .finally(() => setLoading(false));
   };
@@ -61,6 +63,22 @@ export default function CreditsView({ userId = '', initialTab = 'plans', userCre
           Your token balance, plan and what you have earned.
         </p>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-2xl bg-error-container/20 border border-error/30 text-error text-xs flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={fetchBalance}
+            className="px-3 py-1.5 rounded-xl bg-surface-container text-on-surface font-label-caps text-xs hover:bg-surface-container-high transition cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Free Trial activation (owner 09-06): 2FA + 1-cent payment verification */}
       <TrialActivationCard userId={userId} />

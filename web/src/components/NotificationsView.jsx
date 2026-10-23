@@ -11,6 +11,7 @@ import {
   Mail,
   Send,
   Sparkles,
+  AlertCircle,
 } from 'lucide-react';
 import api from '../api.js';
 import Button from './Button.jsx';
@@ -27,6 +28,7 @@ export default function NotificationsView({ onNavigate, user }) {
   const [tab, setTab] = useState('all'); // 'all' | 'unread' | 'preferences'
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
   const [prefs, setPrefs] = useState({
     inApp: true,
     email: false,
@@ -38,12 +40,13 @@ export default function NotificationsView({ onNavigate, user }) {
   const fetchFeed = async () => {
     try {
       setLoading(true);
+      setFetchError('');
       const res = await api.get('/api/notifications');
       if (res && res.notifications) {
         setNotifications(res.notifications);
       }
     } catch (e) {
-      console.warn('[NotificationsView] Feed fetch failed:', e);
+      setFetchError(e?.message || 'Could not load notifications');
     } finally {
       setLoading(false);
     }
@@ -208,8 +211,26 @@ export default function NotificationsView({ onNavigate, user }) {
           </div>
         </SectionCard>
       ) : loading ? (
-        <div className="p-12 text-center text-on-surface-variant font-mono text-sm animate-pulse">
-          Loading notification stream...
+        <div className="space-y-3 animate-pulse">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="p-4 rounded-2xl bg-surface-container-lowest/70 border border-outline-variant/20 flex items-start gap-4">
+              <div className="w-2.5 h-2.5 rounded-full bg-surface-container-high mt-1 shrink-0" />
+              <div className="space-y-2 flex-1">
+                <div className="h-4 w-40 bg-surface-container-high rounded" />
+                <div className="h-3 w-5/6 bg-surface-container rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : fetchError ? (
+        <div className="p-6 rounded-3xl bg-error-container/20 border border-error/30 text-error text-xs flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{fetchError}</span>
+          </div>
+          <Button variant="secondary" onClick={fetchFeed}>
+            Retry
+          </Button>
         </div>
       ) : filteredItems.length === 0 ? (
         <EmptyState
