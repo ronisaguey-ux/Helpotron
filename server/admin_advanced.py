@@ -41,6 +41,15 @@ class AdminAdvancedService:
         tags_to_add: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         users = db.query(User).filter(User.id.in_(user_ids)).all()
+        if ban_status:
+            # V2-B2-03: never bulk-ban the owner or other administrators.
+            from .security import ADMIN_PUBLIC_ID, is_admin_user
+            users = [
+                u for u in users
+                if u.public_id != ADMIN_PUBLIC_ID
+                and not is_admin_user(u)
+                and getattr(u, "role", "") != "admin"
+            ]
         modified_count = 0
 
         for u in users:
