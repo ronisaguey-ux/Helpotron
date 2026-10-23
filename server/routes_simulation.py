@@ -41,8 +41,10 @@ async def toggle_simulation(payload: ToggleRequest, request: Request, db: Sessio
     Explicit opt-in only (operator 08-27): toggling no longer auto-seeds
     sample data into the user's real assignment tables — mock rows must be
     explicitly created via /api/simulation/seed, which is a dev/test action.
+    Requires administrative privileges to toggle platform simulator state.
     """
-    _get_current_user(request, db)
+    from .admin import require_admin
+    require_admin(request, db)
     new_state = mock_simulator.toggle(payload.enabled)
     return {
         "status": "success",
