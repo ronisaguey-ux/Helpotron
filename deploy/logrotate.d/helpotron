@@ -1,13 +1,11 @@
-/var/log/helpotron/*.log {
+/home/roni/helpotron/data/logs/*.log
+/home/roni/helpotron/data_lake/*.jsonl {
     daily
     missingok
-    rotate 30
+    rotate 14
     compress
     delaycompress
     notifempty
-    create 0640 spark spark
-    sharedscripts
-    postrotate
-        systemctl reload helpotron-api.service >/dev/null 2>&1 || true
-    endscript
+    copytruncate
+    create 0640 roni roni
 }
