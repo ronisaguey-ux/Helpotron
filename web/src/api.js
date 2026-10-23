@@ -891,9 +891,9 @@ export const api = {
   listSubjectDumps: (subject, limit = 20) =>
     request(`/api/dump/list?subject=${encodeURIComponent(subject)}&limit=${limit}`, { method: 'GET' }),
   routeDumpItem: (dumpId, payload, userId) => request(`/api/dump/${dumpId}/route?user_id=${userId}`, { method: 'POST', body: JSON.stringify(payload) }),
-  finalizeDumpItem: (dumpId, action) => request(`/api/dump/${dumpId}/finalize`, { method: 'POST', body: JSON.stringify({ action }) }),
+  finalizeDumpItem: (dumpId, action) => request(`/api/dump/${dumpId}/finalize`, { method: 'POST', body: JSON.stringify({ action }), timeoutMs: 180000 }),
   batchEstimateDumpItems: (ids = '') => request(`/api/dump/batch/estimate${ids ? `?ids=${encodeURIComponent(ids)}` : ''}`, { method: 'GET' }),
-  batchFinalizeDumpItems: (payload) => request('/api/dump/batch/finalize', { method: 'POST', body: JSON.stringify(payload) }),
+  batchFinalizeDumpItems: (payload) => request('/api/dump/batch/finalize', { method: 'POST', body: JSON.stringify(payload), timeoutMs: 300000 }),
   deleteDumpItem: (dumpId) => request(`/api/dump/${dumpId}`, { method: 'DELETE' }),
 
   // Extension Version & Updates

@@ -18,6 +18,7 @@ import {
   Brain,
   Layers,
   Check,
+  Loader2,
   X,
   Lock,
   ChevronRight,
@@ -113,6 +114,20 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
   useEffect(() => {
     fetchItems();
   }, [userId]);
+
+  // Reactive polling while work is active (executing batch, uploading, or items generating/processing)
+  useEffect(() => {
+    const hasActiveWork =
+      items.some((i) => i.status === 'processing' || i.status === 'generating') ||
+      executingBatch ||
+      finalizingId !== null;
+    if (!hasActiveWork) return;
+
+    const interval = setInterval(() => {
+      fetchItems();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [items, executingBatch, finalizingId]);
 
   const handleUploadFile = async (file) => {
     if (!file) return;
@@ -549,6 +564,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
         <div className="space-y-3">
           {filteredItems.map((item) => {
             const isFinalized = item.status === 'finalized';
+            const isGenerating = item.status === 'generating' || item.status === 'processing' || finalizingId === item.id;
             return (
               <div
                 key={item.id}
@@ -560,12 +576,15 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                       {item.file_name || `Item #${item.id}`}
                     </span>
                     <span
-                      className={`font-chip-status text-[9px] px-2 py-0.5 rounded-full uppercase ${
+                      className={`font-chip-status text-[9px] px-2 py-0.5 rounded-full uppercase flex items-center gap-1 ${
                         isFinalized
                           ? 'bg-sem-green/15 text-sem-green font-semibold'
+                          : isGenerating
+                          ? 'bg-primary/20 text-primary font-semibold animate-pulse'
                           : 'bg-primary/10 text-primary'
                       }`}
                     >
+                      {isGenerating && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
                       {item.status}
                     </span>
                   </div>
@@ -589,6 +608,11 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                     <span className="font-label-caps text-xs text-sem-green font-semibold px-3 py-1.5 rounded-xl bg-sem-green/10 flex items-center gap-1.5">
                       <Check className="w-4 h-4" />
                       Finalized
+                    </span>
+                  ) : isGenerating ? (
+                    <span className="font-label-caps text-xs text-primary font-semibold px-3 py-1.5 rounded-xl bg-primary/10 flex items-center gap-1.5 animate-pulse">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating…
                     </span>
                   ) : (
                     <button
@@ -766,6 +790,24 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                 })}
               </div>
             </div>
+
+            {/* Modal Error Alert */}
+            {inlineError && (
+              <div className="p-3.5 rounded-2xl bg-error-container/20 border border-error/30 text-error text-xs flex items-center justify-between gap-3 animate-fadeIn">
+                <div className="flex items-center gap-2 min-w-0">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span className="break-words">{inlineError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInlineError('')}
+                  className="p-1 text-on-surface-variant hover:text-on-surface rounded-lg transition shrink-0"
+                  aria-label="Dismiss error"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-3 pt-2">
