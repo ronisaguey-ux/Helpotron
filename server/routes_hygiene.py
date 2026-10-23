@@ -48,6 +48,8 @@ async def _forward(file: UploadFile, endpoint: str) -> dict:
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="empty file")
+    if len(data) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File exceeds 20 MB limit")
     payload = {"file": base64.b64encode(data).decode(), "name": file.filename or "file"}
     try:
         # 2026-09-18: this was a sync call with a 240 s timeout inside an
