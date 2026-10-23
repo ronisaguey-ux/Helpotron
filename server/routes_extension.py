@@ -220,7 +220,7 @@ async def get_extension_version(db: Session = Depends(get_db)):
     # `latest_version` is the newest build we SERVE for manual install; the store
     # installs something older until Chrome approves the submission. Clients show
     # both, so "the extension is out of date" is never a mystery.
-    store_version = fetch_store_version()
+    store_version = await asyncio.to_thread(fetch_store_version)
     update_pending = bool(
         store_version and _version_tuple(store_version) < _version_tuple(latest_version)
     )
@@ -261,9 +261,7 @@ async def check_extension_update(req: VersionCheckRequest):
     }
 
 
-@router.get("/download")
-async def download_extension_zip():
-    """Packages the extension/ folder into a clean .zip file for instant 1-click download."""
+def _build_extension_zip_sync() -> tuple[bytes, str]:
     if not EXTENSION_DIR.exists():
         raise HTTPException(status_code=404, detail="Extension directory not found")
 
@@ -283,12 +281,19 @@ async def download_extension_zip():
     manifest = get_current_manifest()
     version = manifest.get("version", "2.0.0")
     filename = f"helpotron-extension-v{version}.zip"
+    return zip_buffer.getvalue(), filename
+
+
+@router.get("/download")
+async def download_extension_zip():
+    """Packages the extension/ folder into a clean .zip file for instant 1-click download."""
+    zip_bytes, filename = await asyncio.to_thread(_build_extension_zip_sync)
 
     headers = {
         "Content-Disposition": f'attachment; filename="{filename}"',
         "Access-Control-Expose-Headers": "Content-Disposition",
     }
-    return Response(content=zip_buffer.getvalue(), media_type="application/zip", headers=headers)
+    return Response(content=zip_bytes, media_type="application/zip", headers=headers)
 
 
 # ─── Release announcements (09-03): "remember all new major updates" ────────
