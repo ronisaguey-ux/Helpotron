@@ -168,7 +168,7 @@ async def _run_workflow_async(assignment_id: int):
 
         # Step 2: Plan the tasks (break down into sub-tasks)
         workflow.status = "planning"
-        workflow.add_message("system", "Planning tasks via subagent coordinator...")
+        workflow.add_message("system", "Organizing your assignment sections...")
         tasks = await plan_tasks(assignment.prompt, source_text)
         workflow.tasks = tasks
         workflow.estimated_time_seconds = sum(t.get("estimated_seconds", 60) for t in tasks)
@@ -332,11 +332,11 @@ async def _bubble_chat(db: Session, assignment: Assignment, text: str) -> None:
         from .overlord_agent import overlord_agent, persist_chat_message
         overlord_agent.add_chat_message(
             assignment.id,
-            sender="overlord",
+            sender="agent",
             text=text,
             user_id=assignment.user_id,
         )
-        persist_chat_message(db, assignment.user_id, assignment.id, "overlord", text)
+        persist_chat_message(db, assignment.user_id, assignment.id, "agent", text)
     except Exception as e:  # noqa: BLE001 — best-effort
         logger.warning("bubble chat for assignment %s skipped: %s", assignment.id, e)
 

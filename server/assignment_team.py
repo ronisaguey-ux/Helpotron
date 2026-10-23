@@ -130,14 +130,14 @@ async def _do_it_for_me(db: Session, user, assignment, custom_text: str = "") ->
     source = _assignment_source_text(db, assignment)
     prompt = str(getattr(assignment, "prompt", "") or "")
     if not (source or prompt):
-        _team_chat(assignment.id, "overlord",
+        _team_chat(assignment.id, "agent",
                    "🤖 I wanted to start drafting, but the bubble has no material "
                    "yet — paste or upload the assignment content first.",
                    user.id)
         _progress_record(db, assignment, _step("Team Coordinator", note="no source material"))
         return "⚠️ No material in this assignment yet — the team can't draft until you paste or upload it."
 
-    _team_chat(assignment.id, "overlord",
+    _team_chat(assignment.id, "agent",
                "🤖 Sub-agent team taking over this assignment — drafting the "
                "first section now.\n\n"
                "💡 You can steer it: reply here with things like \"make it more "
@@ -173,10 +173,10 @@ async def _do_it_for_me(db: Session, user, assignment, custom_text: str = "") ->
     except Exception as e:  # noqa: BLE001 — LLM offline/failure: honest degrade
         logger.warning("draft generation failed for assignment %s: %s", assignment.id, e)
         _progress_record(db, assignment,
-                         _step("Draft Synthesizer", status="failed", progress=0,
+                         _step("Writer", status="failed", progress=0,
                                note=f"LLM unavailable: {str(e)[:120]}"),
                          dispatch_note="Draft failed — the model is unavailable right now.")
-        _team_chat(assignment.id, "overlord",
+        _team_chat(assignment.id, "agent",
                    "⚠️ I couldn't produce the draft right now — the generation "
                    "model is unavailable. Try again in a moment.", user.id)
         return "⚠️ Draft failed: generation model unavailable — try again in a moment."
@@ -184,7 +184,7 @@ async def _do_it_for_me(db: Session, user, assignment, custom_text: str = "") ->
     draft_text = (draft_text or "").strip()
     if not draft_text:
         _progress_record(db, assignment,
-                         _step("Draft Synthesizer", status="failed", progress=0),
+                         _step("Writer", status="failed", progress=0),
                          dispatch_note="Draft generation returned nothing.")
         return "⚠️ Draft generation returned empty — try again in a moment."
 
@@ -199,13 +199,13 @@ async def _do_it_for_me(db: Session, user, assignment, custom_text: str = "") ->
         "word_count": len(stored_draft.split()),
     }
     _progress_record(db, assignment,
-                     _step("Draft Synthesizer", progress=100, note="first draft done"),
+                     _step("Writer", progress=100, note="first draft done"),
                      **{"first_draft": progress["first_draft"]},
                      dispatch_note=f"First draft ready — {len(stored_draft.split())} words.")
     snippet = stored_draft[:2500]
     if len(stored_draft) > 2500:
         snippet += f"\n\n… (+{len(stored_draft) - 2500} more characters — read or export the full draft)"
-    _team_chat(assignment.id, "overlord",
+    _team_chat(assignment.id, "agent",
                f"✍️ First draft done. Here's the opening:\n\n{snippet}", user.id)
     _ledger(db, user, "dispatch_direction_do_it_for_me",
             f"Drafted assignment #{assignment.id}", assignment.id,
@@ -239,7 +239,7 @@ async def _study_guide(db: Session, user, assignment) -> str:
     _progress_record(db, assignment,
                      _step("Study Guide Agent", progress=100, note="guide saved to library"),
                      dispatch_note=f"Study guide ready — material #{mat.id}.")
-    _team_chat(assignment.id, "overlord",
+    _team_chat(assignment.id, "agent",
                f"📗 Study guide generated for \"{assignment.title}\" — filed in "
                f"your library (material #{mat.id}).", user.id)
     _ledger(db, user, "dispatch_direction_study_guide",
@@ -279,7 +279,7 @@ async def _quiz(db: Session, user, assignment) -> str:
                      _step("Practice-Test Builder", progress=100,
                            note=f"{mc} MC + {sa} short-answer questions"),
                      dispatch_note=f"Practice quiz ready — {mc} MC + {sa} short answer (material #{mat.id}).")
-    _team_chat(assignment.id, "overlord",
+    _team_chat(assignment.id, "agent",
                f"📝 Practice quiz generated — {mc} multiple-choice + {sa} "
                f"short-answer questions (material #{mat.id}).", user.id)
     _ledger(db, user, "dispatch_direction_quiz",
@@ -311,7 +311,7 @@ async def _flashcards(db: Session, user, assignment) -> str:
                      _step("Flashcard Builder", progress=100,
                            note=f"{len(items)} cards in the deck"),
                      dispatch_note=f"Flashcard deck ready — {len(items)} cards (material #{mat.id}).")
-    _team_chat(assignment.id, "overlord",
+    _team_chat(assignment.id, "agent",
                f"🃏 Flashcard deck generated — {len(items)} cards (material #{mat.id}).", user.id)
     _ledger(db, user, "dispatch_direction_flashcards",
             f"Flashcards for #{assignment.id} (material {mat.id})", assignment.id,
@@ -342,7 +342,7 @@ async def _summary(db: Session, user, assignment) -> str:
     _progress_record(db, assignment,
                      _step("Lecture Summarizer", progress=100, note="summary saved to library"),
                      dispatch_note=f"2-minute summary ready — material #{mat.id}.")
-    _team_chat(assignment.id, "overlord",
+    _team_chat(assignment.id, "agent",
                f"📄 2-minute summary of \"{assignment.title}\" done — material "
                f"#{mat.id} in your library.", user.id)
     _ledger(db, user, "dispatch_direction_summary",
@@ -354,7 +354,7 @@ async def _summary(db: Session, user, assignment) -> str:
 # ─── failure helpers: honest in-band messages, never a raise ─────────────────
 
 def _no_source(what: str, db: Session, user, assignment) -> str:
-    _team_chat(assignment.id, "overlord",
+    _team_chat(assignment.id, "agent",
                f"⚠️ I can't build {what} yet — the bubble has no material. "
                "Paste or upload the assignment content first, or point the dump at it.",
                user.id)
@@ -370,7 +370,7 @@ def _gen_failed(what: str, err: Exception, db: Session, user, assignment, agent_
                      _step(agent_name, status="failed", progress=0,
                            note=f"failed: {str(err)[:140]}"),
                      dispatch_note=f"{what.title()} failed — the generation model is unavailable.")
-    _team_chat(assignment.id, "overlord",
+    _team_chat(assignment.id, "agent",
                f"⚠️ I couldn't generate the {what} right now — the generation "
                "model is unavailable. Try again in a moment.", user.id)
     return f"⚠️ {what.title()} failed: generation model unavailable — try again in a moment."
@@ -487,16 +487,16 @@ def interrupt_subagent_team(db: Session, user, assignment, reason: str = "Interr
     updated_steps.append(cancel_step)
 
     progress["subagent_steps"] = updated_steps
-    progress["dispatch_note"] = f"⚠️ Subagent team execution stopped: {reason}"
+    progress["dispatch_note"] = f"⚠️ Assignment work paused: {reason}"
     progress["is_interrupted"] = True
     assignment.progress = progress
     db.commit()
 
-    _team_chat(assignment.id, "overlord",
-               f"🛑 Subagent team interrupted: {reason}. You can choose a new direction or resume whenever ready.",
+    _team_chat(assignment.id, "agent",
+               f"🛑 Assignment paused: {reason}. You can choose a new direction or resume whenever ready.",
                user.id)
     _ledger(db, user, "interrupt_subagent_team",
-            f"Interrupted subagents on assignment #{assignment.id}", assignment.id,
+            f"Paused assignment #{assignment.id}", assignment.id,
             {"reason": reason, "interrupted_count": interrupted_count})
 
     return {
@@ -504,7 +504,6 @@ def interrupt_subagent_team(db: Session, user, assignment, reason: str = "Interr
         "assignment_id": assignment.id,
         "interrupted": True,
         "interrupted_tasks_count": interrupted_count,
-        "message": f"Subagent team interrupted on assignment #{assignment.id}.",
+        "message": f"Assignment paused on #{assignment.id}.",
         "tasks": updated_steps,
     }
-
