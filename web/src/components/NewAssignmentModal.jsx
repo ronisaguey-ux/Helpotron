@@ -153,7 +153,7 @@ export default function NewAssignmentModal({
                 New Assignment Import
               </h2>
               <p className="font-body-sm text-body-sm text-on-surface-variant">
-                Deterministic intake pipeline for LMS URLs, syllabi &amp; DOIs
+                Import coursework from LMS course links, syllabi, or articles
               </p>
             </div>
           </div>
@@ -481,7 +481,7 @@ export default function NewAssignmentModal({
                 Workspace Initialized Successfully
               </h3>
               <p className="font-body-sm text-on-surface-variant">
-                {title} is registered into the synthesis pipeline.
+                {title} has been added to your workspace.
               </p>
             </div>
             <div className="flex items-center gap-3 pt-2">
