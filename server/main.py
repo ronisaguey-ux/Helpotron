@@ -729,9 +729,20 @@ async def list_plans():
 
 
 @app.get("/api/health")
-async def health_check():
-    """Minimal unauthenticated health check (HT-003)."""
-    return {"status": "ok"}
+async def health_check(deep: bool = False):
+    """Unauthenticated health check (HT-003). Pass ?deep=true for DB probe."""
+    res = {"status": "ok"}
+    if deep:
+        from .database import SessionLocal
+        try:
+            with SessionLocal() as db:
+                db.execute(text("SELECT 1"))
+            res["database"] = "ok"
+        except Exception as e:
+            res["status"] = "degraded"
+            res["database"] = f"error: {e}"
+            return JSONResponse(status_code=503, content=res)
+    return res
 
 
 @app.get("/api/admin/health")
