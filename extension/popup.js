@@ -3634,7 +3634,8 @@ async function runAgentTurn(text, opts = {}) {
 
     if (data && data.status === 'insufficient_tokens') {
       if (chatTokenBanner && chatTokenMsg) {
-        chatTokenMsg.textContent = data.message || 'Insufficient tokens for agent actions.';
+        const msgText = (typeof data.message === 'string' ? data.message : (data.message && data.message.text) || data.reply) || 'Insufficient tokens for agent actions.';
+        chatTokenMsg.textContent = msgText;
         chatTokenBanner.style.display = 'flex';
       }
       addPopupChatMsg('agent', '⚠️ Insufficient tokens — visit your Helpotron account to replenish tokens.');
@@ -3668,7 +3669,7 @@ async function runAgentTurn(text, opts = {}) {
       return { ok: false, fatal: true, error: errText };
     }
 
-    const reply = (typeof data.reply === 'string' ? data.reply : data.reply?.text) || data.message || 'Done.';
+    const reply = (typeof data.reply === 'string' ? data.reply : data.reply?.text) || (typeof data.message === 'string' ? data.message : data.message?.text) || 'Done.';
     addPopupChatMsg('agent', reply, data.reply_html || '');
 
     const cacheKey = currentThreadId === 0 ? CHAT_KEY : `${CHAT_KEY}_t${currentThreadId}`;

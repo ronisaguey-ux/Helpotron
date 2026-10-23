@@ -797,10 +797,10 @@ async function resolveLaunchPlan(payload) {
       method: 'POST',
       headers: await authHeaders(),
       body: JSON.stringify({
-        assignment_id: payload && payload.assignmentId ? Number(payload.assignmentId) : null,
-        preset_id: (payload && payload.presetId) || null,
+        assignment_id: payload && (payload.assignmentId != null || payload.assignment_id != null) ? Number(payload.assignmentId ?? payload.assignment_id) : null,
+        preset_id: (payload && (payload.presetId || payload.preset_id)) || null,
         text: (payload && payload.text) || null,
-        tab_id: payload && payload.tabId ? Number(payload.tabId) : null,
+        tab_id: payload && (payload.tabId != null || payload.tab_id != null) ? Number(payload.tabId ?? payload.tab_id) : null,
       }),
     });
     if (!res.ok) throw new Error(`server ${res.status}`);
@@ -825,7 +825,7 @@ async function launchToDoc(payload) {
   // Where it goes is the plan's call; resolving that to a real tab is ours.
   const target = plan.target || {};
   let targetTabId = target.tab_id ? Number(target.tab_id)
-                 : (payload && payload.tabId ? Number(payload.tabId) : null);
+                 : (payload && (payload.tabId != null || payload.tab_id != null) ? Number(payload.tabId ?? payload.tab_id) : null);
 
   if (!targetTabId && target.reuse_existing !== false && target.match) {
     const openTabs = await chrome.tabs.query({ url: `*://${target.match}/*` });
