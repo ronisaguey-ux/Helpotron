@@ -265,6 +265,7 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
             disabled={loading}
             className="h-10 w-10 rounded-xl bg-surface-container-low hover:bg-surface-container text-on-surface border border-outline-variant/30 flex items-center justify-center transition cursor-pointer"
             title="Refresh ledger"
+            aria-label="Refresh assignment history ledger"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-primary" : "text-on-surface-variant"}`} />
           </button>
