@@ -136,6 +136,8 @@ async def revoke_session(session_id: int, request: Request,
         raise HTTPException(404, "session not found")
     db.delete(row)
     db.commit()
+    from .security import revoke_user_jwts
+    revoke_user_jwts(user.id)
     return {"status": "success", "revoked": session_id}
 
 
@@ -167,4 +169,6 @@ async def revoke_others(request: Request, db: Session = Depends(get_db)) -> Dict
             db.delete(r)
             revoked += 1
     db.commit()
+    from .security import revoke_user_jwts
+    revoke_user_jwts(user.id)
     return {"status": "success", "revoked": revoked}

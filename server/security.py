@@ -66,6 +66,22 @@ def revoke_user_jwts(user_id: Any) -> None:
     now_ts = time.time()
     _USER_JWT_REVOKED_BEFORE[user_id] = now_ts
     _USER_JWT_REVOKED_BEFORE[str(user_id)] = now_ts
+    # Persist in DB so multi-worker environments and restarts honor revocation
+    try:
+        from .database import SessionLocal, User
+        db = SessionLocal()
+        try:
+            uid = int(user_id) if str(user_id).isdigit() else None
+            user = db.query(User).filter(User.id == uid).first() if uid is not None else db.query(User).filter(User.public_id == str(user_id)).first()
+            if user:
+                st = dict(user.settings or {})
+                st["jwt_revoked_before"] = now_ts
+                user.settings = st
+                db.commit()
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("Failed to persist jwt_revoked_before for user %s: %s", user_id, exc)
 
 
 if getattr(config, 'production_mode', False):
@@ -115,11 +131,31 @@ def verify_jwt_token(token: str) -> Optional[Dict[str, Any]]:
         iat = payload.get('iat')
         if sub is not None:
             rev_ts = _USER_JWT_REVOKED_BEFORE.get(sub) or _USER_JWT_REVOKED_BEFORE.get(str(sub))
+            iat_ts = iat.timestamp() if isinstance(iat, datetime) else float(iat or 0.0)
             if rev_ts is not None:
-                iat_ts = iat.timestamp() if isinstance(iat, datetime) else float(iat or 0.0)
                 if iat_ts <= rev_ts:
                     logger.warning('Revoked JWT presented for user %s (issued before revocation)', sub)
                     return None
+            else:
+                # Check DB-persisted revocation if not cached in memory
+                try:
+                    from .database import SessionLocal, User
+                    db = SessionLocal()
+                    try:
+                        uid = int(sub) if str(sub).isdigit() else None
+                        user = db.query(User).filter(User.id == uid).first() if uid is not None else None
+                        if user and user.settings:
+                            db_rev = float(user.settings.get("jwt_revoked_before") or 0.0)
+                            if db_rev > 0:
+                                _USER_JWT_REVOKED_BEFORE[sub] = db_rev
+                                _USER_JWT_REVOKED_BEFORE[str(sub)] = db_rev
+                                if iat_ts <= db_rev:
+                                    logger.warning('Revoked JWT presented for user %s (issued before DB revocation)', sub)
+                                    return None
+                    finally:
+                        db.close()
+                except Exception:
+                    pass
         return payload
     except jwt.ExpiredSignatureError:
         logger.warning('Expired JWT token signature presented')
@@ -138,9 +174,12 @@ def hash_password(password: str) -> tuple[str, str]:
 
 
 def verify_password(password: str, hash_hex: str, salt: str) -> bool:
-    """Verify a password against a stored hash and salt."""
+    """Verify a password against a stored hash and salt (constant-time)."""
+    if not password or not hash_hex or not salt:
+        return False
     key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
-    return key.hex() == hash_hex
+    import hmac
+    return hmac.compare_digest(key.hex(), hash_hex)
 
 # ─── rate limiting ────────────────────────────────────────────────────────
 
@@ -266,7 +305,10 @@ def validate_public_id(public_id: str) -> bool:
 COMMON_BREACHED_PASSWORDS = {
     "password", "12345678", "password123", "password1", "admin123", "qwerty123",
     "passw0rd123", "passw0rd", "helpotron123", "welcome123", "letmein123",
-    "changeme123", "123456789", "1234567890", "iloveyou1", "sunshine1", "princess1"
+    "changeme123", "123456789", "1234567890", "iloveyou1", "sunshine1", "princess1",
+    "qwertyuiop", "12345678a", "12345678b", "abcdef12", "abcdef123", "iloveyou123",
+    "monkey123", "dragon123", "football1", "master123", "shadow123", "superman1",
+    "trustno1", "computer1", "internet1", "baseball1", "testing123"
 }
 
 
@@ -279,6 +321,9 @@ def validate_password_strength(password: str) -> bool:
     if not re.search(r'[A-Za-z]', password):
         return False
     if not re.search(r'[0-9]', password):
+        return False
+    # Reject simple character repetition (e.g. "aaaaaaaa1", "11111111a")
+    if len(set(password)) < 4:
         return False
     return True
 
