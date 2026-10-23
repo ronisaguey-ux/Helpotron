@@ -1,23 +1,35 @@
 [Unit]
-Description=Helpotron Automator FastAPI Backend Daemon
-After=network.target
+Description=Helpotron API + web (uvicorn)
+After=network-online.target
+Wants=network-online.target
+Conflicts=helpotron-maintenance.service
 
 [Service]
-User=spark
-Group=spark
-WorkingDirectory=/var/www/helpotron
-Environment="PATH=/var/www/helpotron/venv/bin"
-EnvironmentFile=/var/www/helpotron/.env
-ExecStart=/var/www/helpotron/venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 8000 --workers 4
+Type=simple
+User=roni
+Group=roni
+WorkingDirectory=/home/roni/helpotron
+EnvironmentFile=/home/roni/helpotron/.env
+ExecStart=/home/roni/helpotron/.venv/bin/uvicorn server.main:app --host 127.0.0.1 --port 5000 --proxy-headers --forwarded-allow-ips 127.0.0.1
 Restart=always
 RestartSec=5
 
-# Systemd Security Sandboxing
+# Resource limits
+MemoryMax=2G
+MemoryHigh=1.5G
+TasksMax=1024
+
+# Sandboxing & security hardening
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/var/www/helpotron/data /tmp/helpotron_sandboxes
+ReadWritePaths=/home/roni/helpotron/data /home/roni/helpotron/uploads /home/roni/helpotron/data_lake /home/roni/helpotron/datalake_storage
 PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
 
 [Install]
 WantedBy=multi-user.target
