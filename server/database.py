@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Generator, Optional
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, Boolean, UniqueConstraint, create_engine, event
+from sqlalchemy import Index, JSON, DateTime, Float, ForeignKey, Integer, String, Text, Boolean, UniqueConstraint, create_engine, event
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 from sqlalchemy.pool import NullPool, QueuePool
@@ -20,22 +20,25 @@ except (ImportError, ValueError):
     from server.config import config
 
 
-_connect_args = {"check_same_thread": False, "timeout": 30.0} if config.database_url.startswith("sqlite") else {}
+_connect_args = {"check_same_thread": False, "timeout": 60.0} if config.database_url.startswith("sqlite") else {}
 engine = create_engine(
     config.database_url,
     connect_args=_connect_args,
     poolclass=NullPool if config.database_url.startswith("sqlite") else QueuePool,
 )
 
-# Enable SQLite Write-Ahead Logging (WAL) mode for concurrency
+# Enable SQLite Write-Ahead Logging (WAL) mode and tune pragmas for concurrency
 if config.database_url.startswith("sqlite"):
     @event.listens_for(engine, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.execute("PRAGMA busy_timeout=60000")
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA cache_size=-64000")
+        cursor.execute("PRAGMA mmap_size=268435456")
+        cursor.execute("PRAGMA temp_store=MEMORY")
         cursor.close()
 
 
@@ -130,7 +133,7 @@ class UserSession(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     public_id: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     # Session visibility (owner 2026-09-23): a user could not see or end their
     # own sessions, so a stolen cookie was invisible and unkillable from inside
     # the app. 2FA only guards sign-in; this is what guards a live session.
@@ -167,7 +170,7 @@ class ApiKey(Base):
     key_prefix: Mapped[str] = mapped_column(String(24))
     label: Mapped[str] = mapped_column(String(100), default="")
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     last_used_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
     revoked_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[DateTime] = mapped_column(DateTime, nullable=True)
@@ -207,14 +210,14 @@ class Assignment(Base):
     due_date: Mapped[str | None] = mapped_column(String(64), nullable=True)
     prompt: Mapped[str] = mapped_column(String)
     file_urls: Mapped[list] = mapped_column(JSON, default=list)
-    status: Mapped[str] = mapped_column(String(32), default="tracked")
+    status: Mapped[str] = mapped_column(String(32), default="tracked", index=True)
     progress: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     # Turn-in (08-27): an assignment marked as turned in moves into the
     # assignment history. turned_in_at is the real timestamp of the turn-in;
     # it is reset to NULL when the user undoes the turn-in.
-    turned_in: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
-    turned_in_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    turned_in: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", index=True)
+    turned_in_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
 
     user = relationship("User", back_populates="assignments")
     transcripts = relationship("Transcript", back_populates="assignment")
@@ -228,7 +231,7 @@ class AgentAction(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    assignment_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    assignment_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     action_type: Mapped[str] = mapped_column(String(64))
     summary: Mapped[str] = mapped_column(String(1024), default="")
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -251,7 +254,7 @@ class AgentFile(Base):
     kind: Mapped[str] = mapped_column(String(32), default="skill")
     disk_name: Mapped[str] = mapped_column(String(128))
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
     user = relationship("User", back_populates="agent_files")
 
@@ -261,7 +264,7 @@ class Transcript(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    assignment_id: Mapped[int | None] = mapped_column(ForeignKey("assignments.id"), nullable=True)
+    assignment_id: Mapped[int | None] = mapped_column(ForeignKey("assignments.id"), nullable=True, index=True)
     source: Mapped[str] = mapped_column(String(16), default="upload")
     text: Mapped[str] = mapped_column(String)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -316,12 +319,12 @@ class StudyMaterial(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    assignment_id: Mapped[int | None] = mapped_column(ForeignKey("assignments.id"), nullable=True)
-    transcript_id: Mapped[int | None] = mapped_column(ForeignKey("transcripts.id"), nullable=True)
+    assignment_id: Mapped[int | None] = mapped_column(ForeignKey("assignments.id"), nullable=True, index=True)
+    transcript_id: Mapped[int | None] = mapped_column(ForeignKey("transcripts.id"), nullable=True, index=True)
     kind: Mapped[str] = mapped_column(String(32))
     content: Mapped[str] = mapped_column(String)
     model_used: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     saved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     shared_with: Mapped[list] = mapped_column(JSON, default=list)  # list of user IDs
 
@@ -340,12 +343,15 @@ class StudyCardState(Base):
     card_index: Mapped[int] = mapped_column(Integer)
     state: Mapped[str] = mapped_column(String(16), default="new")  # new/learning/known/mastered (FSRS)
     difficulty: Mapped[str] = mapped_column(String(16), default="medium")  # easy/medium/hard
-    due: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    due: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     lapses: Mapped[int] = mapped_column(Integer, default=0)
     last_practiced: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
-    __table_args__ = (UniqueConstraint("user_id", "material_id", "card_index", name="uq_study_cards"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "material_id", "card_index", name="uq_study_cards"),
+        Index("ix_study_card_user_due", "user_id", "due"),
+    )
 
 
 class CreditTransaction(Base):
@@ -355,7 +361,9 @@ class CreditTransaction(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     delta: Mapped[float] = mapped_column(Float)
     reason: Mapped[str] = mapped_column(String(128))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    __table_args__ = (Index("ix_credit_transactions_user_created", "user_id", "created_at"),)
 
     user = relationship("User", back_populates="credit_transactions")
 
@@ -367,12 +375,14 @@ class Payment(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     provider: Mapped[str] = mapped_column(String(32))
     amount_cents: Mapped[int] = mapped_column(Integer)
-    status: Mapped[str] = mapped_column(String(32), default="pending")
+    status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
     # Indexed (2026-09-18): the Stripe webhook and the admin payment lookup both
     # filter on this, and EXPLAIN QUERY PLAN showed `SCAN payments` — a full table
     # scan on the money path, growing with every payment.
     provider_ref: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    __table_args__ = (Index("ix_payments_user_created", "user_id", "created_at"),)
 
     user = relationship("User", back_populates="payments")
 
@@ -413,8 +423,8 @@ class ModerationItem(Base):
     reason: Mapped[str] = mapped_column(String(255))
     snippet: Mapped[str] = mapped_column(Text, default="")
     risk_score: Mapped[float] = mapped_column(Float, default=0.0)
-    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | approved | rejected
-    flagged_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)  # pending | approved | rejected
+    flagged_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     resolved_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     admin_notes: Mapped[str] = mapped_column(Text, default="")
@@ -459,7 +469,7 @@ class Referral(Base):
     referrer_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     referee_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     referral_code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     referrer = relationship("User", foreign_keys=[referrer_id], back_populates="referrals")
@@ -492,7 +502,7 @@ class AgentChatThread(Base):
     title: Mapped[str] = mapped_column(String(256), default="New chat")
     pinned: Mapped[bool] = mapped_column(default=False)  # pin chats (operator 08-26)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
 
 class AgentChatMessage(Base):
@@ -507,7 +517,9 @@ class AgentChatMessage(Base):
     target_key: Mapped[str] = mapped_column(String(64), index=True)  # 'None' = global agent chat, else assignment id
     sender: Mapped[str] = mapped_column(String(16))
     text: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    __table_args__ = (Index("ix_agent_chat_user_target_created", "user_id", "target_key", "created_at"),)
 
 
 class StudyGroup(Base):
@@ -681,7 +693,7 @@ class UniversalDumpItem(Base):
     file_type: Mapped[str] = mapped_column(String(64))  # document, audio, video, image, text
     file_size_bytes: Mapped[int] = mapped_column(Integer, default=0)
     file_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    status: Mapped[str] = mapped_column(String(64), default="pending_analysis")  # pending_analysis, processing, matched, unmatched, manual_routed, finalized
+    status: Mapped[str] = mapped_column(String(64), default="pending_analysis", index=True)  # pending_analysis, processing, matched, unmatched, manual_routed, finalized
     extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Subject ("bubble") this dump was filed under. An assignment's subject is
     # derived from its title/description, but a raw dump has no title to derive
@@ -692,7 +704,7 @@ class UniversalDumpItem(Base):
     auto_match_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     requested_action: Mapped[str | None] = mapped_column(String(32), nullable=True)  # flashcards, practice_quiz, study_guide, summary, do_it
     overlord_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     user = relationship("User")
@@ -845,6 +857,23 @@ def init_db() -> None:
                     conn.execute(text("ALTER TABLE user_sessions ADD COLUMN user_agent VARCHAR(256)"))
                 if columns_sessions and "ip" not in columns_sessions:
                     conn.execute(text("ALTER TABLE user_sessions ADD COLUMN ip VARCHAR(64)"))
+
+                # Ensure all critical indexes exist on existing SQLite databases
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_organization_id ON users (organization_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_universal_dump_items_subject ON universal_dump_items (subject)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_universal_dump_items_status ON universal_dump_items (status)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_transcripts_assignment_id ON transcripts (assignment_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_study_materials_assignment_id ON study_materials (assignment_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_study_materials_transcript_id ON study_materials (transcript_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_study_materials_created_at ON study_materials (created_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_user_sessions_expires_at ON user_sessions (expires_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_chat_user_target_created ON agent_chat_messages (user_id, target_key, created_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_credit_transactions_user_created ON credit_transactions (user_id, created_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_payments_user_created ON payments (user_id, created_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_assignments_status ON assignments (status)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_assignments_turned_in ON assignments (turned_in)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_assignments_turned_in_at ON assignments (turned_in_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_study_card_user_due ON study_card_states (user_id, due)"))
 
                 conn.commit()
             except Exception:
