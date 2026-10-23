@@ -316,8 +316,8 @@ export default function App() {
     '/overview': ['overview', null],
     '/dashboard': ['overview', null],
     '/assignments': ['overview', null],
-    '/activity': ['overview', null],
-    '/automation': ['overview', null],
+    '/activity': ['activity', null],
+    '/automation': ['automation', null],
     '/monitors': ['admin', null],
     '/datalake': ['library', 'datalake'],
     // /history is a Library tab now
@@ -338,12 +338,13 @@ export default function App() {
     '/pricing': ['credits', 'plans'],
     '/study': ['library', 'practice'],
     '/guide': ['guide', null],
+    '/help': ['guide', null],
     '/terms': ['terms', null],
     '/privacy': ['privacy', null],
     '/features': ['overview', null],
   };
   /* Paths the anonymous landing page legitimately serves. */
-  const PUBLIC_PATHS = new Set(['/', '/features', '/pricing', '/guide', '/terms', '/privacy', '/extension']);
+  const PUBLIC_PATHS = new Set(['/', '/features', '/pricing', '/guide', '/help', '/terms', '/privacy', '/extension']);
   const [notFoundPath, setNotFoundPath] = useState(null);
   const pendingDeepLink = useRef(null);
   const resolvePath = (path, status) => {
