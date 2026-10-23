@@ -62,8 +62,21 @@ export default function ActivityView({ admin = false, initialMode = 'timeline', 
   }, [events, filter]);
 
   /* Mode + category controls: single clean-card toolbar */
+  const header = (
+    <div className="flex flex-col gap-1 pb-1">
+      <h1 className="text-2xl sm:text-3xl font-bold font-headline-lg text-on-surface tracking-tight">
+        Activity Timeline
+      </h1>
+      <p className="text-xs text-[var(--text-muted)] font-body-sm">
+        Chronological record of coursework actions, agent synthesis cycles, and system events.
+      </p>
+    </div>
+  );
+
   const controls = (
-    <div className="clean-card p-3 flex flex-wrap items-center gap-2">
+    <>
+      {header}
+      <div className="clean-card p-3 flex flex-wrap items-center gap-2">
       <div className="flex gap-1 p-1 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
         {[['timeline', '⚡ Timeline'], ['notifications', '🔔 Notifications']].map(([k, label]) => (
           <button
@@ -99,6 +112,7 @@ export default function ActivityView({ admin = false, initialMode = 'timeline', 
         </div>
       )}
     </div>
+    </>
   );
 
   if (mode === 'notifications') {
