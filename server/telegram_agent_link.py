@@ -85,8 +85,10 @@ async def tg_call(token: str, method: str, **payload: Any) -> Tuple[bool, dict]:
     """Calls the Bot API. Returns (ok, body). ok=False covers HTTP errors and
     Telegram's {"ok": false} responses (body carries error_code/description)."""
     url = API.format(token=token, method=method)
+    poll_timeout = float(payload.get("timeout", 0)) if "timeout" in payload else 0.0
+    client_timeout = max(30.0, poll_timeout + 15.0)
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=client_timeout) as client:
             resp = await client.post(url, json=payload)
     except Exception as e:  # network / timeout
         return False, {"error_code": 0, "description": f"network error: {e}"}
@@ -309,62 +311,65 @@ def _connected_users():
 
 
 async def _poll_one(public_id: str, state: dict) -> None:
-    token = state.get("token", "")
-    if not token or _BACKOFF.get(token, 0) > time.time():
-        return
-    offset = int(state.get("offset", 0) or 0)
-    ok, body = await tg_call(
-        token, "getUpdates",
-        timeout=LONG_POLL_TIMEOUT,
-        offset=offset,
-        allowed_updates=["message"],
-    )
-    if ok:
-        from .database import SessionLocal as _SL
-        with _SL() as db:
-            user = db.query(User).filter(User.public_id == public_id).first()
-            if user is None:
-                return
-            updates = body.get("result") or []
-            if updates:
-                await _process_updates(user, token, updates)
-            elif not bot_state(user).get("chat_id"):
-                pass  # silent until the owner messages the bot
-        return
+    try:
+        token = state.get("token", "")
+        if not token or _BACKOFF.get(token, 0) > time.time():
+            return
+        offset = int(state.get("offset", 0) or 0)
+        ok, body = await tg_call(
+            token, "getUpdates",
+            timeout=LONG_POLL_TIMEOUT,
+            offset=offset,
+            allowed_updates=["message"],
+        )
+        if ok:
+            from .database import SessionLocal as _SL
+            with _SL() as db:
+                user = db.query(User).filter(User.public_id == public_id).first()
+                if user is None:
+                    return
+                updates = body.get("result") or []
+                if updates:
+                    await _process_updates(user, token, updates)
+                elif not bot_state(user).get("chat_id"):
+                    pass  # silent until the owner messages the bot
+            return
 
-    error_code = body.get("error_code") or 0
-    description = str(body.get("description") or "")[:160]
-    if error_code in (401, 403):
-        with SessionLocal() as db:
-            u = db.query(User).filter(User.public_id == public_id).first()
-            if u is not None:
-                _set_error(db, u, dict(bot_state(u)),
-                           f"bot token rejected: {description}")
-    elif error_code == 409:
-        with SessionLocal() as db:
-            u = db.query(User).filter(User.public_id == public_id).first()
-            if u is not None:
-                _set_error(db, u, dict(bot_state(u)),
-                           "another process is polling this bot (conflict)")
-    elif error_code == 429:
-        _BACKOFF[token] = time.time() + 65
-        logger.warning("telegram-agent %s rate-limited: %s", public_id, description)
-    else:
-        logger.warning("telegram-agent getUpdates %s failed: %s", public_id, description)
+        error_code = body.get("error_code") or 0
+        description = str(body.get("description") or "")[:160]
+        if error_code in (401, 403):
+            with SessionLocal() as db:
+                u = db.query(User).filter(User.public_id == public_id).first()
+                if u is not None:
+                    _set_error(db, u, dict(bot_state(u)),
+                               f"bot token rejected: {description}")
+        elif error_code == 409:
+            with SessionLocal() as db:
+                u = db.query(User).filter(User.public_id == public_id).first()
+                if u is not None:
+                    _set_error(db, u, dict(bot_state(u)),
+                               "another process is polling this bot (conflict)")
+        elif error_code == 429:
+            _BACKOFF[token] = time.time() + 65
+            logger.warning("telegram-agent %s rate-limited: %s", public_id, description)
+        else:
+            logger.warning("telegram-agent getUpdates %s failed: %s", public_id, description)
+    except Exception:
+        logger.exception("telegram-agent poll failed for %s", public_id)
 
 
 async def telegram_agent_loop() -> None:
-    """Background loop: long-polls every connected user's bot sequentially."""
+    """Background loop: long-polls connected users' bots concurrently."""
     logger.info("telegram-agent link loop started")
     while True:
         connected = []
         try:
-            connected = _connected_users()
-            for public_id, state in connected:
-                try:
-                    await _poll_one(public_id, state)
-                except Exception:
-                    logger.exception("telegram-agent poll failed for %s", public_id)
+            connected = await asyncio.to_thread(_connected_users)
+            if connected:
+                await asyncio.gather(
+                    *(_poll_one(public_id, state) for public_id, state in connected),
+                    return_exceptions=True,
+                )
         except Exception:
             logger.exception("telegram-agent loop cycle failed")
         sleep_interval = POLL_INTERVAL if connected else IDLE_POLL_INTERVAL
