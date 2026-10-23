@@ -415,3 +415,46 @@ def test_2fa_disable_repairs_a_broken_enrollment():
     db.delete(u)
     db.commit()
     db.close()
+
+
+def test_2fa_send_challenge_does_not_leak_phone_or_enumerate():
+    """V3-A2-01: Ensure SMS 2FA send-challenge never leaks phone number or user existence."""
+    import uuid
+    from unittest.mock import patch
+    from server.database import SessionLocal, User
+
+    client.cookies.clear()
+    uid = f"user_{uuid.uuid4().hex[:8]}"
+    pwd = "Password123!"
+    secret_phone = "+15559876543"
+
+    db = SessionLocal()
+    u = User(
+        public_id=uid,
+        plan="none",
+        role="member",
+        settings={"2fa_enabled": True, "2fa_method": "sms", "phone_number": secret_phone},
+    )
+    db.add(u)
+    db.commit()
+    db.close()
+
+    try:
+        with patch("server.auth_2fa.SMSVerification.send", return_value=True):
+            resp_exist = client.post("/api/auth/2fa/send-challenge", json={"user_id": uid, "method": "sms"})
+            assert resp_exist.status_code == 200
+            data_exist = resp_exist.json()
+            # Must NOT leak secret_phone
+            assert secret_phone not in data_exist.get("message", "")
+            # Must be uniform with non-existent user response
+            resp_nonexist = client.post("/api/auth/2fa/send-challenge", json={"user_id": "nonexistent_probe_xyz", "method": "sms"})
+            assert resp_nonexist.status_code == 200
+            data_nonexist = resp_nonexist.json()
+            assert data_exist.get("message") == data_nonexist.get("message")
+    finally:
+        db = SessionLocal()
+        u = db.query(User).filter(User.public_id == uid).first()
+        if u:
+            db.delete(u)
+            db.commit()
+        db.close()

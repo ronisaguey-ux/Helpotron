@@ -399,7 +399,7 @@ async def send_two_factor_challenge(payload: TwoFactorChallengeRequest, db: Sess
         sent = await SMSVerification.send(phone)
         if not sent:
             raise HTTPException(500, "Failed to send the 2FA SMS — Twilio rejected the message.")
-        return {"status": "success", "message": f"2FA code sent via SMS to {phone}."}
+        return {"status": "success", "message": "If a mobile phone is linked to this account, a 2FA code has been sent via SMS."}
 
     elif method == "totp":
         return {"status": "ready", "message": "Please enter the 6-digit code from your authenticator app."}
