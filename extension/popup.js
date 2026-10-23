@@ -76,13 +76,14 @@ const statusEl = document.getElementById('status');
 const serverInput = document.getElementById('server');
 const unparseableBox = document.getElementById('unparseableBox');
 const unparseableReason = document.getElementById('unparseableReason');
-const btnOpenDataLake = document.getElementById('btnRetryScrape')?.addEventListener('click', () => {
+document.getElementById('btnRetryScrape')?.addEventListener('click', () => {
   const b = document.getElementById('btnScrapeCurrent');
   if (b) b.click();
 });
 
-document.getElementById('btnOpenDataLake');
+const btnOpenDataLake = document.getElementById('btnOpenDataLake');
 const openAssignmentBtn = document.getElementById('openAssignmentBtn');
+const captureEmpty = document.getElementById('captureEmpty');
 
 const CRAWL_CACHE_KEY = 'helpotron_crawl_cache';
 const LAST_SCRAPE_KEY = 'helpotron_last_scrapes';
@@ -306,6 +307,7 @@ if (btnStatusCloseEl) btnStatusCloseEl.addEventListener('click', () => setStatus
 // humanErr so a payload can never land on screen here either.
 function showUnparseable(reason) {
   unparseableBox.style.display = 'block';
+  if (captureEmpty) captureEmpty.style.display = 'none';
   const why = humanErr(reason, null);
   unparseableReason.innerText = why && !/^Something went wrong/.test(why)
     ? why
@@ -314,6 +316,9 @@ function showUnparseable(reason) {
 
 function hideUnparseable() {
   unparseableBox.style.display = 'none';
+  if (captureEmpty && (!openAssignmentBtn || openAssignmentBtn.style.display === 'none')) {
+    captureEmpty.style.display = '';
+  }
 }
 
 // ── Active-tab helper (the new launcher has no tab dropdown: option 1 = the
@@ -1374,6 +1379,7 @@ function showOpenAssignment(assignmentId) {
   openAssignmentBtn.style.display = 'block';
   openAssignmentBtn.innerText = `📖 Open bubble #${assignmentId} in Helpotron`;
   openAssignmentBtn.dataset.assignmentId = String(assignmentId);
+  if (captureEmpty) captureEmpty.style.display = 'none';
 }
 
 openAssignmentBtn?.addEventListener('click', () => {
