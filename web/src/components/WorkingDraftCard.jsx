@@ -113,7 +113,7 @@ export default function WorkingDraftCard({
             Nothing generated yet
           </h4>
           <p className="font-body-sm text-xs text-on-surface-variant">
-            Pick an autonomous research vector or coordinate with the agent team to generate the working draft.
+            Direct the execution team or choose a starting direction to generate your working draft.
           </p>
         </div>
         {onPickDirection && (
