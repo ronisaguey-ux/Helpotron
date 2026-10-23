@@ -172,3 +172,62 @@ def test_writing_history_simulation_requires_auth(client):
     res = client.post("/api/user/fake-writing-history/simulate",
                       json={"content": "a" * 40, "wpm": 65, "version_count": 5})
     assert res.status_code == 401
+
+
+# ─── V3-A2-02: server.auth utilities hardening ───────────────────────────────
+
+def test_auth_module_verify_jwt_token_and_admin_gate():
+    """V3-A2-02: verify_jwt_token and require_admin_user handle integer subs, revocations, and bans."""
+    from fastapi import HTTPException
+    from server.auth import verify_jwt_token, require_admin_user
+    from server.security import create_jwt_token, revoke_user_jwts, SessionStore
+    from server.database import SessionLocal, User
+
+    db = SessionLocal()
+    try:
+        # Create an admin user and a student user
+        admin_u = db.query(User).filter(User.public_id == "v3_admin_test").first()
+        if not admin_u:
+            admin_u = User(public_id="v3_admin_test", role="admin", plan="pro", settings={})
+            db.add(admin_u)
+            db.commit()
+            db.refresh(admin_u)
+
+        student_u = db.query(User).filter(User.public_id == "v3_student_test").first()
+        if not student_u:
+            student_u = User(public_id="v3_student_test", role="member", plan="basic", settings={})
+            db.add(student_u)
+            db.commit()
+            db.refresh(student_u)
+
+        # 1. Admin JWT with integer sub succeeds
+        admin_token = create_jwt_token(admin_u.id, role="admin")
+        payload = verify_jwt_token(admin_token)
+        assert payload["sub"] == admin_u.id
+
+        resolved_admin = require_admin_user(token=admin_token, db=db)
+        assert resolved_admin.id == admin_u.id
+
+        # 2. Admin via session token succeeds
+        sess_token = SessionStore.create_session(admin_u.id, admin_u.public_id)
+        resolved_sess = require_admin_user(token=sess_token, db=db)
+        assert resolved_sess.id == admin_u.id
+        SessionStore.delete_session(sess_token)
+
+        # 3. Plain student JWT is rejected with 403
+        student_token = create_jwt_token(student_u.id, role="user")
+        with pytest.raises(HTTPException) as exc_info:
+            require_admin_user(token=student_token, db=db)
+        assert exc_info.value.status_code == 403
+
+        # 4. Revoked admin JWT is rejected with 401
+        revoke_user_jwts(admin_u.id)
+        with pytest.raises(HTTPException) as exc_info:
+            verify_jwt_token(admin_token)
+        assert exc_info.value.status_code == 401
+
+        with pytest.raises(HTTPException) as exc_info:
+            require_admin_user(token=admin_token, db=db)
+        assert exc_info.value.status_code == 401
+    finally:
+        db.close()
