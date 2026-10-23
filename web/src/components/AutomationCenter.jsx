@@ -101,7 +101,7 @@ export default function AutomationCenter() {
       {tab === 'runs' && (
         <SectionCard id="automation-run-history" header={<SectionHeader title="Run history" subtitle="Every execution of every automation" />}>
           {!demo || RUNS.length === 0 ? (
-            <EmptyState title="No runs yet" body="Runs appear here as soon as an automation executes." />
+            <EmptyState title="No runs yet" body="Runs appear here as soon as an automation executes." actionLabel="Browse automations" onAction={() => setTab('automations')} />
           ) : (
             <div className="space-y-2">
               {RUNS.map((r) => (
@@ -137,7 +137,7 @@ export default function AutomationCenter() {
             } headerRight={<Toggle checked={s.enabled} onChange={() => { /* demo: schedules toggle live in settings */ }} label={s.enabled ? 'On' : 'Off'} />}>
             </SectionCard>
           ))}
-          {(!demo || SCHEDULES.length === 0) && <EmptyState title="No schedules" body="Schedule automations to run on a cadence." />}
+          {(!demo || SCHEDULES.length === 0) && <EmptyState title="No schedules" body="Schedule automations to run at set times." actionLabel="Browse automations" onAction={() => setTab('automations')} />}
         </div>
       )}
 
@@ -158,7 +158,7 @@ export default function AutomationCenter() {
               <div className="text-[10px] text-slate-600 text-center">used {t.uses}× by the community</div>
             </SectionCard>
           ))}
-          {(!demo || TEMPLATES.length === 0) && <EmptyState title="No templates" body="Templates turn multi-step workflows into one click." />}
+          {(!demo || TEMPLATES.length === 0) && <EmptyState title="No templates" body="Templates turn multi-step workflows into one click." actionLabel="View automations" onAction={() => setTab('automations')} />}
         </div>
       )}
 
@@ -184,7 +184,7 @@ export default function AutomationCenter() {
               </div>
             </SectionCard>
           ))}
-          {(!demo || RECIPES.length === 0) && <EmptyState title="No recipes yet" body="Recipes bundle automations into proven workflows." />}
+          {(!demo || RECIPES.length === 0) && <EmptyState title="No recipes yet" body="Recipes bundle automations into proven workflows." actionLabel="View automations" onAction={() => setTab('automations')} />}
         </div>
       )}
     </div>
