@@ -192,7 +192,7 @@ export function AssignmentDetailView({
     try {
       await api.interruptSubagentTeam(assignmentId, 'Student clicked Stop Execution');
       setInterrupted(true);
-      setNotice('⚠️ Pipeline halted. Subagent processes paused.');
+      setNotice('⚠️ Paused. You can resume anytime.');
       setTimeout(() => setNotice(''), 4000);
     } catch (err) {
       console.error('Failed to interrupt team:', err);
@@ -269,7 +269,7 @@ export function AssignmentDetailView({
 
     try {
       const res = await api.agentChat({ assignment_id: assignmentId, text });
-      const replyText = res?.reply || res?.message || 'Instruction received. Pipeline updated.';
+      const replyText = res?.reply || res?.message || 'Instruction received. Draft updated.';
       setTeamChat((prev) => [
         ...prev,
         {
@@ -442,7 +442,7 @@ export function AssignmentDetailView({
 
               {teamChat.length === 0 ? (
                 <div className="py-8 text-center text-xs font-code-sm text-on-surface-variant italic">
-                  Session initialized. Send a directive or guideline to instruct the subagent team.
+                  Ask a question, request changes, or tell your assistant what to focus on.
                 </div>
               ) : (
                 teamChat.map((msg, idx) => (
