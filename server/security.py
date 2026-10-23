@@ -455,30 +455,39 @@ class SessionStore:
             session = cls._find(db, token)
             if not session:
                 return False
-            session.expires_at = datetime.now(timezone.utc) + timedelta(seconds=cls._session_expiry)
-            # Session visibility (owner 2026-09-23). Recorded HERE rather than in
-            # a middleware: this repo has none, and every authenticated path
-            # already calls refresh_session, so this is the one place that sees
-            # all of them without inventing a new hook.
-            if request is not None:
-                session.last_used_at = datetime.now(timezone.utc).replace(tzinfo=None)
-                try:
-                    ua = request.headers.get("user-agent")
-                    if ua:
-                        session.user_agent = ua[:256]
-                    # Trust the proxy header only as a hint; the socket address is
-                    # the fact. Behind cloudflared the socket is always the edge,
-                    # so the header is what actually identifies the client.
-                    ip = (
-                        request.headers.get("cf-connecting-ip")
-                        or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-                        or (request.client.host if request.client else None)
-                    )
-                    if ip:
-                        session.ip = ip[:64]
-                except Exception:
-                    pass  # a missing header must never fail authentication
-            db.commit()
+            now_dt = datetime.now(timezone.utc)
+            now_naive = now_dt.replace(tzinfo=None)
+            last_used = session.last_used_at
+            if last_used is not None and last_used.tzinfo is not None:
+                last_used = last_used.astimezone(timezone.utc).replace(tzinfo=None)
+            # Throttle session write commits on frequent poll loops (e.g. 25s /api/me)
+            # Only sync DB write transaction if never stamped or >60 seconds since last write
+            should_commit = (last_used is None) or ((now_naive - last_used).total_seconds() >= 60)
+            if should_commit:
+                session.expires_at = now_dt + timedelta(seconds=cls._session_expiry)
+                # Session visibility (owner 2026-09-23). Recorded HERE rather than in
+                # a middleware: this repo has none, and every authenticated path
+                # already calls refresh_session, so this is the one place that sees
+                # all of them without inventing a new hook.
+                if request is not None:
+                    session.last_used_at = now_naive
+                    try:
+                        ua = request.headers.get("user-agent")
+                        if ua:
+                            session.user_agent = ua[:256]
+                        # Trust the proxy header only as a hint; the socket address is
+                        # the fact. Behind cloudflared the socket is always the edge,
+                        # so the header is what actually identifies the client.
+                        ip = (
+                            request.headers.get("cf-connecting-ip")
+                            or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                            or (request.client.host if request.client else None)
+                        )
+                        if ip:
+                            session.ip = ip[:64]
+                    except Exception:
+                        pass  # a missing header must never fail authentication
+                db.commit()
             return True
         finally:
             db.close()
