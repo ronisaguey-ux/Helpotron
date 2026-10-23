@@ -8,8 +8,8 @@ import { AlertTriangle, Trash2, X, ShieldAlert } from 'lucide-react';
 
 export default function DestructiveConfirmModal({
   isOpen = false,
-  title = 'Critical System Action',
-  description = 'This operation is irreversible and will permanently mutate or purge the selected records.',
+  title = 'Are you sure?',
+  description = 'This action cannot be undone. Are you sure you want to delete this?',
   confirmLabel = 'Confirm Deletion',
   cancelLabel = 'Cancel',
   onConfirm,

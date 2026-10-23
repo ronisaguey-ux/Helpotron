@@ -384,7 +384,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
                       onClick={handleSendDevTicket}
                       className="w-full text-xs uppercase tracking-wider py-2 font-semibold"
                     >
-                      {loading ? 'Dispatching...' : 'Dispatch Ticket to Developer'}
+                      {loading ? 'Dispatching...' : 'Send Message to Developer'}
                     </Button>
                   </>
                 )}
@@ -397,7 +397,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
                 onClick={() => handleRequestOtp()}
                 className="w-full h-11 uppercase font-semibold text-xs tracking-wider flex items-center justify-center gap-2 mt-2"
               >
-                <span>{loading ? 'Dispatching Passcode...' : 'Dispatch One-Time Token →'}</span>
+                <span>{loading ? 'Dispatching Passcode...' : 'Send Recovery Code →'}</span>
               </Button>
             )}
           </div>
@@ -568,7 +568,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
               disabled={loading || !newPass || newPass !== confirmPass}
               className="w-full h-11 uppercase font-semibold text-xs tracking-wider flex items-center justify-center gap-2 mt-2"
             >
-              <span>{loading ? 'Renewing Passphrase...' : 'Synchronize New Passphrase →'}</span>
+              <span>{loading ? 'Renewing Passphrase...' : 'Save New Password →'}</span>
             </Button>
           </form>
         )}
@@ -584,7 +584,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
                 Credential Reset Complete
               </h2>
               <p className="font-body-sm text-xs text-on-surface-variant max-w-sm mx-auto leading-relaxed">
-                Your master passphrase has been renewed and authenticated. All active sessions have been safely cycled.
+                Your password has been updated. You can now sign in with your new password.
               </p>
             </div>
             <Button
