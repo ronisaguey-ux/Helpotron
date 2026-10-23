@@ -118,7 +118,7 @@ export default function CreateSubjectDialog({
       setIcon('BookOpen');
       onClose();
     } catch (err) {
-      setError(err?.message || 'Failed to initialize subject module. Please try again.');
+      setError(err?.message || 'Could not create this subject right now. Please check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
