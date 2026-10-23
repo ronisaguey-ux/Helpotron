@@ -600,6 +600,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # reason: Turnstile builds its worker from a blob: URL.
         "frame-src https://challenges.cloudflare.com https://*.challenges.cloudflare.com; "
         "worker-src 'self' blob: data:; "
+        "base-uri 'self'; "
+        "object-src 'none'; "
+        "form-action 'self'; "
         "frame-ancestors 'none'"
     )
     PERMISSIONS_POLICY = "camera=(), geolocation=(), payment=(), usb=(), display-capture=()"
