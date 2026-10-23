@@ -16,21 +16,21 @@ export const CADENCE_PRESETS = [
     label: 'Hesitant / Thinker',
     wpm: 45,
     typoRate: 3.2,
-    description: 'Frequent cognitive pauses, clause re-reads, and deliberate typing cadence.',
+    description: 'Frequent cognitive pauses, clause re-reads, and deliberate typing pace.',
   },
   {
     id: 'academic',
     label: 'Flowing Academic',
     wpm: 65,
     typoRate: 1.8,
-    description: 'Steady scholarly rhythm with organic burstiness and occasional typo corrections.',
+    description: 'Steady scholarly rhythm with natural pauses and occasional typo corrections.',
   },
   {
     id: 'rapid',
     label: 'Rapid Draft',
     wpm: 85,
     typoRate: 2.2,
-    description: 'High-speed synthesis with burst deletions and continuous sentence flow.',
+    description: 'High-speed drafting with quick corrections and continuous sentence flow.',
   },
 ];
 
@@ -260,7 +260,7 @@ export default function LaunchToDocModal({
         {/* 3 Cadence Presets (§3.7.2) */}
         <div className="flex flex-col gap-2">
           <label className="font-label-caps text-xs text-on-surface-variant uppercase tracking-wider">
-            Typing Cadence Persona
+            Typing Speed & Style
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-unit-2">
             {presets.map((preset) => {
@@ -345,7 +345,7 @@ export default function LaunchToDocModal({
             </button>
           </div>
           <p className="font-mono text-xs text-on-surface-variant min-h-[40px] leading-relaxed bg-surface-container-low/40 p-2.5 rounded-xl border border-outline-variant/15">
-            {previewText || 'Click "Test Preview 10s" to simulate live keystroke cadence with backspaces and pauses.'}
+            {previewText || 'Click "Test Preview 10s" to simulate live typing speed with backspaces and pauses.'}
             {previewRunning && <span className="inline-block w-1.5 h-3.5 bg-primary ml-0.5 animate-pulse" />}
           </p>
         </div>
