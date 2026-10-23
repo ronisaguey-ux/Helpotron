@@ -12,7 +12,7 @@
  * agent ask for "everything under Biology" (`list_dumps`) instead of the user
  * having to repeat themselves.
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, FileText, Upload, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import api from '../api';
 
@@ -23,8 +23,6 @@ export default function SubjectDumpModal({ isOpen, subject, onClose, onDumped })
   const [error, setError] = useState('');
   const [done, setDone] = useState('');
   const fileInputRef = useRef(null);
-
-  if (!isOpen) return null;
 
   const reset = () => {
     setText('');
@@ -39,6 +37,19 @@ export default function SubjectDumpModal({ isOpen, subject, onClose, onDumped })
     reset();
     onClose?.();
   };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  if (!isOpen) return null;
 
   const canSubmit = !busy && (text.trim().length > 0 || file != null);
 
