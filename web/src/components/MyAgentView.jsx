@@ -761,7 +761,7 @@ export default function MyAgentView({
         />
 
         {/* Center/Main Column: Chat Canvas & Controls */}
-        <main className="col-span-12 lg:col-span-8 xl:col-span-9 flex flex-col gap-unit-4 min-h-[640px] justify-between">
+        <section aria-label="Agent conversation workspace" className="col-span-12 lg:col-span-8 xl:col-span-9 flex flex-col gap-unit-4 min-h-[640px] justify-between">
           {/* Topbar Control Bar (§3.6.2 & §3.6.3) */}
           <header className="p-unit-3 rounded-2xl bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 shadow-lg flex flex-wrap items-center justify-between gap-unit-3">
             {/* Title / Topic context */}
@@ -1045,7 +1045,7 @@ export default function MyAgentView({
                 )}
             </form>
           </div>
-        </main>
+        </section>
       </div>
 
       {/* Flyout Configs Sidebar (Drawer) */}
