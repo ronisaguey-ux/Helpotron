@@ -50,6 +50,18 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
     // No else: never re-check the box the user un-cleared while the gate was open.
   }, [isOpen]);
 
+  // Escape key dismissal for non-mandatory presentation (WCAG 2.1.2)
+  useEffect(() => {
+    if (!isOpen || requireMandatoryAgreement) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, requireMandatoryAgreement, onClose]);
+
   if (!isOpen) return null;
 
   return (
@@ -58,6 +70,9 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
       role="dialog"
       aria-modal="true"
       aria-label="Privacy Policy & Terms of Service"
+      onClick={() => {
+        if (!requireMandatoryAgreement) onClose?.();
+      }}
     >
       {/* Aurora modal chrome (scoped; index.css owns the design system).
           pointer-events is state-driven (see peReady above), never keyframe-driven.
