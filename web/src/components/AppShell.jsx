@@ -259,7 +259,7 @@ export default function AppShell({
             <button
               type="button"
               onClick={toggleSidebar}
-              className="p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition cursor-pointer"
               title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
@@ -393,7 +393,7 @@ export default function AppShell({
                 type="button"
                 onClick={onGoBack}
                 disabled={!canGoBack}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant enabled:hover:text-on-surface enabled:hover:bg-surface-container disabled:opacity-30 transition cursor-pointer"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant enabled:hover:text-on-surface enabled:hover:bg-surface-container disabled:opacity-30 transition cursor-pointer"
                 aria-label="Navigate back"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -402,7 +402,7 @@ export default function AppShell({
                 type="button"
                 onClick={onGoForward}
                 disabled={!canGoForward}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant enabled:hover:text-on-surface enabled:hover:bg-surface-container disabled:opacity-30 transition cursor-pointer"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant enabled:hover:text-on-surface enabled:hover:bg-surface-container disabled:opacity-30 transition cursor-pointer"
                 aria-label="Navigate forward"
               >
                 <ChevronRight className="w-4 h-4" />
