@@ -2056,8 +2056,6 @@ async def _resolve_agent_intent(
     # Node-scoped: assignment bubbles use the assignment_team surface config
     # (or none at all) — never My Agent's — plus the real assignment context.
     system_prompt = agent_system_prompt(user, settings, node=node, ctx=humanizer_ctx)
-    if assignment_context:
-        system_prompt += assignment_context
     system_prompt += (
         f"AVAILABLE ACTIONS (choose exactly one):\n{action_spec}\n\n"
         f"{HUMANIZE_TOOL_GUIDE}\n\n"
@@ -2132,6 +2130,11 @@ async def _resolve_agent_intent(
             "   NEVER refuse browser requests with 'I don't have a tool to search' or 'I cannot use your browser' — you HAVE the `browser_action` tool!\n"
             "2. `scrape_assignment`: When the user asks you to scrape, capture, or collect the assignment on their tab (Canvas or school page), choose `scrape_assignment`.\n"
         )
+    # Per-assignment text is dynamic: appended LAST so the static prefix above
+    # (identity, action spec, rules) stays byte-identical across assignments
+    # and remains eligible for provider prefix caching.
+    if assignment_context:
+        system_prompt += assignment_context
     # Conversation memory (operator 08-26): the LLM previously saw ONLY the
     # current message. 08-27 bugfix: the loop walked the history from the
     # OLDEST end and stopped after 10 turns, and load_chat_history_from_db
