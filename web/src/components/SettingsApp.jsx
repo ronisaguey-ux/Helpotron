@@ -210,7 +210,7 @@ export default function SettingsApp({
   }, []);
 
   return (
-    <div className="relative w-full max-w-5xl mx-auto px-gutter-desktop py-gutter-desktop flex flex-col gap-unit-6">
+    <div className="relative w-full max-w-5xl mx-auto px-4 sm:px-gutter-desktop py-4 sm:py-gutter-desktop flex flex-col gap-unit-6">
       {/* Page Header */}
       <header className="flex flex-wrap items-center justify-between gap-unit-4 border-b border-outline-variant/15 pb-unit-5">
         <div>
