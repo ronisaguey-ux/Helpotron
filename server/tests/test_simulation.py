@@ -28,20 +28,25 @@ def setup_sim_user():
 
 
 def test_simulation_toggle_and_status():
-    headers = _auth_headers("test_sim_user")
+    user_headers = _auth_headers("test_sim_user")
+    admin_headers = _auth_headers("test_admin_sim_user", is_admin=True)
 
-    # 1. Get status
-    stat_resp = client.get("/api/simulation/status", headers=headers)
+    # 1. Get status (regular user can read status)
+    stat_resp = client.get("/api/simulation/status", headers=user_headers)
     assert stat_resp.status_code == 200
     assert "is_enabled" in stat_resp.json()
 
-    # 2. Toggle to disabled
-    tog_off = client.post("/api/simulation/toggle", json={"enabled": False}, headers=headers)
+    # 2. Regular user cannot toggle simulator (403 Forbidden)
+    forbidden_resp = client.post("/api/simulation/toggle", json={"enabled": False}, headers=user_headers)
+    assert forbidden_resp.status_code == 403
+
+    # 3. Admin can toggle to disabled
+    tog_off = client.post("/api/simulation/toggle", json={"enabled": False}, headers=admin_headers)
     assert tog_off.status_code == 200
     assert tog_off.json()["is_enabled"] is False
 
-    # 3. Toggle back to enabled
-    tog_on = client.post("/api/simulation/toggle", json={"enabled": True}, headers=headers)
+    # 4. Admin can toggle back to enabled
+    tog_on = client.post("/api/simulation/toggle", json={"enabled": True}, headers=admin_headers)
     assert tog_on.status_code == 200
     assert tog_on.json()["is_enabled"] is True
 
@@ -71,7 +76,7 @@ def test_simulation_seed_and_clear():
     assert clear_resp.json()["result"]["status"] == "cleared"
 
 
-def _auth_headers(public_id: str) -> dict:
+def _auth_headers(public_id: str, is_admin: bool = False) -> dict:
     """Real auth for the hardened overlord/simulation surface (BATCH-11): a
     valid Bearer token for an existing user — X-Public-ID is never identity."""
     from server.security import create_jwt_token
@@ -82,9 +87,12 @@ def _auth_headers(public_id: str) -> dict:
         if user is None:
             user = User(public_id=public_id, plan="basic", credits=50.0, settings={})
             db.add(user)
-            db.commit()
-            db.refresh(user)
-        token = create_jwt_token(user_id=user.id, role="user")
+        if is_admin:
+            user.role = "admin"
+            user.is_admin = True
+        db.commit()
+        db.refresh(user)
+        token = create_jwt_token(user_id=user.id, role="admin" if is_admin else "user")
     finally:
         db.close()
     return {"Authorization": f"Bearer {token}"}
