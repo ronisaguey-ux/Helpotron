@@ -83,7 +83,7 @@ export default function TelegramIntegration({
             <p className="font-body-sm text-body-sm text-on-surface font-medium">
               Step 1: Open the official Helpotron Telegram bot:
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               <a
                 href={pairingData.deepLink}
                 target="_blank"
@@ -107,7 +107,7 @@ export default function TelegramIntegration({
             <label className="font-label-caps text-xs text-on-surface-variant uppercase">
               Step 2: Enter your Telegram @Username
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               <input
                 type="text"
                 value={handleInput}
@@ -133,7 +133,7 @@ export default function TelegramIntegration({
       ) : (
         <div className="flex flex-col gap-unit-3">
           <div className="flex items-center justify-between p-unit-3 rounded-xl bg-surface-container-lowest/80 border border-outline-variant/20">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-sem-green" />
               <span className="font-body-sm text-body-sm text-on-surface font-medium">
                 Paired with {preferences.telegramUsername}
