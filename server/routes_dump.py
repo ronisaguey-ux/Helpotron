@@ -480,6 +480,11 @@ async def _execute_finalize(
         from .llm import call_llm, extract_json
         from .agent_prompt import prompt_injection_defense_rule
 
+        # Persist intermediate status so client polling reflects active work
+        item.status = "generating"
+        item.requested_action = action
+        db.commit()
+
         source_text = (item.extracted_text or "").strip()
         kind = GENERATING_ACTIONS[action]
         sys_prompt = f"{FINALIZE_PROMPTS[action]}\n\n{prompt_injection_defense_rule()}"
