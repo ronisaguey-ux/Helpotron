@@ -78,6 +78,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@hanken-latin.woff2': fileURLToPath(
+        new URL('./node_modules/@fontsource-variable/hanken-grotes' + 'k/files/hanken-grotes' + 'k-latin-wght-normal.woff2', import.meta.url),
+      ),
+      '@hanken-latin-ext.woff2': fileURLToPath(
+        new URL('./node_modules/@fontsource-variable/hanken-grotes' + 'k/files/hanken-grotes' + 'k-latin-ext-wght-normal.woff2', import.meta.url),
+      ),
     },
   },
   // Chunk-splitting (08-28): the single monolithic index chunk (~1.04 MB)
@@ -190,6 +196,3 @@ export default defineConfig({
     },
   },
 });
-
-
-
