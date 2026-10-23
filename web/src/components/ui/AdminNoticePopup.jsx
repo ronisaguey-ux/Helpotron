@@ -86,6 +86,17 @@ export default function AdminNoticePopup({ isLoggedIn }) {
     }
   };
 
+  useEffect(() => {
+    if (!current) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        dismiss();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [current]);
+
   if (!current) return null;
 
   return (
