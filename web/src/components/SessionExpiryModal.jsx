@@ -83,11 +83,16 @@ export default function SessionExpiryModal({
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [hasShaked, setHasShaked] = useState(false);
+  const [requires2FA, setRequires2FA] = useState(false);
+  const [twoFactorMethod, setTwoFactorMethod] = useState('totp');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setPassphrase('');
       setErrorMsg('');
+      setRequires2FA(false);
+      setTwoFactorCode('');
     }
   }, [isOpen]);
 
@@ -104,18 +109,26 @@ export default function SessionExpiryModal({
       triggerError('Please enter your passphrase to unlock workspace.');
       return;
     }
+    if (requires2FA && !twoFactorCode.trim()) {
+      triggerError('Please enter your 2FA verification code.');
+      return;
+    }
 
     setLoading(true);
     setErrorMsg('');
     try {
-      const res = await api.login(publicId, passphrase, null, null);
-      if (res && (res.message === 'Logged in' || res.status === 'ok')) {
+      const codeToSend = requires2FA ? twoFactorCode.trim() : null;
+      const res = await api.login(publicId, passphrase, codeToSend, null);
+      if (res && res.status === '2fa_required') {
+        setRequires2FA(true);
+        setTwoFactorMethod(res.method || 'totp');
+      } else if (res && (res.message === 'Logged in' || res.status === 'ok')) {
         onSessionRestored?.(publicId);
       } else {
-        triggerError('Invalid passphrase. Verify your credentials.');
+        triggerError('Invalid credentials. Verify your passphrase or 2FA code.');
       }
     } catch (err) {
-      triggerError(err.message || 'Authentication failed. Please check passphrase.');
+      triggerError(err.message || 'Authentication failed. Please check credentials.');
     } finally {
       setLoading(false);
     }
@@ -192,7 +205,7 @@ export default function SessionExpiryModal({
                 id="session-passphrase"
                 type={showPass ? 'text' : 'password'}
                 autoComplete="current-password"
-                autoFocus
+                autoFocus={!requires2FA}
                 required
                 placeholder="Enter key to renew bearer context..."
                 value={passphrase}
@@ -209,6 +222,34 @@ export default function SessionExpiryModal({
               </button>
             </div>
           </div>
+
+          {/* 2FA Verification Input (when 2FA is required) */}
+          {requires2FA && (
+            <div className="space-y-1 text-left">
+              <label
+                htmlFor="session-2fa-code"
+                className="font-mono text-[11px] uppercase tracking-wider text-sem-amber font-semibold block"
+              >
+                2FA Verification Code ({twoFactorMethod.toUpperCase()})
+              </label>
+              <input
+                id="session-2fa-code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
+                required
+                maxLength={twoFactorMethod === 'email' ? 12 : 6}
+                placeholder={twoFactorMethod === 'email' ? '12-digit email code' : '6-digit authenticator code'}
+                value={twoFactorCode}
+                onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, twoFactorMethod === 'email' ? 12 : 6))}
+                className="w-full h-11 px-3.5 rounded-xl bg-surface-container-low/70 border border-sem-amber/40 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-sem-amber focus:ring-1 focus:ring-sem-amber transition"
+              />
+              <span className="font-mono text-[10px] text-on-surface-variant">
+                {twoFactorMethod === 'email' ? 'Enter the 12-digit code emailed to your address.' : 'Enter the 6-digit code from your authenticator app.'}
+              </span>
+            </div>
+          )}
 
           {/* Error Strip */}
           {errorMsg && (
@@ -228,10 +269,10 @@ export default function SessionExpiryModal({
             variant="primary"
             glow={true}
             type="submit"
-            disabled={loading || !passphrase}
+            disabled={loading || !passphrase || (requires2FA && !twoFactorCode.trim())}
             className="w-full h-12 uppercase font-semibold text-xs tracking-wider flex items-center justify-center gap-2 mt-2"
           >
-            <span>{loading ? 'Validating Token...' : 'Resume Session & Unlock Workspace'}</span>
+            <span>{loading ? 'Validating Token...' : requires2FA ? 'Verify 2FA & Unlock Workspace' : 'Resume Session & Unlock Workspace'}</span>
             <ArrowRight className="w-4 h-4" />
           </Button>
 
