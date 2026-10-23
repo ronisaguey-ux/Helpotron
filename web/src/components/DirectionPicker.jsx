@@ -223,7 +223,7 @@ export default function DirectionPicker({
               disabled={!customText.trim() || disabled}
               className="h-10 px-5 rounded-xl bg-primary text-on-primary font-label-caps text-xs uppercase tracking-wider shadow-[0_0_16px_rgba(89,216,201,0.25)] hover:bg-primary-container disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer self-end sm:self-auto active:scale-95"
             >
-              <span>Apply Vector</span>
+              <span>Start</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>

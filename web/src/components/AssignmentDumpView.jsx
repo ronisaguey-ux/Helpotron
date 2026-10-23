@@ -608,7 +608,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
                         disabled={deletingId === item.id}
                         className="px-2.5 py-1 bg-error text-on-error rounded-lg text-[10px] font-label-caps disabled:opacity-60"
                       >
-                        {deletingId === item.id ? 'Deleting…' : 'Confirm'}
+                        {deletingId === item.id ? 'Deleting…' : 'Delete Item'}
                       </button>
                       <button
                         type="button"
