@@ -1,0 +1,34 @@
+[Unit]
+Description=Helpotron maintenance banner (public site intentionally down)
+Documentation=file:///home/roni/helpotron/maintenance/serve.py
+After=network.target
+Conflicts=helpotron-api.service
+
+[Service]
+Type=simple
+User=roni
+Group=roni
+WorkingDirectory=/home/roni/helpotron
+Environment=MAINTENANCE_PORT=5000
+ExecStart=/usr/bin/python3 /home/roni/helpotron/maintenance/serve.py
+Restart=always
+RestartSec=3
+
+# Resource limits
+MemoryMax=128M
+TasksMax=128
+Nice=5
+
+# Sandboxing & security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
