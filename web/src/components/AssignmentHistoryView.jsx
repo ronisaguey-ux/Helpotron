@@ -444,8 +444,16 @@ export default function AssignmentHistoryView({ userId, onSelectAssignment }) {
 
       {/* Ledger Content Area */}
       {loading ? (
-        <div className="p-12 rounded-3xl bg-surface-container-lowest/80 border border-outline-variant/30 text-center font-code-sm text-xs text-on-surface-variant">
-          Loading portfolio ledger…
+        <div className="rounded-3xl bg-surface-container-lowest/80 border border-outline-variant/30 p-6 space-y-3 animate-pulse">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex items-center justify-between p-4 rounded-2xl bg-surface-container-low/50">
+              <div className="space-y-2 flex-1">
+                <div className="h-4 w-48 bg-surface-container-high rounded" />
+                <div className="h-3 w-32 bg-surface-container rounded" />
+              </div>
+              <div className="h-6 w-24 bg-surface-container rounded-full" />
+            </div>
+          ))}
         </div>
       ) : filteredList.length === 0 ? (
         searchQuery ? (
