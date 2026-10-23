@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import shutil
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -117,7 +118,7 @@ def delete_user_account_and_data(
     except Exception as e:
         logger.warning("Could not delete admin organization for user %s: %s", user_id, e)
 
-    # 2. Gather on-disk agent file paths before rows are deleted
+    # 2. Gather on-disk agent and dump file paths before rows are deleted
     try:
         agent_files = db.query(AgentFile).filter(AgentFile.user_id == user_id).all()
         agent_file_paths = [
@@ -127,6 +128,16 @@ def delete_user_account_and_data(
         ]
     except Exception:
         agent_file_paths = []
+
+    try:
+        dump_items = db.query(UniversalDumpItem).filter(UniversalDumpItem.user_id == user_id).all()
+        dump_file_paths = [
+            Path(di.file_path)
+            for di in dump_items
+            if getattr(di, "file_path", None)
+        ]
+    except Exception:
+        dump_file_paths = []
 
     # 3. Clean up moderation items linked to user's public_id
     try:
@@ -147,6 +158,11 @@ def delete_user_account_and_data(
             deleted = q.filter(SharedMaterial.shared_by_id == user_id).delete(synchronize_session=False)
         elif model is StudyGroup:
             deleted = q.filter(StudyGroup.created_by_id == user_id).delete(synchronize_session=False)
+        elif model in (AdminMessage, AdminNotice, AdminNoticeRead, ExtensionReleaseRead):
+            # These tables store public_id (VARCHAR) in user_id, or string representation of user_id
+            deleted = q.filter(
+                (model.user_id == public_id) | (model.user_id == str(user_id))
+            ).delete(synchronize_session=False)
         else:
             deleted = q.filter(model.user_id == user_id).delete(synchronize_session=False)
         counts[model.__tablename__] = deleted
@@ -155,13 +171,20 @@ def delete_user_account_and_data(
     deleted_user = db.query(User).filter(User.id == user_id).delete(synchronize_session=False)
     db.commit()
 
-    # 6. Clean up on-disk files (agent memory, uploaded agent files, custom avatars)
+    # 6. Clean up on-disk files (agent memory, uploaded agent files, custom avatars, dump files, message attachments, exports)
     for p in agent_file_paths:
         try:
             if p.exists() and p.is_file():
                 p.unlink()
         except OSError as e:
             logger.warning("Could not unlink agent file %s: %s", p, e)
+
+    for dp in dump_file_paths:
+        try:
+            if dp.exists() and dp.is_file():
+                dp.unlink()
+        except OSError as e:
+            logger.warning("Could not unlink dump file %s: %s", dp, e)
 
     safe_pid = re.sub(r"[^A-Za-z0-9_-]", "_", public_id or "guest")[:80]
     mem_path = Path("./uploads/agent_memory") / f"{safe_pid}.json"
@@ -180,6 +203,23 @@ def delete_user_account_and_data(
                 av_path.unlink()
         except OSError as e:
             logger.warning("Could not unlink avatar %s: %s", av_path, e)
+
+    msg_attach_dir = Path("data/uploads/message_attachments")
+    if msg_attach_dir.exists() and msg_attach_dir.is_dir():
+        for prefix in (f"{public_id}_", f"{safe_pid}_"):
+            for att_path in msg_attach_dir.glob(f"{prefix}*"):
+                try:
+                    if att_path.is_file():
+                        att_path.unlink()
+                except OSError as e:
+                    logger.warning("Could not unlink message attachment %s: %s", att_path, e)
+
+    export_dir = Path(__file__).resolve().parent.parent / "exports" / (public_id or "")
+    if public_id and export_dir.exists() and export_dir.is_dir():
+        try:
+            shutil.rmtree(export_dir, ignore_errors=True)
+        except OSError as e:
+            logger.warning("Could not remove export directory %s: %s", export_dir, e)
 
     # 7. Anonymize user records across data lake storage
     anonymized_lake_records = 0

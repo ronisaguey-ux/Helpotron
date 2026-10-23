@@ -16,6 +16,11 @@ from server.database import (
     PasswordReset,
     AgentChatThread,
     AgentChatMessage,
+    AdminMessage,
+    AdminNotice,
+    AdminNoticeRead,
+    ExtensionReleaseRead,
+    UniversalDumpItem,
 )
 import server.privacy as privacy
 
@@ -89,7 +94,12 @@ def test_cascading_erasure_with_foreign_keys_enabled():
     )
     thread = AgentChatThread(user_id=user_id, title="Chat 1")
     msg = AgentChatMessage(user_id=user_id, target_key="global", sender="user", text="hello")
-    db.add_all([scs, ce, ti, act, af, ak, pr, thread, msg])
+    admin_msg = AdminMessage(user_id=u.public_id, subject="Help Request", message="User personal details")
+    admin_not = AdminNotice(user_id=u.public_id, message="Direct notice to user")
+    admin_nr = AdminNoticeRead(notice_id=1, user_id=u.public_id)
+    ext_rr = ExtensionReleaseRead(release_id=1, user_id=u.public_id)
+    dump_item = UniversalDumpItem(user_id=user_id, file_name="notes.pdf", file_type="pdf", file_path="/tmp/nonexistent_dump_123.pdf")
+    db.add_all([scs, ce, ti, act, af, ak, pr, thread, msg, admin_msg, admin_not, admin_nr, ext_rr, dump_item])
     db.commit()
 
     res = privacy.delete_user_account_and_data(u, db)
@@ -101,3 +111,8 @@ def test_cascading_erasure_with_foreign_keys_enabled():
     assert db.query(TrashItem).filter(TrashItem.user_id == user_id).first() is None
     assert db.query(StudyCardState).filter(StudyCardState.user_id == user_id).first() is None
     assert db.query(AgentChatMessage).filter(AgentChatMessage.user_id == user_id).first() is None
+    assert db.query(AdminMessage).filter(AdminMessage.user_id == "stu_test_cov_123").first() is None
+    assert db.query(AdminNotice).filter(AdminNotice.user_id == "stu_test_cov_123").first() is None
+    assert db.query(AdminNoticeRead).filter(AdminNoticeRead.user_id == "stu_test_cov_123").first() is None
+    assert db.query(ExtensionReleaseRead).filter(ExtensionReleaseRead.user_id == "stu_test_cov_123").first() is None
+    assert db.query(UniversalDumpItem).filter(UniversalDumpItem.user_id == user_id).first() is None
