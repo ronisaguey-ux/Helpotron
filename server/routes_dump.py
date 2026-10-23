@@ -288,13 +288,16 @@ async def list_dump_items(
 
     items = query.order_by(UniversalDumpItem.created_at.desc()).limit(limit).all()
 
+    # Batch fetch matched assignment titles in a single query to eliminate N+1 loop
+    matched_ids = {item.matched_assignment_id for item in items if item.matched_assignment_id}
+    matched_titles = {}
+    if matched_ids:
+        for a_id, a_title in db.query(Assignment.id, Assignment.title).filter(Assignment.id.in_(matched_ids)).all():
+            matched_titles[a_id] = a_title
+
     result = []
     for item in items:
-        matched_title = None
-        if item.matched_assignment_id:
-            assign = db.query(Assignment).filter(Assignment.id == item.matched_assignment_id).first()
-            if assign:
-                matched_title = assign.title
+        matched_title = matched_titles.get(item.matched_assignment_id)
 
         result.append({
             "id": item.id,
