@@ -14,8 +14,8 @@ from .database import User, StudyMaterial
 class StudyGroupManager:
     @staticmethod
     def create_group(db: Session, name: str, created_by: User) -> dict:
-        """Create a new study group."""
-        from .database import StudyGroup
+        """Create a new study group and enroll creator as initial member."""
+        from .database import StudyGroup, GroupMembership
         group = StudyGroup(
             name=name,
             created_by_id=created_by.id,
@@ -23,6 +23,9 @@ class StudyGroupManager:
             settings={"allow_material_sharing": True, "allow_editing": False}
         )
         db.add(group)
+        db.flush()
+        membership = GroupMembership(group_id=group.id, user_id=created_by.id)
+        db.add(membership)
         db.commit()
         db.refresh(group)
         return {"id": group.id, "name": group.name, "invite_code": group.invite_code}
