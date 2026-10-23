@@ -41,7 +41,7 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
   const categories = [
     { label: 'Universal Assignment Dump', key: 'dump', pct: 45, tokens: Math.round(cycleTokens * 0.45) },
     { label: 'Flashcards & Practice Quizzes', key: 'study', pct: 30, tokens: Math.round(cycleTokens * 0.30) },
-    { label: 'Research & Essay Synthesis', key: 'synthesis', pct: 18, tokens: Math.round(cycleTokens * 0.18) },
+    { label: 'Research & Essay Drafting', key: 'synthesis', pct: 18, tokens: Math.round(cycleTokens * 0.18) },
     { label: 'AI Detection & Calibration', key: 'detection', pct: 7, tokens: Math.round(cycleTokens * 0.07) },
   ];
 
@@ -109,7 +109,7 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
           <div>
             <div className="flex items-baseline gap-2">
               <span className="font-tabular-stat text-2xl md:text-3xl text-on-surface font-bold">100%</span>
-              <span className="font-label-caps text-xs text-on-surface-variant">CONTENT-METERED</span>
+              <span className="font-label-caps text-xs text-on-surface-variant">USAGE-BASED</span>
             </div>
             <div className="inline-flex items-center gap-1.5 mt-3 text-sem-green text-xs font-code-sm">
               <ShieldCheck className="w-4 h-4 text-sem-green" />
@@ -134,12 +134,12 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
               <span className="font-code-sm text-xs text-on-surface-variant">TOKENS</span>
             </div>
             <p className="font-code-sm text-xs text-on-surface-variant mt-2">
-              Available compute capacity: {currentTokens.toLocaleString()} tokens.
+              Available token balance: {currentTokens.toLocaleString()} tokens.
             </p>
           </div>
           <div className="flex items-center justify-between mt-3 pt-2 text-xs font-code-sm text-on-surface-variant border-t border-outline-variant/10">
             <span>Auto-rollback active</span>
-            <span className="text-sem-green font-medium">Safe Execution</span>
+            <span className="text-sem-green font-medium">Protected Balance</span>
           </div>
         </div>
       </div>
@@ -150,11 +150,11 @@ export default function CreditsCostTab({ onBack = null, userId = '', currentToke
           <div>
             <h3 className="font-title-md text-title-md text-on-surface font-semibold">Spending over time</h3>
             <p className="font-code-sm text-xs text-on-surface-variant mt-0.5">
-              Continuous rolling telemetry across completed model generations and synthesis tasks.
+              Token usage across completed assignments and study tasks.
             </p>
           </div>
           <span className="font-chip-status text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md">
-            CONTENT-METERED
+            USAGE-BASED
           </span>
         </div>
 

@@ -249,10 +249,10 @@ export default function BillingView({ userId = '' }) {
           <ShieldCheck className="w-5 h-5 text-sem-green shrink-0" />
           <div>
             <span className="font-label-caps uppercase tracking-wider text-sem-green font-semibold block">
-              Transparent Compute Policy
+              Transparent Token Policy
             </span>
             <span className="text-on-surface-variant font-body-sm">
-              All plans have full access to tools and models. You only pay for the deterministic compute tokens your tasks use.
+              All plans have full access to tools and models. You only pay for the tokens your assignments use.
             </span>
           </div>
         </div>
@@ -406,7 +406,7 @@ export default function BillingView({ userId = '' }) {
             Open Beta Prototype Notice
           </span>
           <p className="font-body-sm text-xs leading-relaxed">
-            Payment processing is currently running in test sandbox mode during platform evaluation. No real credit card charges will occur. Token balances and subscription states settle upon official release. Tokens are earn-only and non-refundable: purchased tokens are consumed on the compute work they power, and tasks that fail outright are not charged.
+            Payment processing is currently running in test sandbox mode during platform evaluation. No real credit card charges will occur. Token balances and subscription states settle upon official release. Tokens are earn-only and non-refundable: purchased tokens are consumed on the assignments you run, and tasks that fail outright are not charged.
           </p>
         </div>
       </div>
@@ -415,9 +415,9 @@ export default function BillingView({ userId = '' }) {
       <div className="bg-surface-container-lowest/80 backdrop-blur-xl p-6 rounded-3xl border border-outline-variant/20 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-title-md text-title-md text-on-surface font-semibold">Activity &amp; Receipts Ledger</h3>
+            <h3 className="font-title-md text-title-md text-on-surface font-semibold">Activity &amp; Receipts History</h3>
             <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-              Verified compute deduction and credit history.
+              Verified token usage and credit history.
             </p>
           </div>
           <span className="font-tabular-stat text-xs text-on-surface-variant bg-surface-container-high px-3 py-1 rounded-full">
@@ -505,7 +505,7 @@ export default function BillingView({ userId = '' }) {
             </div>
 
             <p className="text-[11px] text-on-surface-variant leading-relaxed">
-              Tokens are earn-only and non-refundable: purchased tokens are consumed directly on the compute tasks you run. Tasks that fail outright are not charged.
+              Tokens are earn-only and non-refundable: purchased tokens are consumed directly on the assignments you run. Tasks that fail outright are not charged.
             </p>
 
             {/* Inline Error */}
