@@ -1,5 +1,11 @@
 # Helpotron — Academic Study Operating System
 
+[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
+[![React 19](https://img.shields.io/badge/Frontend-React%2019-61DAFB.svg)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Bundler-Vite-646CFF.svg)](https://vitejs.dev/)
+[![Status](https://img.shields.io/badge/Status-Public-brightgreen.svg)](https://github.com/ronisaguey-ux/Helpotron)
+
 > An AI-native study operating system and agent co-pilot designed for high-school students: personalized agent tutoring, multi-modal assignment tracking, verifiable math sandboxing, credit-governed tool execution, and browser extension scraping.
 
 ---
@@ -475,3 +481,15 @@ Helpotron includes a comprehensive pytest suite in `server/tests/`:
 - **Single Branch (`main`)**: All development occurs on the `main` branch.
 - **Local Commits Only**: **NEVER push to remote origin or master without explicit operator authorization.** Commits are recorded locally and verified against the test suite prior to staging.
 - **Conventional Commits**: Commits follow descriptive prefixes (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`).
+
+---
+
+## 18. License & Commercial Use
+
+Helpotron is licensed under the **Business Source License 1.1 (BSL 1.1)**.
+
+- **Non-Commercial & Evaluation**: Free to use, modify, and redistribute for personal, educational, research, and internal evaluation purposes.
+- **Commercial & SaaS Use**: Providing Helpotron as a managed hosted service or integrating it into commercial production systems requires a commercial license from the author.
+- **Conversion to Open Source**: On **January 1, 2030**, this work automatically transitions to the **Apache License 2.0**.
+
+See [LICENSE](LICENSE) for the full license terms.
