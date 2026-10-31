@@ -101,3 +101,4 @@ research/security_audit_findings_20260917.json
 #             The written reports (AUDIT.md, PLAN.md, REPORT.md) ARE tracked.
 /reports/ui-audit/metrics/
 /reports/ui-audit/shots/
+reports/audit-v2/
