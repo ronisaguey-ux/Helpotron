@@ -386,26 +386,51 @@ def verify_and_reset(db, public_id: str, new_password: str, code: Optional[str] 
         db.commit()
         raise ValueError("Invalid recovery code or link.")
 
-    # MISC-07: Require 2FA if enabled on the account
-    is_2fa_enabled = bool((user.settings or {}).get("2fa_enabled"))
-    if is_2fa_enabled:
+    # MISC-07: Require 2FA if enabled on the account. Mirrors the /api/login
+    # gate (main.py): only challenge when the configured factor can actually be
+    # verified, and dispatch per method. The old gate verified TOTP only, so an
+    # sms/email 2FA account could never complete recovery (no code was sent and
+    # no TOTP secret exists to check against).
+    _st = user.settings or {}
+    method = (_st.get("2fa_method") or "totp").lower()
+    phone = ""
+    if method == "sms":
+        try:
+            from .routes_auth_2fa import _e164
+            raw = _st.get("phone_number") or (_st.get("profile") or {}).get("phone") or ""
+            phone = _e164(raw) if raw else ""
+        except Exception:
+            phone = ""
+    email_target = ((_st.get("profile") or {}).get("email") or _st.get("email") or "").strip()
+    factor_ready = (
+        (method == "totp" and bool(_st.get("2fa_totp_secret")))
+        or (method == "sms" and bool(phone))
+        or (method == "email" and bool(email_target))
+    )
+    if _st.get("2fa_enabled") and factor_ready:
         if not two_factor_code:
+            from .auth_2fa import SMSVerification, code_store, email_service
+            if method == "sms":
+                SMSVerification.send_sync(phone)
+            elif method == "email" and email_service.is_configured():
+                new_code = code_store.generate_code(user.public_id, purpose="2fa_challenge", length=12)
+                email_service.send_verification_code(email_target, new_code, "Password Reset")
             return {
                 "status": "2fa_required",
-                "method": (user.settings or {}).get("2fa_method", "totp"),
+                "method": method,
                 "message": "Two-factor authentication code required to complete password reset.",
             }
-        from .routes_auth_2fa import totp_service
-        secret = (user.settings or {}).get("2fa_totp_secret", "")
-        valid_2fa = totp_service.verify_code(secret, two_factor_code.strip()) if secret else False
-        if not valid_2fa:
-            backup_codes = list((user.settings or {}).get("2fa_backup_codes") or [])
-            if two_factor_code.strip() in backup_codes:
-                backup_codes.remove(two_factor_code.strip())
-                st = dict(user.settings or {})
-                st["2fa_backup_codes"] = backup_codes
-                user.settings = st
-                valid_2fa = True
+        tf = two_factor_code.strip()
+        valid_2fa = False
+        if method == "totp":
+            from .auth_2fa import totp_service
+            valid_2fa = totp_service.verify_code_with_replay(user.id, _st.get("2fa_totp_secret", ""), tf)
+        elif method == "sms":
+            from .auth_2fa import SMSVerification
+            valid_2fa, _why = SMSVerification.check_sync(phone, tf)
+        else:
+            from .auth_2fa import code_store
+            valid_2fa, _why = code_store.verify_code(user.public_id, tf, purpose="2fa_challenge")
         if not valid_2fa:
             _record_failed_attempt(user.id)
             raise ValueError("Invalid two-factor authentication code.")
