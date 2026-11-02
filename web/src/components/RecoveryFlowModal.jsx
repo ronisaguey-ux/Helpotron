@@ -69,6 +69,13 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
   }, [open, publicId]);
 
   useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  useEffect(() => {
     if (cooldown <= 0) return;
     const interval = setInterval(() => setCooldown((prev) => prev - 1), 1000);
     return () => clearInterval(interval);
