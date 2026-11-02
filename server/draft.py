@@ -15,6 +15,7 @@ import threading
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from . import detectors, llm
@@ -35,6 +36,24 @@ MAX_HUMANIZER_RETRIES = 3
 
 # Default detector threshold if user doesn't specify
 DEFAULT_THRESHOLD = 80.0
+
+
+def charge_draft_cost(db: Session, user_id: int) -> bool:
+    """Debit DRAFT_COST only if the balance covers it, in ONE guarded statement.
+
+    debit_tokens_atomic(allow_negative=False) silently leaves the balance unchanged
+    when it is too low, so a read-check-then-debit lets two concurrent requests both
+    pass the check while only one debit lands: the second draft runs free. The
+    guard lives in the WHERE clause, so rowcount says whether the charge happened.
+    """
+    res = db.execute(
+        text("UPDATE users SET settings = json_set(settings, '$.token_balance', "
+             "CAST(COALESCE(json_extract(settings, '$.token_balance'), 0) AS REAL) - :amt) "
+             "WHERE id = :uid AND CAST(COALESCE(json_extract(settings, '$.token_balance'), 0) AS REAL) >= :amt"),
+        {"amt": float(DRAFT_COST), "uid": user_id},
+    )
+    db.commit()
+    return (res.rowcount or 0) == 1
 
 
 def get_style(user_id: int, db: Session) -> Optional[str]:
@@ -171,11 +190,10 @@ async def create_draft_task(
     if not user:
         raise ValueError("User not found")
     # Charge task tokens upfront (refunded on failure)
-    from .credits import get_token_balance, debit_tokens_atomic, is_unmetered
+    from .credits import is_unmetered
     if not is_unmetered(user):
-        if get_token_balance(user) < DRAFT_COST:
+        if not charge_draft_cost(db, user_id):
             raise ValueError("Insufficient tokens")
-        debit_tokens_atomic(db, user_id, DRAFT_COST, allow_negative=False)
 
     draft = Draft(
         user_id=user_id,

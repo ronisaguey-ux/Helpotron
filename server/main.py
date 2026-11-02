@@ -2645,11 +2645,23 @@ def retry_draft(draft_id: int, db: Session = Depends(get_db), current_user: User
     if current_user.credits < DRAFT_COST:
         raise HTTPException(402, f"insufficient credits — need {DRAFT_COST} credits")
 
-    from .credits import get_token_balance, set_token_balance, is_unmetered
+    from .credits import is_unmetered
+    from sqlalchemy import update as _sa_update
+    # Claim the risky->pending transition atomically so a double-click cannot
+    # start two paid workflows on the same draft.
+    claimed = db.execute(
+        _sa_update(Draft).where(Draft.id == draft.id, Draft.status == "risky").values(status="pending")
+    ).rowcount
+    db.commit()
+    if claimed != 1:
+        raise HTTPException(409, "Draft retry already in progress")
     if not is_unmetered(current_user):
-        if get_token_balance(current_user) < DRAFT_COST:
+        from .draft import charge_draft_cost
+        if not charge_draft_cost(db, current_user.id):
+            draft.status = "risky"
+            db.commit()
             raise HTTPException(402, "insufficient task tokens for draft")
-        set_token_balance(current_user, get_token_balance(current_user) - DRAFT_COST)
+    db.refresh(draft)
     # Reset status and retries
     draft.status = "pending"
     draft.retries_left = MAX_RETRIES
