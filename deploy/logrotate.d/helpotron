@@ -1,11 +1,19 @@
-/home/roni/helpotron/data/logs/*.log
-/home/roni/helpotron/data_lake/*.jsonl {
-    daily
+# Only files nothing else bounds. Deliberately NOT listed:
+#  - data/logs/*.log: server/access_log.py already rotates them with
+#    RotatingFileHandler (10 MB x 10); a second rotator renames *.log.1 over
+#    the handler's own backups and copytruncate races its writes.
+#  - data_lake/microcredit_submissions.jsonl: a system of record (listed,
+#    deleted-by-id, rewritten via tmp+rename in server/datalake.py); a 14-day
+#    rotate silently destroyed user submissions.
+#  - data_lake/monitors_history.jsonl: self-trimmed to 2000 rows by
+#    server/monitors.py; daily rotation wiped the history charts every day.
+/home/roni/helpotron/data_lake/task_kills.jsonl {
+    weekly
+    maxsize 50M
     missingok
-    rotate 14
+    rotate 8
     compress
     delaycompress
     notifempty
     copytruncate
-    create 0640 roni roni
 }
