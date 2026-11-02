@@ -115,6 +115,18 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
     fetchItems();
   }, [userId]);
 
+  useEffect(() => {
+    if (!batchModalOpen && !finalizeModalItem && !resultView) return;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (resultView) setResultView(null);
+      else if (finalizeModalItem) setFinalizeModalItem(null);
+      else setBatchModalOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [batchModalOpen, finalizeModalItem, resultView]);
+
   // Reactive polling while work is active (executing batch, uploading, or items generating/processing)
   useEffect(() => {
     const hasActiveWork =
@@ -681,6 +693,7 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
               <button
                 type="button"
                 onClick={() => setBatchModalOpen(false)}
+                aria-label="Close spend confirmation"
                 className="p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition"
               >
                 <X className="w-5 h-5" />
@@ -836,19 +849,21 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby="dump-dialog-title"
           className="fixed inset-0 z-50 bg-background/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
         >
           <div className="w-full max-w-lg rounded-3xl bg-surface-container-lowest border border-outline-variant/30 shadow-2xl p-6 sm:p-8 space-y-6 relative">
             <div className="flex items-start justify-between">
               <div className="space-y-1">
                 <span className="font-label-caps text-xs text-primary uppercase tracking-wider">Select Material Kind</span>
-                <h3 className="font-title-md text-lg text-on-surface font-semibold truncate max-w-sm">
+                <h3 id="dump-dialog-title" className="font-title-md text-lg text-on-surface font-semibold truncate max-w-sm">
                   {finalizeModalItem.file_name}
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setFinalizeModalItem(null)}
+                aria-label="Close item actions"
                 className="p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition"
               >
                 <X className="w-5 h-5" />
@@ -890,14 +905,16 @@ export default function AssignmentDumpView({ userId = '', onSelectAssignment }) 
         <div
           role="dialog"
           aria-modal="true"
+          aria-labelledby="dump-preview-title"
           className="fixed inset-0 z-50 bg-background/80 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn"
         >
           <div className="w-full max-w-3xl rounded-3xl bg-surface-container-lowest border border-outline-variant/30 shadow-2xl p-6 sm:p-8 space-y-4 max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between">
-              <h3 className="font-title-md text-lg text-on-surface font-semibold">{resultView.title}</h3>
+              <h3 id="dump-preview-title" className="font-title-md text-lg text-on-surface font-semibold">{resultView.title}</h3>
               <button
                 type="button"
                 onClick={() => setResultView(null)}
+                aria-label="Close preview"
                 className="p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition"
               >
                 <X className="w-5 h-5" />
