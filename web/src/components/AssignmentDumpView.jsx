@@ -36,7 +36,7 @@ const FINALIZE_OPTIONS = [
 ];
 
 function estimateContentTokens(item) {
-  const textLen = (item?.extracted_text || '').length;
+  const textLen = item?.extracted_text_len ?? (item?.extracted_text || '').length;
   if (!textLen) return 'Est. ~1 Token';
   const inputTokens = Math.max(100, Math.round(textLen / 4));
   const estOutputTokens = Math.max(250, Math.min(4000, Math.round(inputTokens * 0.6)));
