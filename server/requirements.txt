@@ -1,6 +1,6 @@
 fastapi>=0.141.1,<0.142.0
 uvicorn[standard]>=0.52.4,<0.53.0
-gunicorn>=22.0.0,<24.0.0
+gunicorn>=26.2.0,<27.0.0
 # uvloop>=0.19.0,<0.22.0; sys_platform != "win32"
 # Self-hosted detectors (owner 09-06): thinkst-zippy (ZipPy twin-prelude
 # compression heuristic) + onnxruntime/tokenizers for the INT8 ONNX RoBERTa
