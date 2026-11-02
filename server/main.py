@@ -1978,6 +1978,13 @@ async def transcribe(file: UploadFile = File(...),
                                         process="transcription", track_stall=True)
     except RuntimeError as e:
         raise HTTPException(500, str(e))
+    finally:
+        # Privacy: the raw recording is not referenced by any row, so neither
+        # GDPR erasure nor retention could ever reach it. Keep only the text.
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
     if not text.strip():
         raise HTTPException(500, "transcription returned empty text")
 
