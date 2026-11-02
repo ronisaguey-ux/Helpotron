@@ -278,10 +278,14 @@ async def list_dump_items(
     status: Optional[str] = Query(None),
     subject: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
+    preview: bool = Query(False),
     current_user: User = Depends(get_current_authenticated_user),
     db: Session = Depends(get_db),
 ):
-    """Retrieves all universal dumped items for user with Overlord assignment match details."""
+    """Retrieves all universal dumped items for user with Overlord assignment match details.
+
+    preview=1 trims extracted_text to a short snippet (plus extracted_text_len) so the
+    dump list view does not download up to 200 x 200k chars it only shows 140 of."""
     query = db.query(UniversalDumpItem).filter(UniversalDumpItem.user_id == current_user.id)
     if status:
         query = query.filter(UniversalDumpItem.status == status)
@@ -302,6 +306,7 @@ async def list_dump_items(
     result = []
     for item in items:
         matched_title = matched_titles.get(item.matched_assignment_id)
+        text = item.extracted_text or ""
 
         result.append({
             "id": item.id,
@@ -309,7 +314,8 @@ async def list_dump_items(
             "file_type": item.file_type,
             "file_size_bytes": item.file_size_bytes,
             "status": item.status,
-            "extracted_text": item.extracted_text,
+            "extracted_text": text[:300] if preview else item.extracted_text,
+            "extracted_text_len": len(text),
             "matched_assignment_id": item.matched_assignment_id,
             "matched_assignment_title": matched_title,
             "subject": item.subject,
