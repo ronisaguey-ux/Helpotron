@@ -20,8 +20,11 @@ if [[ ! -d "\$RELEASES" ]]; then
 fi
 
 cd "\$RELEASES"
-# Find previous release (second newest in directory)
-PREV_RELEASE=\$(ls -dt */ 2>/dev/null | sed -n '2p' | tr -d '/')
+# Find the release just older than the ACTIVE one. "Second newest" was wrong
+# after any rollback: a second run picked the same release again and reported
+# success while nothing changed.
+CURRENT=\$(basename "\$(readlink -f "\$REMOTE_BASE/dist")")
+PREV_RELEASE=\$(ls -dt */ 2>/dev/null | tr -d '/' | awk -v cur="\$CURRENT" 'seen{print; exit} \$0==cur{seen=1}')
 
 if [[ -z "\$PREV_RELEASE" ]]; then
     echo "❌ No previous release available to roll back to." >&2
