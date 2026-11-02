@@ -120,10 +120,10 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
         setCooldown(30);
         setStep(2);
       } else {
-        triggerError(res.message || 'Dispatch to requested channel failed. Try asking the developer.');
+        triggerError(res.message || 'We couldn\'t send the code there. Try the other option or message the developer.');
       }
     } catch (err) {
-      triggerError(err.message || 'Could not dispatch recovery challenge.');
+      triggerError(err.message || 'Could not send the recovery code. Try again in a moment.');
     } finally {
       setLoading(false);
     }
@@ -227,7 +227,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
               Account Recovery &amp; Credential Reset
             </h1>
             <p className="font-body-sm text-xs text-on-surface-variant mt-0.5">
-              Cryptographic key reset &amp; verified account restoration channel (Spec 3.2.4).
+              Get a code by email or text, then choose a new password.
             </p>
           </div>
         </div>
@@ -404,7 +404,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
                       onClick={handleSendDevTicket}
                       className="w-full text-xs uppercase tracking-wider py-2 font-semibold"
                     >
-                      {loading ? 'Dispatching...' : 'Send Message to Developer'}
+                      {loading ? 'Sending…' : 'Send Message to Developer'}
                     </Button>
                   </>
                 )}
@@ -417,7 +417,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
                 onClick={() => handleRequestOtp()}
                 className="w-full h-11 uppercase font-semibold text-xs tracking-wider flex items-center justify-center gap-2 mt-2"
               >
-                <span>{loading ? 'Dispatching Passcode...' : 'Send Recovery Code →'}</span>
+                <span>{loading ? 'Sending code…' : 'Send Recovery Code →'}</span>
               </Button>
             )}
           </div>
@@ -451,7 +451,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
             {/* Segmented OTP 6-Cell Form */}
             <div className="space-y-2 text-center">
               <label className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
-                Cryptographic Passcode (6-Digit OTP)
+                6-digit code
               </label>
               <SegmentedOTPInput
                 value={otpCode}
