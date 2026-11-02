@@ -2779,9 +2779,11 @@ class HardenedUploadsStaticFiles(StaticFiles):
             response.headers["Content-Disposition"] = "attachment"
         return response
 
-# User uploads (avatars, agent files) served statically — mounted before the
-# SPA catch-all below so /uploads/* resolves to files, not index.html.
-app.mount("/uploads", HardenedUploadsStaticFiles(directory=str(_UPLOADS_DIR)), name="uploads")
+# Only avatars are public. Mounting all of uploads/ served dump files,
+# agent files and per-user agent_memory/<public_id>.json to anyone with
+# the URL, no auth. Mounted before the SPA catch-all below.
+(_UPLOADS_DIR / "avatars").mkdir(parents=True, exist_ok=True)
+app.mount("/uploads/avatars", HardenedUploadsStaticFiles(directory=str(_UPLOADS_DIR / "avatars")), name="uploads")
 
 if _WEB_DIST.exists() and (_WEB_DIST / "index.html").exists():
     if (_WEB_DIST / "assets").exists():
