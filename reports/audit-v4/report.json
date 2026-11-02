@@ -1,0 +1,392 @@
+{
+  "audit": "Helpotron Full-Stack Audit Swarm v4 (r14)",
+  "generated_at": "2026-11-02T00:00:00Z",
+  "target": "local repository /home/roni/Roni_workspace/helpotron (production not mutated, nothing deployed or pushed)",
+  "coordinator": "claude-worker (Opus 5.5)",
+  "base_commit": "300a8b8",
+  "merged_head": "ac99845",
+  "summary": {
+    "total_findings": 37,
+    "fixed": 19,
+    "partial": 1,
+    "open": 12,
+    "no_action": 5,
+    "commits": 18,
+    "verification": {
+      "web_build": "PASS",
+      "pytest_tests": "32 passed, 1 pre-existing failure (test_ip_rate_limit_returns_429)"
+    }
+  },
+  "findings": [
+    {
+      "id": "V4-A1-01",
+      "agent": "A1",
+      "category": "Accessibility",
+      "severity": "MEDIUM",
+      "file": "web/src/components/RecoveryFlowModal.jsx",
+      "status": "fixed",
+      "commit": "45edf46",
+      "summary": "Recovery modal had no Escape dismissal."
+    },
+    {
+      "id": "V4-A1-02",
+      "agent": "A1",
+      "category": "Accessibility",
+      "severity": "MEDIUM",
+      "file": "web/src/components/AssignmentDumpView.jsx",
+      "status": "fixed",
+      "commit": "def6d7b",
+      "summary": "2 dump dialogs unnamed, 3 close buttons unlabeled, no Escape on any of 3."
+    },
+    {
+      "id": "V4-A1-03",
+      "agent": "A1",
+      "category": "Accessibility",
+      "severity": "LOW",
+      "file": "web/src/components/GuideView.jsx:379, TermsOfServiceView.jsx:22",
+      "status": "partial",
+      "commit": "aacd374",
+      "summary": "Scripted smooth scroll ignored prefers-reduced-motion; remaining in AnonymousLanding, AssignmentDetailView, MyAgentView, lib/errorActions.js."
+    },
+    {
+      "id": "V4-A1-04",
+      "agent": "A1",
+      "category": "Routing and view-state correctness",
+      "severity": "LOW",
+      "file": "web/src/App.jsx (VIEW_TITLES)",
+      "status": "fixed",
+      "commit": "90f889a",
+      "summary": "5 views had no document title."
+    },
+    {
+      "id": "V4-A1-05",
+      "agent": "A1",
+      "category": "Routing and view-state correctness",
+      "severity": "MEDIUM",
+      "file": "web/src/App.jsx (handleSelectView, goBack)",
+      "status": "open",
+      "commit": null,
+      "summary": "In-app navigation never updates the URL: reload/share loses view, Back leaves app."
+    },
+    {
+      "id": "V4-A1-06",
+      "agent": "A1",
+      "category": "Responsive layout and mobile overflow",
+      "severity": "INFO",
+      "file": "web/src (fixed-width elements)",
+      "status": "no_action",
+      "commit": null,
+      "summary": "All wide fixed-width elements sit in clipping/scrolling containers."
+    },
+    {
+      "id": "V4-A2-01",
+      "agent": "A2",
+      "category": "Authentication and session lifecycle",
+      "severity": "HIGH",
+      "file": "web/src/components/RecoveryFlowModal.jsx:143-148",
+      "status": "fixed",
+      "commit": "843d8ef",
+      "summary": "Recovery reported success for 2FA accounts when password had not changed."
+    },
+    {
+      "id": "V4-A2-02",
+      "agent": "A2",
+      "category": "Authentication and session lifecycle",
+      "severity": "HIGH",
+      "file": "server/recovery.py:390-411",
+      "status": "fixed",
+      "commit": "e2f5239",
+      "summary": "Reset 2FA only accepted TOTP, locking out SMS/email-2FA users; added TOTP replay guard; dead backup-code path removed."
+    },
+    {
+      "id": "V4-A2-03",
+      "agent": "A2",
+      "category": "Copy, clarity and onboarding",
+      "severity": "MEDIUM",
+      "file": "web/src/components/RecoveryFlowModal.jsx",
+      "status": "fixed",
+      "commit": "843d8ef",
+      "summary": "Jargon ('Master Passphrase', 'Key renewal failed') replaced with plain copy."
+    },
+    {
+      "id": "V4-A2-04",
+      "agent": "A2",
+      "category": "Copy, clarity and onboarding",
+      "severity": "LOW",
+      "file": "web/src/components/RecoveryFlowModal.jsx:116,119,223,400,413,447",
+      "status": "fixed",
+      "commit": "0db4871",
+      "summary": "Visible '(Spec 3.2.4)' and 'Dispatch'/'Cryptographic Passcode' wording removed."
+    },
+    {
+      "id": "V4-A2-05",
+      "agent": "A2",
+      "category": "Authorization and IDOR",
+      "severity": "INFO",
+      "file": "server/ (all non-admin id routes)",
+      "status": "no_action",
+      "commit": null,
+      "summary": "All non-admin id-taking routes enforce ownership. Admin surfaces NOT audited."
+    },
+    {
+      "id": "V4-A3-01",
+      "agent": "A3",
+      "category": "Input handling and injection",
+      "severity": "MEDIUM",
+      "file": "scrape_sidecar/app.py:293,305-317",
+      "status": "open",
+      "commit": null,
+      "summary": "SSRF: stealth/dynamic modes only check final URL; subrequests to internal hosts unblocked; plain mode doesn't pin resolved IP."
+    },
+    {
+      "id": "V4-A3-02",
+      "agent": "A3",
+      "category": "Privacy and data retention",
+      "severity": "MEDIUM",
+      "file": "server/main.py:1970",
+      "status": "fixed",
+      "commit": "077a375",
+      "summary": "/api/transcribe kept uploaded audio forever, unreachable by account deletion."
+    },
+    {
+      "id": "V4-A3-03",
+      "agent": "A3",
+      "category": "Input handling and injection",
+      "severity": "HIGH",
+      "file": "server/main.py:2784",
+      "status": "fixed",
+      "commit": "5450ff2, 9fae044",
+      "summary": "Unauthenticated static mount served all of uploads/ (dumps, agent files, agent memory); now avatars only."
+    },
+    {
+      "id": "V4-A3-04",
+      "agent": "A3",
+      "category": "Secrets, dependencies and supply chain",
+      "severity": "HIGH",
+      "file": "git history 43fdcc7/9378a6d .agents/mcp_config.json",
+      "status": "open",
+      "commit": null,
+      "summary": "DeepSeek sk-**** and GitHub ghp_**** remain in history; owner must rotate and purge."
+    },
+    {
+      "id": "V4-A3-05",
+      "agent": "A3",
+      "category": "Secrets, dependencies and supply chain",
+      "severity": "LOW",
+      "file": "requirements.txt:1",
+      "status": "fixed",
+      "commit": "ce7a2b0",
+      "summary": "stripe unbounded; now <16.0.0 matching server pin."
+    },
+    {
+      "id": "V4-A3-06",
+      "agent": "A3",
+      "category": "Secrets, dependencies and supply chain",
+      "severity": "LOW",
+      "file": "web/package.json (katex)",
+      "status": "open",
+      "commit": null,
+      "summary": "GHSA-238p-pmpm-9mq7; fix requires breaking upgrade."
+    },
+    {
+      "id": "V4-A3-07",
+      "agent": "A3",
+      "category": "Input handling and injection",
+      "severity": "INFO",
+      "file": "server/credits.py:452",
+      "status": "no_action",
+      "commit": null,
+      "summary": "Only f-string text() query; constant SQL fragments, all values bound."
+    },
+    {
+      "id": "V4-A4-01",
+      "agent": "A4",
+      "category": "Backend latency and error handling",
+      "severity": "MEDIUM",
+      "file": "server/routes_dump.py:277",
+      "status": "fixed",
+      "commit": "ba9207e, 0503024",
+      "summary": "Dump list shipped full extracted_text; preview=1 mode trims it and web uses it."
+    },
+    {
+      "id": "V4-A4-02",
+      "agent": "A4",
+      "category": "Backend latency and error handling",
+      "severity": "MEDIUM",
+      "file": "server/main.py:180",
+      "status": "fixed",
+      "commit": "65e0a11",
+      "summary": "Hourly temp cleanup blocked event loop; moved to thread."
+    },
+    {
+      "id": "V4-A4-03",
+      "agent": "A4",
+      "category": "Database correctness and query cost",
+      "severity": "MEDIUM",
+      "file": "server/database.py:130",
+      "status": "fixed",
+      "commit": "65e0a11",
+      "summary": "user_sessions never purged; expired rows purged hourly."
+    },
+    {
+      "id": "V4-A4-04",
+      "agent": "A4",
+      "category": "Frontend performance",
+      "severity": "LOW",
+      "file": "web/vite.config.js:117",
+      "status": "fixed",
+      "commit": "6337834",
+      "summary": "Forced eager icon chunk removed: 204,537 -> 196,543 B gzip (-3.9%)."
+    },
+    {
+      "id": "V4-A4-05",
+      "agent": "A4",
+      "category": "Frontend performance",
+      "severity": "INFO",
+      "file": "web/",
+      "status": "no_action",
+      "commit": null,
+      "summary": "gsap gone; fonts latin+latin-ext only."
+    },
+    {
+      "id": "V4-A4-06",
+      "agent": "A4",
+      "category": "Frontend performance",
+      "severity": "LOW",
+      "file": "ThinkingBubble chunk",
+      "status": "open",
+      "commit": null,
+      "summary": "401 KB raw / 121 KB gzip (markdown+KaTeX), lazy."
+    },
+    {
+      "id": "V4-A4-07",
+      "agent": "A4",
+      "category": "Frontend performance",
+      "severity": "LOW",
+      "file": "web/package.json",
+      "status": "open",
+      "commit": null,
+      "summary": "4 deps with zero imports; package changes out of scope."
+    },
+    {
+      "id": "V4-A4-08",
+      "agent": "A4",
+      "category": "Database correctness and query cost",
+      "severity": "LOW",
+      "file": "server/main.py:1489",
+      "status": "open",
+      "commit": null,
+      "summary": "/api/admin/users N+1 credit sums, no pagination."
+    },
+    {
+      "id": "V4-A4-09",
+      "agent": "A4",
+      "category": "Backend latency and error handling",
+      "severity": "LOW",
+      "file": "server/routes_dump.py:139",
+      "status": "open",
+      "commit": null,
+      "summary": "Upload reads up to 100 MB into memory before size check."
+    },
+    {
+      "id": "V4-A4-10",
+      "agent": "A4",
+      "category": "Database correctness and query cost",
+      "severity": "INFO",
+      "file": "api_usage_logs",
+      "status": "open",
+      "commit": null,
+      "summary": "No retention; public_id lookup needs temp sort."
+    },
+    {
+      "id": "V4-A5-01",
+      "agent": "A5",
+      "category": "LLM cost and token efficiency",
+      "severity": "HIGH",
+      "file": "server/draft.py:174-178",
+      "status": "fixed",
+      "commit": "d1d1d01",
+      "summary": "Concurrent requests could both get a draft for one charge."
+    },
+    {
+      "id": "V4-A5-02",
+      "agent": "A5",
+      "category": "LLM cost and token efficiency",
+      "severity": "HIGH",
+      "file": "server/main.py:2618-2622",
+      "status": "fixed",
+      "commit": "d1d1d01",
+      "summary": "Draft retry could drop the charge; double-click started two paid runs."
+    },
+    {
+      "id": "V4-A5-03",
+      "agent": "A5",
+      "category": "Infrastructure and operational safety",
+      "severity": "MEDIUM",
+      "file": "scripts/rollback_atomic.sh:24",
+      "status": "fixed",
+      "commit": "ac57269",
+      "summary": "Repeated rollback re-selected the same release."
+    },
+    {
+      "id": "V4-A5-04",
+      "agent": "A5",
+      "category": "Infrastructure and operational safety",
+      "severity": "HIGH",
+      "file": "deploy/logrotate.d/helpotron",
+      "status": "fixed",
+      "commit": "ac99845",
+      "summary": "logrotate deleted microcredit submissions after 14d and wiped monitor history daily."
+    },
+    {
+      "id": "V4-A5-05",
+      "agent": "A5",
+      "category": "Infrastructure and operational safety",
+      "severity": "MEDIUM",
+      "file": "deploy/logrotate.d/helpotron",
+      "status": "fixed",
+      "commit": "ac99845",
+      "summary": "data/logs double-rotated, clobbering app backups."
+    },
+    {
+      "id": "V4-A5-06",
+      "agent": "A5",
+      "category": "LLM cost and token efficiency",
+      "severity": "HIGH",
+      "file": "server/draft.py:328-331",
+      "status": "open",
+      "commit": null,
+      "summary": "Restart mid-draft leaves it pending with 1000 tokens charged, no refund."
+    },
+    {
+      "id": "V4-A5-07",
+      "agent": "A5",
+      "category": "Infrastructure and operational safety",
+      "severity": "MEDIUM",
+      "file": "scripts/backup_db.sh:22, helpotron-backup.service:19",
+      "status": "open",
+      "commit": null,
+      "summary": "Backups on same disk, no offsite copy."
+    },
+    {
+      "id": "V4-A5-08",
+      "agent": "A5",
+      "category": "Infrastructure and operational safety",
+      "severity": "INFO",
+      "file": "deploy/*.service",
+      "status": "open",
+      "commit": null,
+      "summary": "Stale /var/www paths and user spark in 3 units."
+    },
+    {
+      "id": "V4-A5-09",
+      "agent": "A5",
+      "category": "Browser extension parity",
+      "severity": "INFO",
+      "file": "extension/*.js",
+      "status": "no_action",
+      "commit": null,
+      "summary": "All 33 /api paths the extension calls exist server-side."
+    }
+  ]
+}
