@@ -884,7 +884,7 @@ export const api = {
     }
     return res.json();
   },
-  getDumpList: (userId, status) => request(`/api/dump/list?user_id=${userId}${status ? `&status=${status}` : ''}`, { method: 'GET' }),
+  getDumpList: (userId, status) => request(`/api/dump/list?preview=1&user_id=${userId}${status ? `&status=${status}` : ''}`, { method: 'GET' }),
   // Dump pasted text (no file) — filed under a subject so an agent can find it.
   uploadDumpText: (payload) => request('/api/dump/upload-text', { method: 'POST', body: JSON.stringify(payload) }),
   // Raw material filed under one subject (the dump list endpoint filters by it).
