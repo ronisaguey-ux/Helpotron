@@ -19,7 +19,7 @@ export default function TermsOfServiceView({ onBack = null, publicMode = false, 
     setActiveClause(id);
     const el = document.getElementById(id);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      el.scrollIntoView({ behavior: (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || document.documentElement.dataset.motion === 'reduced') ? 'auto' : 'smooth', block: 'start' });
     }
   };
 
