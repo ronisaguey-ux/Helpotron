@@ -114,7 +114,7 @@ export default defineConfig({
             id.includes('/node_modules/radix-ui/') ||
             id.includes('/node_modules/@radix-ui/')
           ) return 'radix';
-          if (id.includes('/node_modules/lucide-react/')) return 'icons';
+          // lucide-react: no manual chunk, so each lazy view carries only its own icons.
           // @visx chart stack + its d3-* dependencies.
           if (
             id.includes('/node_modules/@visx/') ||
