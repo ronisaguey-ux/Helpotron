@@ -658,6 +658,11 @@ export default function App() {
     terms: 'Terms of Service',
     privacy: 'Privacy Policy',
     extension: 'Extension',
+    activity: 'Activity',
+    automation: 'Automation',
+    inbox: 'Inbox',
+    message_admin: 'Messages',
+    datalake: 'Data Lake',
   };
 
   useEffect(() => {
