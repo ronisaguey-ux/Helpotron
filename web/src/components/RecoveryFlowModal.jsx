@@ -43,6 +43,9 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
   const [confirmPass, setConfirmPass] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
+  // Set when the server answers 2fa_required: the reset is NOT done yet.
+  const [twoFactorMethod, setTwoFactorMethod] = useState(null);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
 
   // Ask Developer / Help Ticket inline drawer
   const [devMessage, setDevMessage] = useState('');
@@ -59,6 +62,8 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
       setOtpCode('');
       setNewPass('');
       setConfirmPass('');
+      setTwoFactorMethod(null);
+      setTwoFactorCode('');
       setErrorMsg('');
       setDevMessage('');
       setDevSent(false);
@@ -137,24 +142,32 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
   const handleResetPassword = async (e) => {
     e?.preventDefault();
     if (newPass.length < 8) {
-      triggerError('Passphrase must be at least 8 characters long.');
+      triggerError('Password must be at least 8 characters long.');
       return;
     }
     if (newPass !== confirmPass) {
-      triggerError('Passphrases do not match. Please verify.');
+      triggerError('The two passwords don\'t match.');
       return;
     }
     setLoading(true);
     setErrorMsg('');
     try {
-      await api.recoveryVerify({
+      const res = await api.recoveryVerify({
         public_id: targetId.trim(),
         new_password: newPass,
         code: otpCode.trim(),
+        two_factor_code: twoFactorCode.trim() || undefined,
       });
+      // A 2FA account gets HTTP 200 with status "2fa_required" — the password
+      // has NOT changed yet. Ask for the second code instead of claiming success.
+      if (res && res.status === '2fa_required') {
+        setTwoFactorMethod(res.method || 'totp');
+        setTwoFactorCode('');
+        return;
+      }
       setStep(4);
     } catch (err) {
-      triggerError(err.message || 'Key renewal failed. Verification code may be invalid or expired.');
+      triggerError(err.message || 'Your password was not changed. The code may be wrong or expired — request a new one.');
     } finally {
       setLoading(false);
     }
@@ -518,7 +531,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div className="space-y-1">
               <label htmlFor="recovery-new-pass" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
-                New Master Passphrase
+                New password
               </label>
               <div className="relative flex items-center">
                 <input
@@ -533,7 +546,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
                 <button
                   type="button"
                   onClick={() => setShowPass((prev) => !prev)}
-                  aria-label={showPass ? 'Hide passphrase' : 'Show passphrase'}
+                  aria-label={showPass ? 'Hide password' : 'Show password'}
                   aria-pressed={showPass}
                   className="absolute right-2 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition cursor-pointer"
                 >
@@ -544,14 +557,14 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
 
             <div className="space-y-1">
               <label htmlFor="recovery-confirm-pass" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
-                Confirm New Master Passphrase
+                Confirm new password
               </label>
               <div className="relative flex items-center">
                 <input
                   id="recovery-confirm-pass"
                   type={showConfirmPass ? 'text' : 'password'}
                   required
-                  placeholder="Re-enter new passphrase..."
+                  placeholder="Type the same password again"
                   value={confirmPass}
                   onChange={(e) => setConfirmPass(e.target.value)}
                   className="w-full h-11 px-3.5 pr-10 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary transition"
@@ -559,7 +572,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPass((prev) => !prev)}
-                  aria-label={showConfirmPass ? 'Hide passphrase' : 'Show passphrase'}
+                  aria-label={showConfirmPass ? 'Hide password' : 'Show password'}
                   aria-pressed={showConfirmPass}
                   className="absolute right-2 p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition cursor-pointer"
                 >
@@ -568,14 +581,38 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
               </div>
             </div>
 
+            {twoFactorMethod && (
+              <div className="space-y-1">
+                <label htmlFor="recovery-2fa-code" className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant font-semibold block">
+                  Two-factor code
+                </label>
+                <p className="text-xs text-on-surface-variant">
+                  {twoFactorMethod === 'sms'
+                    ? 'This account uses two-factor sign-in. We texted a code to your phone. Enter it to finish.'
+                    : twoFactorMethod === 'email'
+                      ? 'This account uses two-factor sign-in. We emailed you a code. Enter it to finish.'
+                      : 'This account uses two-factor sign-in. Enter the code from your authenticator app to finish.'}
+                </p>
+                <input
+                  id="recovery-2fa-code"
+                  type="text"
+                  autoComplete="one-time-code"
+                  required
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value)}
+                  className="w-full h-11 px-3.5 rounded-xl bg-surface-container-low/70 border border-outline-variant/30 font-mono text-xs text-on-surface focus:outline-none focus:border-primary transition"
+                />
+              </div>
+            )}
+
             <Button
               variant="primary"
               glow={true}
               type="submit"
-              disabled={loading || !newPass || newPass !== confirmPass}
+              disabled={loading || !newPass || newPass !== confirmPass || (twoFactorMethod && !twoFactorCode.trim())}
               className="w-full h-11 uppercase font-semibold text-xs tracking-wider flex items-center justify-center gap-2 mt-2"
             >
-              <span>{loading ? 'Renewing Passphrase...' : 'Save New Password →'}</span>
+              <span>{loading ? 'Saving…' : 'Save New Password →'}</span>
             </Button>
           </form>
         )}
@@ -588,7 +625,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
             </div>
             <div className="space-y-1">
               <h2 className="font-title-md text-xl font-bold text-on-surface">
-                Credential Reset Complete
+                Password changed
               </h2>
               <p className="font-body-sm text-xs text-on-surface-variant max-w-sm mx-auto leading-relaxed">
                 Your password has been updated. You can now sign in with your new password.
@@ -600,7 +637,7 @@ export default function RecoveryFlowModal({ open, onClose, publicId = '' }) {
               onClick={onClose}
               className="w-full h-11 uppercase font-semibold text-xs tracking-wider mt-4"
             >
-              Return to Sign In &amp; Enter Workspace
+              Back to sign in
             </Button>
           </div>
         )}
