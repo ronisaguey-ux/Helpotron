@@ -40,7 +40,7 @@ latex2mathml>=3.80,<4.0
 # Stylometry + typing engines moved in from text-improver (owner 2026-09-17).
 # spacy also needs the model: python -m spacy download en_core_web_sm
 nltk>=3.9
-spacy>=3.8
+spacy>=3.8.18
 pyphen>=0.15
 
 # Stripe (payments). server/payments.py imports this lazily inside each route,
