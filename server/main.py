@@ -177,37 +177,57 @@ async def _datalake_background_loop(interval_seconds: int = 21600) -> None:
         await asyncio.sleep(interval_seconds)
 
 
-async def _cleanup_temp_files_loop(interval_seconds: int = 3600):
-    """Background task purging temporary files in uploads and exports older than 24h."""
+def _purge_expired_sessions() -> int:
+    """Delete user_sessions rows past expires_at; nothing else ever removed them,
+    so the table grew by one row per login forever."""
+    from .database import SessionLocal, UserSession, utcnow
+    with SessionLocal() as s_db:
+        n = s_db.query(UserSession).filter(UserSession.expires_at < utcnow().replace(tzinfo=None)).delete(synchronize_session=False)
+        s_db.commit()
+        return n
+
+
+def _cleanup_temp_files_once() -> None:
     import time
+    now = time.time()
+    for folder in ["./uploads", "./exports", "/tmp/helpotron_exports"]:
+            if os.path.exists(folder):
+                if os.path.islink(folder):
+                    logger.warning("temp_cleanup: skipping symlinked folder: %s", folder)
+                    continue
+                st = os.stat(folder)
+                if folder.startswith("/tmp"):
+                    if st.st_uid != os.getuid():
+                        logger.warning("temp_cleanup: skipping folder not owned by current user: %s", folder)
+                        continue
+                    try:
+                        os.chmod(folder, 0o700)
+                    except OSError:
+                        pass
+                for fname in os.listdir(folder):
+                    fpath = os.path.join(folder, fname)
+                    if os.path.islink(fpath):
+                        continue
+                    if os.path.isfile(fpath) and (now - os.path.getmtime(fpath) > 86400):
+                        try:
+                            os.remove(fpath)
+                        except Exception:
+                            pass
+
+
+async def _cleanup_temp_files_loop(interval_seconds: int = 3600):
+    """Background task purging temporary files in uploads and exports older than 24h,
+    plus expired login sessions. The filesystem walk and DB delete are blocking, so
+    they run in a worker thread instead of stalling the event loop."""
     while True:
         try:
-            now = time.time()
-            for folder in ["./uploads", "./exports", "/tmp/helpotron_exports"]:
-                if os.path.exists(folder):
-                    if os.path.islink(folder):
-                        logger.warning("temp_cleanup: skipping symlinked folder: %s", folder)
-                        continue
-                    st = os.stat(folder)
-                    if folder.startswith("/tmp"):
-                        if st.st_uid != os.getuid():
-                            logger.warning("temp_cleanup: skipping folder not owned by current user: %s", folder)
-                            continue
-                        try:
-                            os.chmod(folder, 0o700)
-                        except OSError:
-                            pass
-                    for fname in os.listdir(folder):
-                        fpath = os.path.join(folder, fname)
-                        if os.path.islink(fpath):
-                            continue
-                        if os.path.isfile(fpath) and (now - os.path.getmtime(fpath) > 86400):
-                            try:
-                                os.remove(fpath)
-                            except Exception:
-                                pass
+            await asyncio.to_thread(_cleanup_temp_files_once)
         except Exception as e:
             logger.warning("temp_cleanup: error: %s", e)
+        try:
+            await asyncio.to_thread(_purge_expired_sessions)
+        except Exception as e:
+            logger.warning("session_cleanup: error: %s", e)
         await asyncio.sleep(interval_seconds)
 
 
