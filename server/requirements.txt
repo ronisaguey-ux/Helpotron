@@ -46,4 +46,4 @@ pyphen>=0.15
 # Stripe (payments). server/payments.py imports this lazily inside each route,
 # so checkout/webhook raised ModuleNotFoundError only once STRIPE_SECRET_KEY was
 # set — the import audit that found this was a runtime one, not an import one.
-stripe>=11.0,<16.0.0
+stripe>=16.1.0,<17.0.0
