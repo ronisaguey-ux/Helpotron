@@ -441,13 +441,18 @@ def test_users_patch_privilege_escalation_blocked():
 
 def test_uploads_hardening_headers():
     from pathlib import Path
-    uploads_dir = Path(__file__).resolve().parent.parent.parent / "uploads"
+    uploads_dir = Path(__file__).resolve().parent.parent.parent / "uploads" / "avatars"
     uploads_dir.mkdir(parents=True, exist_ok=True)
     test_html = uploads_dir / "test_xss_probe.html"
     test_html.write_text("<html><script>alert(1)</script></html>")
+    private = uploads_dir.parent / "test_private_probe.json"
+    private.write_text('{"secret": 1}')
 
     try:
-        res = client.get("/uploads/test_xss_probe.html")
+        # Only avatars are public; other uploads must not be served statically.
+        leak = client.get("/uploads/test_private_probe.json")
+        assert "secret" not in leak.text
+        res = client.get("/uploads/avatars/test_xss_probe.html")
         assert res.status_code == 200
         # Nosniff + CSP sandbox + attachment disposition to prevent stored XSS
         assert res.headers.get("X-Content-Type-Options") == "nosniff"
@@ -456,6 +461,8 @@ def test_uploads_hardening_headers():
     finally:
         if test_html.exists():
             test_html.unlink()
+        if private.exists():
+            private.unlink()
 
 
 def test_recovery_user_enumeration_mitigation():
