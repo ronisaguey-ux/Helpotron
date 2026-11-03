@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from .database import User
+from .upload_limits import read_upload_capped
 from .security import get_current_user, get_current_user_optional
 
 router = APIRouter(prefix="/api/hygiene", tags=["hygiene"])
@@ -45,11 +46,9 @@ async def status(current_user: User | None = Depends(get_current_user_optional))
 
 
 async def _forward(file: UploadFile, endpoint: str) -> dict:
-    data = await file.read()
+    data = await read_upload_capped(file, 20 * 1024 * 1024, "File exceeds 20 MB limit")
     if not data:
         raise HTTPException(status_code=400, detail="empty file")
-    if len(data) > 20 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File exceeds 20 MB limit")
     payload = {"file": base64.b64encode(data).decode(), "name": file.filename or "file"}
     try:
         # 2026-09-18: this was a sync call with a 240 s timeout inside an
