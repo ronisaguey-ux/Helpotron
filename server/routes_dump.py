@@ -5,6 +5,7 @@ import json
 import logging
 import math
 import os
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -12,10 +13,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .assignment_dump import assignment_dump_manager, classify_assignment_meta
+from .assignment_dump import DUMP_DIR, assignment_dump_manager, classify_assignment_meta
 from .database import Assignment, Draft, StudyMaterial, Transcript, UniversalDumpItem, User, get_db, utcnow
 from .routes_features import get_current_authenticated_user
 from .security import is_admin_user
+from .upload_limits import stream_upload_to_file
 from .credits import debit_tokens_atomic, is_unmetered, task_tokens_to_usd, TOKENS_PER_USD
 
 logger = logging.getLogger("helpotron.dump")
@@ -140,20 +142,30 @@ async def upload_dump_file(
         raise HTTPException(status_code=400, detail="Executable and script file uploads are not permitted.")
 
     max_dump_bytes = 100 * 1024 * 1024  # 100MB limit
-    content = await file.read()
-    if len(content) == 0:
-        raise HTTPException(status_code=400, detail="Empty file uploaded.")
-    if len(content) > max_dump_bytes:
-        raise HTTPException(status_code=413, detail="Uploaded file exceeds 100MB limit.")
-
-    dump_item = await assignment_dump_manager.process_dump_upload(
-        db=db,
-        user=current_user,
-        filename=filename,
-        content=content,
-        manual_assignment_id=assignment_id,
-        subject=subject,
+    # Stream to disk in 1MB chunks with an early 413 cutoff instead of reading the
+    # whole body (up to and beyond 100MB) into memory before the size check.
+    incoming_path = str(DUMP_DIR / f".incoming-{uuid.uuid4().hex}")
+    size = await stream_upload_to_file(
+        file, incoming_path, max_dump_bytes, "Uploaded file exceeds 100MB limit."
     )
+    if size == 0:
+        os.remove(incoming_path)
+        raise HTTPException(status_code=400, detail="Empty file uploaded.")
+
+    try:
+        dump_item = await assignment_dump_manager.process_dump_upload(
+            db=db,
+            user=current_user,
+            filename=filename,
+            manual_assignment_id=assignment_id,
+            subject=subject,
+            src_path=incoming_path,
+        )
+    finally:
+        # process_dump_upload moves the file into place first thing; anything
+        # still at the incoming path means it failed before that.
+        if os.path.exists(incoming_path):
+            os.remove(incoming_path)
     # Falling back to the matched assignment's own subject keeps a dump filed under
     # the same bubble as the assignment it landed on, rather than showing up unfiled.
     if not dump_item.subject and dump_item.matched_assignment_id:
