@@ -602,23 +602,35 @@ class AssignmentDumpManager:
         db: Session,
         user: User,
         filename: str,
-        content: bytes,
+        content: Optional[bytes] = None,
         manual_assignment_id: Optional[int] = None,
         subject: Optional[str] = None,
+        src_path: Optional[str] = None,
     ) -> UniversalDumpItem:
-        """Processes file upload, extracts content, and executes Overlord routing."""
+        """Processes file upload, extracts content, and executes Overlord routing.
+
+        Pass either `content` (bytes) or `src_path`, a file already streamed to disk
+        (moved into DUMP_DIR, so the upload never has to sit in memory).
+        """
+        if (content is None) == (src_path is None):
+            raise ValueError("process_dump_upload needs exactly one of content or src_path")
         category = AssignmentDumpManager.detect_file_category(filename)
         clean_filename = os.path.basename(filename).replace('..', '').replace('/', '').replace('\\', '')
         safe_name = f"{uuid.uuid4().hex}.{clean_filename.rsplit('.', 1)[-1] if '.' in clean_filename else 'bin'}"
         file_path = str(DUMP_DIR / safe_name)
-        with open(file_path, "wb") as f:
-            f.write(content)
+        if src_path is not None:
+            os.replace(src_path, file_path)
+            size_bytes = os.path.getsize(file_path)
+        else:
+            with open(file_path, "wb") as f:
+                f.write(content)
+            size_bytes = len(content)
 
         dump_item = UniversalDumpItem(
             user_id=user.id,
             file_name=filename,
             file_type=category,
-            file_size_bytes=len(content),
+            file_size_bytes=size_bytes,
             file_path=file_path,
             status="processing",
             subject=(subject or "").strip()[:256] or None,
