@@ -1,11 +1,11 @@
 # PRIVACY POLICY AND DATA GOVERNANCE CHARTER
 ### Helpotron Academic Companion Platform
-**Effective Date:** August 18, 2026  
-**Last Updated:** September 2, 2026  
-**Document Version:** 4.0.0-PROD  
-**Legal Entity:** Helpotron Academic Companion Inc. (“Helpotron”, “Company”, “We”, “Us”, or “Our”)  
-**Data Protection Officer (DPO) Contact:** `dpo@helpotron.com`  
-**Security & Legal Compliance:** `compliance@helpotron.com`  
+**Effective Date:** August 18, 2026
+**Last Updated:** September 2, 2026
+**Document Version:** 4.0.0-PROD
+**Legal Entity:** Helpotron Academic Companion Inc. (“Helpotron”, “Company”, “We”, “Us”, or “Our”)
+**Data Protection Officer (DPO) Contact:** `buisness@rssytemsweb.com`
+**Security & Legal Compliance:** `buisness@rssytemsweb.com`
 **Applicable Jurisdictions:** United States (Federal, California CCPA/CPRA, Virginia VCDPA, Colorado CPA, Florida FDBR), European Union & United Kingdom (General Data Protection Regulation - GDPR / UK-GDPR), Canada (PIPEDA), and International Student Data Privacy Standards (FERPA & COPPA compliant frameworks).
 
 ---
@@ -54,7 +54,7 @@ By registering an account, installing the Helpotron browser extension, uploading
 
 If you are accessing or using Helpotron on behalf of an educational institution, school district, university, or corporate team, you represent and warrant that you possess the requisite authority to bind that entity to this Policy, and that your use complies with all applicable institutional data governance bylaws and statutory student record frameworks.
 
-If you do not agree with any provision of this Privacy Policy, you must immediately terminate your use of Helpotron, uninstall the browser extension, and submit an account deletion request to `dpo@helpotron.com`.
+If you do not agree with any provision of this Privacy Policy, you must immediately terminate your use of Helpotron, uninstall the browser extension, and submit an account deletion request to `buisness@rssytemsweb.com`.
 
 ---
 
@@ -238,7 +238,7 @@ Accounts with zero login activity for a consecutive period of twenty-four (24) m
 
 Under the General Data Protection Regulation (GDPR Articles 15–22), the California Consumer Privacy Act / California Privacy Rights Act (CCPA/CPRA), and related privacy statutes, you possess comprehensive rights regarding your personal data:
 
-- **Right to Access & Portability (GDPR Art. 15 & 20; CCPA § 1798.100)**: Instant downloads of flashcards in Quizlet/Anki CSV formats, practice tests in structured JSON, and study guides in clean Markdown via `/api/export/*`. Full comprehensive data archives delivered within 30 calendar days upon request to `dpo@helpotron.com`.
+- **Right to Access & Portability (GDPR Art. 15 & 20; CCPA § 1798.100)**: Instant downloads of flashcards in Quizlet/Anki CSV formats, practice tests in structured JSON, and study guides in clean Markdown via `/api/export/*`. Full comprehensive data archives delivered within 30 calendar days upon request to `buisness@rssytemsweb.com`.
 - **Right to Rectification (GDPR Art. 16)**: Update profile attributes, reading levels, or assignment data directly via the Settings modal or by contacting support.
 - **Right to Erasure / Right to Be Forgotten (GDPR Art. 17; CCPA § 1798.105)**: Permanent cryptographic wipe of user records, assignments, transcripts, drafts, and study sessions across all active databases within 30 days.
 - **Right to Restrict & Object to Processing (GDPR Art. 18 & 21)**: Restrict analytical telemetry or stylistic voice mimicry at any time.
@@ -284,12 +284,12 @@ Helpotron reserves the right to revise this Privacy Policy periodically. When ma
 
 ## 13. DATA PROTECTION OFFICER & CONTACT INFORMATION
 
-**Helpotron Academic Companion Inc.**  
-*Office of the Data Protection Officer (DPO)*  
-- **DPO Inquiries & Rights Requests:** `dpo@helpotron.com`  
-- **Security Operations & Disclosures:** `security@helpotron.com`  
-- **Legal Compliance:** `compliance@helpotron.com`  
-- **General Support:** `support@helpotron.com`  
+**Helpotron Academic Companion Inc.**
+*Office of the Data Protection Officer (DPO)*
+- **DPO Inquiries & Rights Requests:** `buisness@rssytemsweb.com`
+- **Security Operations & Disclosures:** `buisness@rssytemsweb.com`
+- **Legal Compliance:** `buisness@rssytemsweb.com`
+- **General Support:** `buisness@rssytemsweb.com`
 - **Official Domain:** `https://helpotron.com`
 
 ---
@@ -302,7 +302,7 @@ Helpotron reserves the right to revise this Privacy Policy periodically. When ma
 - **Shine the Light (Cal. Civ. Code § 1798.83)**: Helpotron does not disclose personal data to third parties for direct marketing.
 
 ### 14.2 Virginia (VCDPA), Colorado (CPA), Connecticut (CTDPA), and Florida (FDBR)
-Eligible residents may submit requests to confirm processing, access, correct, delete, or obtain portable copies of their personal data, or appeal rights determinations by emailing `dpo@helpotron.com` with subject `PRIVACY APPEAL`.
+Eligible residents may submit requests to confirm processing, access, correct, delete, or obtain portable copies of their personal data, or appeal rights determinations by emailing `buisness@rssytemsweb.com` with subject `PRIVACY APPEAL`.
 
 ---
 
@@ -356,7 +356,7 @@ Helpotron adheres to Section 508 of the Rehabilitation Act, Title III of the ADA
 - **Operable**: Complete keyboard accessibility (`Tab`, `Enter`, `Space`, `Escape`), focus-trapped dialogs, zero keyboard traps.
 - **Understandable & Robust**: Plain language system notices, live announcements (`aria-live="polite"`), semantic HTML5 structure.
 
-Accessibility Coordinator Contact: `accessibility@helpotron.com`.
+Accessibility Coordinator Contact: `buisness@rssytemsweb.com`.
 
 ---
 
@@ -366,5 +366,5 @@ Accessibility Coordinator Contact: `accessibility@helpotron.com`.
 - **Dispute Resolution & Governing Law**: Governed by the laws of the State of Florida, United States, or competent EU supervisory tribunals where mandated by GDPR Article 79.
 
 ---
-*Authoritative Document Reference: `PRIVACY_POLICY_2026_V4_MONOLITHIC.MD`*  
+*Authoritative Document Reference: `PRIVACY_POLICY_2026_V4_MONOLITHIC.MD`*
 *Helpotron Academic Companion Inc. · Office of the Data Protection Officer*
