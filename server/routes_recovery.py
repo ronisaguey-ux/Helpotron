@@ -99,9 +99,15 @@ async def recovery_request(payload: RecoveryRequestIn, db: Session = Depends(get
 
 
 @router.post("/verify")
-async def recovery_verify(payload: RecoveryVerifyIn, db: Session = Depends(get_db)):
+def recovery_verify(payload: RecoveryVerifyIn, db: Session = Depends(get_db)):
     """Redeem the recovery code (or link token) and set a NEW password without
-    the old one. Same hashing as signup; other sessions get revoked."""
+    the old one. Same hashing as signup; other sessions get revoked.
+
+    Sync on purpose: verify_and_reset uses SMSVerification.send_sync/check_sync
+    (asyncio.run) for SMS 2FA and Twilio Verify phone codes. Inside an `async def`
+    that raises "asyncio.run() cannot be called from a running event loop" and
+    every SMS-2FA reset answered 500. FastAPI runs a sync route in its threadpool,
+    which has no running loop — the same arrangement as the sync /api/login."""
     try:
         result = verify_and_reset(
             db,
