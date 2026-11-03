@@ -241,7 +241,17 @@ async def lifespan(_app: FastAPI):
     _install_access_logging(logger)
     for problem in config.validate():
         logger.warning("config: %s", problem)
+    from datetime import datetime as _dt, timezone as _tz
+    _boot_time = _dt.now(_tz.utc)
     init_db()
+    # Drafts run in daemon threads; any still "pending" from before this boot lost
+    # their thread to the restart and would sit charged (DRAFT_COST) forever.
+    # Runs before the app serves, so no new workflow can be mistaken for one.
+    try:
+        from .draft import reap_orphaned_drafts
+        await asyncio.to_thread(reap_orphaned_drafts, _boot_time)
+    except Exception as e:
+        logger.warning("draft reaper failed: %s", e)
     # Convert any session row still storing its token in the clear. The lazy
     # fallback in SessionStore only converts a row that is actually used, so a
     # dormant row would keep leaking its credential — measured 2026-09-23, all
