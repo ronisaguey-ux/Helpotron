@@ -1,7 +1,7 @@
 # Helpotron Academic Companion — Comprehensive Terms of Service & Acceptable Use Policy
 
-**Last Updated:** August 25, 2026  
-**Effective Date:** August 25, 2026  
+**Last Updated:** August 25, 2026
+**Effective Date:** August 25, 2026
 
 ---
 
@@ -103,5 +103,5 @@ Any dispute, claim, or controversy arising out of or relating to these Terms or 
 ## 9. Contact Information
 
 For inquiries regarding these Terms, privacy rights, or institutional licensing:
-- **Email:** `legal@helpotron.com` / `privacy@helpotron.com`  
-- **Platform:** Helpotron Academic Companion Inc., Academic Data Governance Group  
+- **Email:** `buisness@rssytemsweb.com` / `buisness@rssytemsweb.com`
+- **Platform:** Helpotron Academic Companion Inc., Academic Data Governance Group
