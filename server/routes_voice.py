@@ -23,6 +23,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from .routes_features import get_current_authenticated_user
+from .upload_limits import read_upload_capped
 
 VOICEBOX = "http://127.0.0.1:17493"
 router = APIRouter(prefix="/api/voice", tags=["voice"])
@@ -64,7 +65,9 @@ async def voice_transcribe(
     current_user=Depends(get_current_authenticated_user),
 ):
     """Dictation: mic recording -> text, relayed to Voicebox's local Whisper."""
-    data = await file.read()
+    # Was an uncapped `await file.read()`: any size went straight into memory and
+    # was then re-sent to Voicebox. Same 100MB ceiling as /api/transcribe.
+    data = await read_upload_capped(file, 100 * 1024 * 1024, "Audio upload exceeds 100MB limit")
     name = file.filename or "audio.webm"
     mime = file.content_type or "audio/webm"
     try:
