@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 from .agent_files import delete_agent_file, list_agent_files, save_agent_file
+from .upload_limits import read_upload_capped
 from .agent_memory import append_memory, delete_memory, load_memory, replace_memory
 from .agent_prompt import agent_persona_block, agent_system_prompt
 from .llm import strip_thinking_tokens  # noqa: F401 — reply plumbing strips every LLM text
@@ -1088,7 +1089,8 @@ async def upload_agent_file_endpoint(
     db: Session = Depends(get_db),
 ):
     user = _get_current_user(request, db)
-    content = await file.read()
+    from .agent_files import _MAX_BYTES as _AGENT_FILE_MAX
+    content = await read_upload_capped(file, _AGENT_FILE_MAX, "File too large (max 20 MB)", status_code=400)
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file uploaded.")
     try:
@@ -1162,11 +1164,9 @@ async def upload_avatar(
     # a generous per-account budget with a real Retry-After.
     from .ratelimit import check_costly
     check_costly("avatar", request, user, limit=20, window=60.0)
-    content = await file.read()
+    content = await read_upload_capped(file, 5 * 1024 * 1024, "Avatar too large (max 5 MB).", status_code=400)
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file uploaded.")
-    if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Avatar too large (max 5 MB).")
     # Trust the bytes, not the client-supplied Content-Type: the file lands in a
     # statically served directory, so a mislabelled payload must not be stored.
     if content.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -2806,11 +2806,9 @@ async def attach_to_agent_chat(
     text extraction for documents), then call the same handler as
     POST /api/agent/chat with the content — the agent sees the REAL file."""
     user = _get_current_user(request, db)
-    content = await file.read()
+    content = await read_upload_capped(file, _ATTACH_MAX_BYTES, "File is too large (30 MB max).")
     if not content:
         raise HTTPException(status_code=400, detail="Empty file.")
-    if len(content) > _ATTACH_MAX_BYTES:
-        raise HTTPException(status_code=413, detail="File is too large (30 MB max).")
 
     filename = os.path.basename(file.filename or "attachment")
     ext = os.path.splitext(filename)[1].lower()
