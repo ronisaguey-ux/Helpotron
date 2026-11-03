@@ -23,7 +23,7 @@ If you discover a security vulnerability or potential threat in Helpotron Automa
 1. **Do NOT open a public GitHub issue.**
 2. Email your report directly to our security team at:
    ```
-   security@helpotron.com
+   buisness@rssytemsweb.com
    ```
    *(or open an encrypted advisory on GitHub via Security Advisories)*
 
