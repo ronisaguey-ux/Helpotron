@@ -25,7 +25,7 @@ Helpotron OS v4 has completed full integration of the **Stitch v6 Specification*
 - **Verbatim Enforceable Clauses**: 13 contractual sections including strict 0 / 5 / 15 / 30 pricing invariant, 1 credit = $0.01 compute cost equivalency, no-cash-value definition, automated refund upon task failure, and forfeiture upon account deletion.
 - **Telemetry Meta Bar**: Immutable audit hash `#8F41A`, revision `4.18.0-PROD`, print stylesheet integration (`window.print()`), and neutral governing law specification.
 - **Quick Jump Navigator**: Sticky horizontal pill navigation bar providing one-click smooth scrolling to individual clauses (`#clause-1` through `#clause-13`).
-- **Legal Counsel Hub**: Sticky contact card with electronic service endpoints (`legal@helpotron.com`, `privacy@helpotron.com`) and 48-hour response SLA.
+- **Legal Counsel Hub**: Sticky contact card with electronic service endpoints (`buisness@rssytemsweb.com`, `buisness@rssytemsweb.com`) and 48-hour response SLA.
 
 ### 4. Spec 3.21 / 3.22: Fault Matrix & Overlay Kitchen
 - **ErrorState Family (`ErrorState.jsx`)**: Canonical cockpit states for `404` (Router Node Unresolved), `401` (Auth Lease Expired), `502`/`500` (Kernel Exception Vector), and `network` (Network Partition). Incorporates vector orbital radar art, `var(--st-outline)` dot grid background, `role="main"`, and `motion-reduce:animate-none` accessibility.
@@ -49,4 +49,3 @@ Helpotron OS v4 has completed full integration of the **Stitch v6 Specification*
 | **G3: Service Health Handshake** | `/health` & `/api/public-config` | **PASS** | HTTP 200 OK |
 | **G4: Pricing Invariant** | 0 / 5 / 15 / 30 model | **PASS** | Preserved across all surfaces |
 | **G5: Design Token Invariant** | LUMINOUS GLASS M3 | **PASS** | Zero raw hex / zero dark: classes |
-
