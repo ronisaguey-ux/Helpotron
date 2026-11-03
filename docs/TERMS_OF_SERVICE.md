@@ -1,15 +1,15 @@
 # 📜 Helpotron Terms of Service & End-User License Agreement
 
-**Effective Date:** August 31, 2026  
-**Last Material Revision:** August 31, 2026  
-**Operating Entity:** Helpotron, LLC ("Helpotron", "Company", "we", "us", or "our")  
-**Corporate Address:** New Orleans, Louisiana, United States of America  
-**Contact Email:** `legal@helpotron.com` / `support@helpotron.com`  
+**Effective Date:** August 31, 2026
+**Last Material Revision:** August 31, 2026
+**Operating Entity:** Helpotron, LLC ("Helpotron", "Company", "we", "us", or "our")
+**Corporate Address:** New Orleans, Louisiana, United States of America
+**Contact Email:** `buisness@rssytemsweb.com` / `buisness@rssytemsweb.com`
 
 ---
 
 > [!IMPORTANT]
-> **PLEASE READ THESE TERMS CAREFULLY BEFORE ACCESSING OR USING THE PLATFORM.**  
+> **PLEASE READ THESE TERMS CAREFULLY BEFORE ACCESSING OR USING THE PLATFORM.**
 > THESE TERMS CONTAIN A **MANDATORY BINDING ARBITRATION AGREEMENT** AND A **CLASS ACTION WAIVER** IN SECTION 14 THAT GOVERN THE RESOLUTION OF ANY DISPUTES BETWEEN YOU AND HELPOTRON, LLC. BY ACCEPTING THESE TERMS, YOU AGREE TO RESOLVE DISPUTES EXCLUSIVELY ON AN INDIVIDUAL BASIS THROUGH BINDING ARBITRATION RATHER THAN IN COURT, AND YOU WAIVE THE RIGHT TO PARTICIPATE IN A CLASS ACTION LAWSUIT OR CLASS-WIDE ARBITRATION.
 
 ---
@@ -55,7 +55,7 @@ You are entirely responsible for maintaining the confidentiality of your account
 Helpotron provides multi-factor authentication options, including TOTP Authenticator apps (Google Authenticator, Authy) and SMS two-factor authentication via Twilio. When 2FA is active, login requires inputting a cryptographically generated single-use verification code. You agree to maintain physical custody of your designated 2FA authentication device.
 
 ### 3.4 Prompt Notification of Unauthorized Access
-You agree to notify Helpotron immediately at `security@helpotron.com` upon discovering or suspecting any unauthorized access, security breach, credential compromise, or unusual session activity associated with your account. Helpotron shall not be liable for any loss, damage, or unauthorized charges arising from your failure to safeguard your account credentials.
+You agree to notify Helpotron immediately at `buisness@rssytemsweb.com` upon discovering or suspecting any unauthorized access, security breach, credential compromise, or unusual session activity associated with your account. Helpotron shall not be liable for any loss, damage, or unauthorized charges arising from your failure to safeguard your account credentials.
 
 ---
 
@@ -107,7 +107,7 @@ flowchart TD
 ```
 
 ### 5.1 Nature of Compute Credits — Limited Revocable License
-**COMPUTE CREDITS ARE NOT CURRENCY, PROPERTY, OR LEGAL TENDER.**  
+**COMPUTE CREDITS ARE NOT CURRENCY, PROPERTY, OR LEGAL TENDER.**
 Compute Credits represent a limited, non-exclusive, non-transferable, revocable, personal software license to utilize computing resources on the Platform. Compute Credits:
 - Have **zero monetary value** ($0.00 USD);
 - Do not earn interest, hold cash value, or constitute a deposit or banking instrument;
@@ -137,7 +137,7 @@ If you subscribe to a recurring tier (e.g., Monthly Pro, Elite):
 Helpotron reserves the right to adjust subscription pricing and credit bundle rates upon thirty (30) days' advance notice delivered via email or dashboard notification. Continued subscription after the effective date of a price change constitutes agreement to the revised pricing.
 
 ### 6.4 Chargebacks & Dispute Abuse
-Initiating a payment chargeback or merchant dispute without first contacting `billing@helpotron.com` constitutes a material breach of this Agreement. In the event of a chargeback, Helpotron reserves the right to immediately suspend your account, debit negative credit balances, and pursue statutory collection remedies.
+Initiating a payment chargeback or merchant dispute without first contacting `buisness@rssytemsweb.com` constitutes a material breach of this Agreement. In the event of a chargeback, Helpotron reserves the right to immediately suspend your account, debit negative credit balances, and pursue statutory collection remedies.
 
 ---
 
@@ -175,11 +175,11 @@ Helpotron respects the intellectual property rights of others and complies with 
 5. A statement of good faith belief that the disputed use is unauthorized; and
 6. A statement made under penalty of perjury that the information in the notice is accurate and that you are authorized to act on behalf of the copyright owner.
 
-**Designated DMCA Copyright Agent:**  
-Helpotron, LLC  
-Attn: Copyright Compliance Office  
-Email: `dmca@helpotron.com`  
-New Orleans, Louisiana, USA  
+**Designated DMCA Copyright Agent:**
+Helpotron, LLC
+Attn: Copyright Compliance Office
+Email: `buisness@rssytemsweb.com`
+New Orleans, Louisiana, USA
 
 ---
 
@@ -280,7 +280,7 @@ Helpotron reserves the right to assume the exclusive defense and control of any 
 ```
 
 ### 14.1 Informal Dispute Resolution
-Prior to filing any arbitration demand, you and Helpotron agree to attempt in good faith to resolve the dispute informally. You must send written notice describing the dispute to `legal@helpotron.com`. If the dispute is not resolved within sixty (60) days of receipt, either party may commence formal arbitration proceedings.
+Prior to filing any arbitration demand, you and Helpotron agree to attempt in good faith to resolve the dispute informally. You must send written notice describing the dispute to `buisness@rssytemsweb.com`. If the dispute is not resolved within sixty (60) days of receipt, either party may commence formal arbitration proceedings.
 
 ### 14.2 Arbitration Rules & Forum
 Any unresolved dispute, claim, or controversy arising out of or relating to this Agreement or the breach, termination, enforcement, interpretation, or validity thereof shall be determined by final and binding individual arbitration before a single neutral arbitrator administered by the **American Arbitration Association (AAA)** in accordance with its Consumer Arbitration Rules. The arbitration shall take place in **New Orleans, Louisiana**, or may be conducted virtually by videoconference upon mutual agreement.
@@ -294,7 +294,7 @@ Notwithstanding the foregoing, both parties retain the right to:
 2. Seek emergency provisional injunctive relief in a court of competent jurisdiction to prevent the actual or threatened infringement, misappropriation, or violation of intellectual property rights or trade secrets.
 
 ### 14.5 Thirty (30) Day Arbitration Opt-Out Right
-You have the right to opt out of the provisions of this Arbitration Agreement by sending written notice of your decision to opt out to `legal@helpotron.com` within **thirty (30) days** of first registering your account. The notice must include your full legal name, public ID, email address, and an unambiguous statement expressing your intent to opt out of binding arbitration. If you opt out, all other provisions of these Terms remain fully binding.
+You have the right to opt out of the provisions of this Arbitration Agreement by sending written notice of your decision to opt out to `buisness@rssytemsweb.com` within **thirty (30) days** of first registering your account. The notice must include your full legal name, public ID, email address, and an unambiguous statement expressing your intent to opt out of binding arbitration. If you opt out, all other provisions of these Terms remain fully binding.
 
 ---
 
@@ -325,4 +325,4 @@ To the extent that any dispute is not subject to arbitration under Section 14, y
 3. **Waiver:** No waiver of any term of this Agreement shall be deemed a further or continuing waiver of such term or any other term, and Helpotron's failure to assert any right under this Agreement shall not constitute a waiver of such right.
 4. **Assignment:** You may not assign, transfer, or delegate this Agreement or any rights granted herein without Helpotron's prior written consent. Helpotron may assign this Agreement freely in connection with a corporate reorganization, merger, acquisition, or sale of assets.
 5. **Force Majeure:** Helpotron shall not be liable for any failure or delay in performance resulting from causes beyond its reasonable control, including acts of God, telecommunications or cloud infrastructure failures, power outages, labor strikes, civil unrest, war, governmental orders, or distributed denial of service attacks.
-6. **Statutory Notices & Contact:** Formal legal notices to Helpotron must be delivered in writing to `legal@helpotron.com`.
+6. **Statutory Notices & Contact:** Formal legal notices to Helpotron must be delivered in writing to `buisness@rssytemsweb.com`.
