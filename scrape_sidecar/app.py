@@ -271,10 +271,112 @@ def _looks_like_feed(url: str) -> bool:
 
 # ── Lane 3-5: Scrapling (impersonation / stealth / dynamic). ──────────────
 
+# Schemes a page may load that never leave the browser process.
+_LOCAL_SCHEMES = {"data", "blob", "about"}
+_WS_TO_HTTP = {"ws": "http", "wss": "https"}
+
+
+def _subrequest_allowed(url: str, cache: dict | None = None) -> bool:
+    """SSRF policy for a request a rendered page makes on its own.
+
+    V5-A3-01: fetch()/iframe/img/WebSocket from the scraped page to a
+    loopback, RFC1918, link-local, ULA or metadata address is refused, using
+    the same resolver check as the top-level URL (server.ssrf.is_safe_url).
+    Unknown schemes (file:, chrome:, ftp:) are refused outright.
+    """
+    from server.ssrf import is_safe_url
+    try:
+        parsed = urllib.parse.urlparse(url or "")
+    except Exception:
+        return False
+    scheme = (parsed.scheme or "").lower()
+    if scheme in _LOCAL_SCHEMES:
+        return True
+    if scheme in _WS_TO_HTTP:
+        url = _WS_TO_HTTP[scheme] + url[len(scheme):]
+        scheme = _WS_TO_HTTP[scheme]
+    if scheme not in ("http", "https"):
+        return False
+    key = (scheme, (parsed.netloc or "").lower())
+    if cache is not None and key in cache:
+        return cache[key]
+    ok = is_safe_url(url)
+    if cache is not None:
+        cache[key] = ok
+    return ok
+
+
+def _make_browser_guard() -> tuple[dict, callable]:
+    """Build a scrapling `page_setup` hook that intercepts every request.
+
+    Returns (state, setup). scrapling logs and SWALLOWS page_setup errors
+    (scrapling 0.4.15 engines/_browsers/_stealth.py:249-253), so callers must
+    treat `state["installed"] is False` as a refusal: fail closed.
+    """
+    state = {"installed": False, "blocked": False}
+    cache: dict = {}
+
+    def _route(route, request=None):
+        req = request if request is not None else route.request
+        if _subrequest_allowed(req.url, cache):
+            route.fallback()  # hand on to scrapling's own handler, if any
+        else:
+            state["blocked"] = True
+            route.abort()
+
+    def _ws(ws_route):
+        if _subrequest_allowed(ws_route.url, cache):
+            ws_route.connect_to_server()
+        else:
+            state["blocked"] = True
+            ws_route.close()
+
+    def setup(page):
+        page.route("**/*", _route)
+        page.route_web_socket(re.compile(".*"), _ws)
+        # Popups/new pages in the same context bypass page-level routes.
+        page.context.route("**/*", _route)
+        state["installed"] = True
+
+    return state, setup
+
+
+def _pinned_curl_get(url: str):
+    """One impersonated GET with the connection pinned to a validated IP.
+
+    Closes the DNS-rebinding TOCTOU of the plain lane: the host is resolved
+    and validated once (server.ssrf.resolve_and_validate_host) and curl is
+    forced to that address via CURLOPT_RESOLVE, then the IP curl actually
+    connected to is re-checked. Returns a scrapling Response.
+    """
+    from curl_cffi import requests as curl_requests
+    from curl_cffi.const import CurlOpt
+    from scrapling.engines.toolbelt.convertor import ResponseFactory
+    from server.ssrf import resolve_and_validate_host, _is_disallowed_ip
+    import ipaddress
+
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.hostname or ""
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    ip = resolve_and_validate_host(host, port)  # ValueError when unsafe
+    pinned = f"[{ip}]" if ":" in ip else ip
+    with curl_requests.Session(curl_options={CurlOpt.RESOLVE: [f"{host}:{port}:{pinned}"]}) as s:
+        resp = s.get(url, impersonate="chrome", timeout=_SCRAPE_TIMEOUT,
+                     allow_redirects=False)
+    connected = (getattr(resp, "primary_ip", "") or "").strip("[]")
+    if connected:
+        try:
+            if _is_disallowed_ip(ipaddress.ip_address(connected)):
+                raise ValueError(f"connected to disallowed IP {connected}")
+        except ValueError as exc:
+            raise ValueError(f"pinned fetch refused: {exc}") from exc
+    return ResponseFactory.from_http_request(resp, {})
+
+
 def _fetch_scrapling(url: str, mode: str) -> str:
     """mode in {'plain', 'stealth', 'dynamic'}; returns markdown or ''.
 
-    Unit quirk (verified against scrapling 0.4.15): the curl-based Fetcher.get
+    Unit quirk (verified against scrapling 0.4.15): the curl-based fetch
     takes `timeout` in SECONDS (with `impersonate`), while the browser-based
     StealthyFetcher/DynamicFetcher `.fetch` forwards `timeout` straight to
     Playwright — MILLISECONDS. Both are honored here.
@@ -284,13 +386,15 @@ def _fetch_scrapling(url: str, mode: str) -> str:
         return ""
 
     if mode == "plain":
-        from scrapling import Fetcher
         curr_url = url
         page = None
         for _ in range(5):
             if not is_safe_url(curr_url):
                 return ""
-            page = Fetcher().get(curr_url, timeout=_SCRAPE_TIMEOUT, impersonate="chrome", follow_redirects=False)
+            try:
+                page = _pinned_curl_get(curr_url)
+            except ValueError:
+                return ""
             status = getattr(page, "status", 200)
             if status in (301, 302, 303, 307, 308):
                 headers = getattr(page, "headers", {}) or {}
@@ -302,16 +406,21 @@ def _fetch_scrapling(url: str, mode: str) -> str:
             break
         if page is None:
             return ""
-    elif mode == "stealth":
-        from scrapling.fetchers import StealthyFetcher
-        page = StealthyFetcher().fetch(url, timeout=max(_SCRAPE_TIMEOUT, 60) * 1000)
-        final_url = str(getattr(page, "url", url) or url)
-        if not is_safe_url(final_url):
-            return ""
     else:
-        from scrapling.fetchers import DynamicFetcher
-        page = DynamicFetcher().fetch(url, timeout=max(_SCRAPE_TIMEOUT, 60) * 1000,
-                                      headless=True)
+        if mode == "stealth":
+            from scrapling.fetchers import StealthyFetcher as _Browser
+            extra = {}
+        else:
+            from scrapling.fetchers import DynamicFetcher as _Browser
+            extra = {"headless": True}
+        guard, setup = _make_browser_guard()
+        page = _Browser().fetch(url, timeout=max(_SCRAPE_TIMEOUT, 60) * 1000,
+                                page_setup=setup, **extra)
+        # Fail closed: guard not installed (scrapling swallows setup errors)
+        # or any request reached for an internal address -> refuse the whole
+        # page, since partial content may already carry the leaked bytes.
+        if not guard["installed"] or guard["blocked"]:
+            return ""
         final_url = str(getattr(page, "url", url) or url)
         if not is_safe_url(final_url):
             return ""
@@ -373,30 +482,20 @@ def _fetch_playwright(url: str) -> str:
     guard has to move to request interception, where EVERY navigation Chromium
     attempts is checked rather than just the first one.
     """
-    from server.ssrf import is_safe_url
     from playwright.sync_api import sync_playwright
 
-    blocked = {"hit": False}
+    guard, setup = _make_browser_guard()
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=[
             "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
         try:
             page = browser.new_page(user_agent=_UA)
-
-            def _guard(route, request):
-                target = request.url if route.request else ""
-                # Sub-resources matter too: an iframe or fetch() to an internal
-                # address is the same read primitive as a top-level navigation.
-                if target and not is_safe_url(target):
-                    blocked["hit"] = True
-                    route.abort()
-                    return
-                route.continue_()
-
-            page.route("**/*", _guard)
+            # Sub-resources matter too: an iframe, fetch() or WebSocket to an
+            # internal address is the same read primitive as a navigation.
+            setup(page)
             page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            if blocked["hit"]:
+            if guard["blocked"]:
                 # Something in the chain reached for an unsafe address. Returning
                 # a partial page would leak whatever loaded before the block, so
                 # refuse the whole scrape.
@@ -405,6 +504,8 @@ def _fetch_playwright(url: str) -> str:
             html = page.content()
         finally:
             browser.close()
+    if guard["blocked"]:  # a post-load script reached inward while hydrating
+        return ""
     return html if _looks_like_real_page(html) else ""
 
 
