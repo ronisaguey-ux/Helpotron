@@ -3,7 +3,7 @@ uvicorn>=0.30
 requests>=2.31
 # LLM extraction layer — SmartScraperGraph against OpenRouter (FREE deepseek key only)
 scrapegraphai>=0.19
-playwright>=1.46
+playwright>=1.48  # route_web_socket (SSRF guard, V5-A3-01)
 # Agent-Reach zero-config channels, used directly by the sidecar lanes
 # (agent-reach itself is installed from the GitHub archive — see run.sh / install.txt)
 yt-dlp>=2024.01.01
