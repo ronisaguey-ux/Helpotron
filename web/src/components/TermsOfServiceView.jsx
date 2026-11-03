@@ -231,7 +231,7 @@ export default function TermsOfServiceView({ onBack = null, publicMode = false, 
             <ul className="list-disc pl-5 space-y-1.5 text-on-surface text-xs leading-relaxed">
               <li>The Service routes prompts through third-party AI providers (OpenRouter, DeepSeek, Google), payment processing (Stripe), SMS (Twilio), and infrastructure (Cloudflare). Their own terms govern their services.</li>
               <li>AI-generated outputs are provided for your own study and coursework. You remain responsible for how you use them per your school's policies.</li>
-              <li>If you believe something on the platform infringes your copyright, contact us at <span className="font-mono text-primary font-semibold">legal@helpotron.com</span> for statutory DMCA review.</li>
+              <li>If you believe something on the platform infringes your copyright, contact us at <span className="font-mono text-primary font-semibold">buisness@rssytemsweb.com</span> for statutory DMCA review.</li>
             </ul>
           </div>
         </div>
@@ -543,20 +543,20 @@ export default function TermsOfServiceView({ onBack = null, publicMode = false, 
                 <div className="p-3.5 rounded-2xl bg-surface-container-low/60 border border-outline-variant/20 space-y-1">
                   <div className="text-[11px] font-mono text-on-surface-variant uppercase font-semibold">Electronic Service</div>
                   <a
-                    href="mailto:legal@helpotron.com"
+                    href="mailto:buisness@rssytemsweb.com"
                     className="font-mono text-xs text-primary font-bold hover:underline break-all"
                   >
-                    legal@helpotron.com
+                    buisness@rssytemsweb.com
                   </a>
                 </div>
 
                 <div className="p-3.5 rounded-2xl bg-surface-container-low/60 border border-outline-variant/20 space-y-1">
                   <div className="text-[11px] font-mono text-on-surface-variant uppercase font-semibold">Privacy Officer</div>
                   <a
-                    href="mailto:privacy@helpotron.com"
+                    href="mailto:buisness@rssytemsweb.com"
                     className="font-mono text-xs text-secondary font-bold hover:underline break-all"
                   >
-                    privacy@helpotron.com
+                    buisness@rssytemsweb.com
                   </a>
                 </div>
 

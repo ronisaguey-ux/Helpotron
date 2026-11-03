@@ -54,7 +54,7 @@ const RIGHTS = [
   { title: 'Immediate Erasure', text: 'Delete Account (Settings → Account → Delete Account) executes a single-transaction cascade wipe of your user row and all associated records (assignments, transcripts, chats, payments).' },
   { title: 'Rectification', text: 'Correct academic profiles, writing DNA samples, custom subjects, and rule overrides at any time directly in Settings.' },
   { title: 'Non-Destructive Reset', text: 'Soft Reset restores system defaults and archives unfinished staging without permanently destroying your historical materials.' },
-  { title: 'Formal Data Inquiries', text: 'Direct GDPR/CCPA subject access requests to privacy@helpotron.com — processed within statutory timelines. Zero data sale or cross-context ad brokering.' },
+  { title: 'Formal Data Inquiries', text: 'Direct GDPR/CCPA subject access requests to buisness@rssytemsweb.com — processed within statutory timelines. Zero data sale or cross-context ad brokering.' },
 ];
 
 export default function PrivacyPolicyView({ publicMode = false, onBack = null, onGoTo = null }) {
@@ -526,10 +526,10 @@ export default function PrivacyPolicyView({ publicMode = false, onBack = null, o
               </p>
               <div className="pt-2 flex flex-wrap items-center gap-3">
                 <a
-                  href="mailto:privacy@helpotron.com"
+                  href="mailto:buisness@rssytemsweb.com"
                   className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary hover:text-on-primary-container text-xs font-bold transition cursor-pointer shadow-sm active:scale-95"
                 >
-                  <span>Contact Privacy Counsel (privacy@helpotron.com)</span>
+                  <span>Contact Privacy Counsel (buisness@rssytemsweb.com)</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               </div>
