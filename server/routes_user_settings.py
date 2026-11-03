@@ -776,9 +776,8 @@ async def send_message_to_admin_route(
         allowed_exts = {".pdf", ".docx", ".doc", ".txt", ".png", ".jpg", ".jpeg", ".webp", ".zip", ".csv"}
         if ext not in allowed_exts:
             raise HTTPException(400, f"Unsupported attachment format: '{ext}'. Allowed: {', '.join(sorted(allowed_exts))}")
-        content = await attachment.read()
-        if len(content) > 15 * 1024 * 1024:
-            raise HTTPException(413, "Attachment exceeds 15 MB limit")
+        from .upload_limits import read_upload_capped
+        content = await read_upload_capped(attachment, 15 * 1024 * 1024, "Attachment exceeds 15 MB limit")
         try:
             files_dir = Path("data/uploads/message_attachments")
             files_dir.mkdir(parents=True, exist_ok=True)
