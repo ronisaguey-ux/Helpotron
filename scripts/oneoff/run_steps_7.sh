@@ -153,7 +153,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
                 <li>📦 <strong>Right to Portability</strong> — Export your data as JSON</li>
                 <li>🚫 <strong>Right to Object</strong> — Opt out of non-essential processing</li>
               </ul>
-              <p>To exercise your rights, visit Settings → Account → Delete Account, or contact privacy@helpotron.com</p>
+              <p>To exercise your rights, visit Settings → Account → Delete Account, or contact buisness@rssytemsweb.com</p>
             </div>
           )}
         </div>
@@ -163,4 +163,3 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
 }
 INNER_EOF
 git add web/src/components/PrivacyPolicyModal.jsx && git commit -m 'fix(remediation): STEP-20 - Cookie consent banner and GDPR subprocessor transparency modal' || true
-
