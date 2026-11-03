@@ -56,6 +56,89 @@ def charge_draft_cost(db: Session, user_id: int) -> bool:
     return (res.rowcount or 0) == 1
 
 
+# Statuses in which a workflow thread still owns the draft. A draft is charged
+# before it enters "pending" (create_draft_task, /api/draft/{id}/retry).
+IN_FLIGHT_DRAFT_STATUSES = ("pending",)
+
+
+def fail_draft_and_refund(db: Session, draft_id: int, reason: str,
+                          updated_before: Optional[datetime] = None) -> bool:
+    """Move an in-flight draft to "failed" and refund DRAFT_COST, at most once.
+
+    The status change is a guarded UPDATE (WHERE status = 'pending'), so only one
+    caller — the workflow's own failure path or the startup reaper — can win it;
+    a loser sees rowcount 0 and refunds nothing. The status change and the credit
+    are committed in ONE transaction (credit_tokens_atomic's commit flushes both),
+    so a crash cannot leave a failed draft unrefunded or a refund without the
+    status change. Returns True when this call failed the draft.
+    """
+    from sqlalchemy import update as _update
+    from .credits import credit_tokens_atomic, is_unmetered
+
+    row = db.query(Draft.user_id).filter(Draft.id == draft_id).first()
+    if row is None:
+        return False
+    user_id = row[0]
+    stmt = (
+        _update(Draft)
+        .where(Draft.id == draft_id, Draft.status.in_(IN_FLIGHT_DRAFT_STATUSES))
+        .values(status="failed", last_error=(reason or "draft failed")[:512], updated_at=utcnow())
+        .execution_options(synchronize_session=False)
+    )
+    if updated_before is not None:
+        stmt = stmt.where(Draft.updated_at < updated_before)
+    res = db.execute(stmt)
+    if (res.rowcount or 0) != 1:
+        db.rollback()
+        return False
+    user = db.get(User, user_id)
+    if user is not None and not is_unmetered(user):
+        credit_tokens_atomic(db, user_id, DRAFT_COST)  # commits status + credit together
+        logger.info("Draft %d failed (%s); refunded %s tokens to user %s", draft_id, reason, DRAFT_COST, user_id)
+    else:
+        db.commit()
+    return True
+
+
+def reap_orphaned_drafts(boot_time: datetime) -> int:
+    """Fail + refund drafts whose workflow thread died with the previous process.
+
+    The workflow runs in a daemon thread (start_draft_workflow), so a restart
+    mid-run leaves the draft "pending" forever with DRAFT_COST already debited.
+    Call once at startup, before any new workflow can start: every draft still
+    in flight that was last touched before this process booted has no thread.
+    Assumes ONE app process (prod helpotron-api.service runs uvicorn without
+    --workers); with several workers, a sibling's live draft could be reaped.
+    """
+    from .database import SessionLocal
+    cutoff = boot_time
+    if cutoff.tzinfo is not None:
+        # SQLite DateTime columns hold naive UTC; compare like with like.
+        cutoff = cutoff.astimezone(timezone.utc).replace(tzinfo=None)
+    reaped = 0
+    db = SessionLocal()
+    try:
+        ids = [r[0] for r in db.query(Draft.id)
+               .filter(Draft.status.in_(IN_FLIGHT_DRAFT_STATUSES), Draft.updated_at < cutoff)
+               .all()]
+        for draft_id in ids:
+            try:
+                if fail_draft_and_refund(
+                    db, draft_id,
+                    "Interrupted by a server restart; your tokens were refunded. Please try again.",
+                    updated_before=cutoff,
+                ):
+                    reaped += 1
+            except Exception:
+                db.rollback()
+                logger.exception("Draft reaper: could not fail draft %d", draft_id)
+    finally:
+        db.close()
+    if reaped:
+        logger.warning("Draft reaper: failed and refunded %d draft(s) orphaned by a restart", reaped)
+    return reaped
+
+
 def get_style(user_id: int, db: Session) -> Optional[str]:
     """Retrieve the student's uploaded custom text for style mimicry."""
     user = db.get(User, user_id)
@@ -330,15 +413,14 @@ async def _draft_workflow_async(draft_id: int) -> None:
         logger.info("Draft %d marked risky after %d attempts", draft_id, MAX_RETRIES)
     except Exception as e:
         logger.exception("Draft workflow failed: %s", e)
-        draft.status = "failed"
-        draft.last_error = str(e)
-        db.commit()
-        # Refund tokens atomically on failure
-        user = db.get(User, draft.user_id)
-        if user:
-            from .credits import credit_tokens_atomic, is_unmetered
-            if not is_unmetered(user):
-                credit_tokens_atomic(db, draft.user_id, DRAFT_COST)
+        # The session may be mid-flush or holding a failed transaction (the old
+        # code then raised again on draft.status, so the refund never ran). Start
+        # clean and go through the guarded transition so a refund lands once.
+        try:
+            db.rollback()
+            fail_draft_and_refund(db, draft_id, str(e))
+        except Exception:
+            logger.exception("Draft %d: failure refund could not be applied", draft_id)
     finally:
         db.close()
 
