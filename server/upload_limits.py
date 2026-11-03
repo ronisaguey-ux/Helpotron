@@ -17,8 +17,8 @@ from fastapi import HTTPException, UploadFile
 CHUNK_BYTES = 1024 * 1024
 
 
-def _too_large(detail: str) -> HTTPException:
-    return HTTPException(status_code=413, detail=detail)
+def _too_large(detail: str, status_code: int = 413) -> HTTPException:
+    return HTTPException(status_code=status_code, detail=detail)
 
 
 def _declared_size(file: UploadFile) -> Optional[int]:
@@ -26,11 +26,16 @@ def _declared_size(file: UploadFile) -> Optional[int]:
     return size if isinstance(size, int) else None
 
 
-async def read_upload_capped(file: UploadFile, max_bytes: int, detail: str) -> bytes:
-    """Return the upload's bytes, raising 413 as soon as more than max_bytes arrive."""
+async def read_upload_capped(
+    file: UploadFile, max_bytes: int, detail: str, status_code: int = 413
+) -> bytes:
+    """Return the upload's bytes, raising 413 as soon as more than max_bytes arrive.
+
+    status_code lets an endpoint keep the error code its clients already handle.
+    """
     declared = _declared_size(file)
     if declared is not None and declared > max_bytes:
-        raise _too_large(detail)
+        raise _too_large(detail, status_code)
     parts = []
     total = 0
     while True:
@@ -39,7 +44,7 @@ async def read_upload_capped(file: UploadFile, max_bytes: int, detail: str) -> b
             break
         total += len(chunk)
         if total > max_bytes:
-            raise _too_large(detail)
+            raise _too_large(detail, status_code)
         parts.append(chunk)
     return b"".join(parts)
 

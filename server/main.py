@@ -1982,11 +1982,10 @@ async def transcribe(file: UploadFile = File(...),
     if ext and ext not in allowed_audio_exts:
         raise HTTPException(400, f"Unsupported audio format: '{ext}'. Allowed: {', '.join(sorted(allowed_audio_exts))}")
     max_audio_bytes = 100 * 1024 * 1024  # 100MB
-    content = await file.read()
+    from .upload_limits import read_upload_capped
+    content = await read_upload_capped(file, max_audio_bytes, "Audio upload exceeds 100MB limit")
     if not content:
         raise HTTPException(400, "empty upload")
-    if len(content) > max_audio_bytes:
-        raise HTTPException(413, "Audio upload exceeds 100MB limit")
     path = transcription.save_upload(content, file.filename or "lecture.webm")
     # Admission control (2026-09-28): transcription of up to 100MB of audio is one of the
     # heaviest things a user can ask for, and it ran outside the queue. Wrapped around the
