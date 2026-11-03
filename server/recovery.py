@@ -410,11 +410,33 @@ def verify_and_reset(db, public_id: str, new_password: str, code: Optional[str] 
     if _st.get("2fa_enabled") and factor_ready:
         if not two_factor_code:
             from .auth_2fa import SMSVerification, code_store, email_service
+            # A failed send used to be ignored, so the user was told to enter a
+            # code that never arrived. Say what happened and what to do instead
+            # (mirrors the /api/login 2FA send errors). Not a failed attempt:
+            # the recovery code itself was correct and stays unspent.
             if method == "sms":
-                SMSVerification.send_sync(phone)
-            elif method == "email" and email_service.is_configured():
+                if _st.get("sms_opt_out"):
+                    raise ValueError(
+                        "Texts to your phone are turned off (you replied STOP). Reply START "
+                        "from that phone and try again, or ask the developer to reset your password."
+                    )
+                if not SMSVerification.send_sync(phone):
+                    raise ValueError(
+                        "Your two-factor code could not be texted right now. Try again in a "
+                        "moment, or ask the developer to reset your password."
+                    )
+            elif method == "email":
+                if not email_service.is_configured():
+                    raise ValueError(
+                        "Your two-factor code cannot be sent because email is not set up on "
+                        "this server. Ask the developer to reset your password."
+                    )
                 new_code = code_store.generate_code(user.public_id, purpose="2fa_challenge", length=12)
-                email_service.send_verification_code(email_target, new_code, "Password Reset")
+                if not email_service.send_verification_code(email_target, new_code, "Password Reset"):
+                    raise ValueError(
+                        "Your two-factor code could not be emailed right now. Try again in a "
+                        "moment, or ask the developer to reset your password."
+                    )
             return {
                 "status": "2fa_required",
                 "method": method,
