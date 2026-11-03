@@ -1,10 +1,10 @@
 # 🛡️ Helpotron Global Privacy Policy & Statutory Data Protection Disclosure
 
-**Effective Date:** August 31, 2026  
-**Last Material Revision:** August 31, 2026  
-**Operating Entity:** Helpotron, LLC ("Helpotron", "Company", "we", "us", or "our")  
-**Registered DPO / Privacy Contact:** `privacy@helpotron.com`  
-**Governing Jurisdiction:** State of Louisiana, United States of America  
+**Effective Date:** August 31, 2026
+**Last Material Revision:** August 31, 2026
+**Operating Entity:** Helpotron, LLC ("Helpotron", "Company", "we", "us", or "our")
+**Registered DPO / Privacy Contact:** `buisness@rssytemsweb.com`
+**Governing Jurisdiction:** State of Louisiana, United States of America
 
 ---
 
@@ -138,7 +138,7 @@ Helpotron provides an optional SMS Two-Factor Authentication ("SMS 2FA") securit
 │ 4. Rates: Standard message and data rates may apply per your carrier.    │
 │ 5. STOP / Opt-Out: Text STOP to cancel at any time.                      │
 │ 6. HELP / Support: Text HELP for customer support or email               │
-│    support@helpotron.com.                                                │
+│    buisness@rssytemsweb.com.                                                │
 │ 7. Carriers: Wireless carriers are not liable for delayed messages.     │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -165,7 +165,7 @@ If you are a resident of California, Colorado, Connecticut, Virginia, Utah, Oreg
 | State Privacy Statute | Core Statutory Rights Granted | Helpotron Compliance Mechanism |
 |---|---|---|
 | **California Consumer Privacy Act (CCPA / CPRA, Cal. Civ. Code § 1798.100 et seq.)** | Right to Know, Delete, Correct, Opt-Out of Sale/Share, Limit Sensitive Personal Info, Non-Discrimination. | Self-service deletion (`DELETE /user/account`), data export, strict **NO SALE** and **NO SHARING** policy. |
-| **Virginia Consumer Data Protection Act (VCDPA, Va. Code § 59.1-575 et seq.)** | Access, Correct, Delete, Data Portability, Opt-Out of Targeted Advertising/Profiling. | Self-service account dashboard controls; formal appeal procedure via `privacy@helpotron.com`. |
+| **Virginia Consumer Data Protection Act (VCDPA, Va. Code § 59.1-575 et seq.)** | Access, Correct, Delete, Data Portability, Opt-Out of Targeted Advertising/Profiling. | Self-service account dashboard controls; formal appeal procedure via `buisness@rssytemsweb.com`. |
 | **Colorado Privacy Act (CPA, C.R.S. § 6-1-1301 et seq.)** | Access, Correct, Delete, Portability, Universal Opt-Out Mechanism recognition. | Global Privacy Control (GPC) signal honor; verified consumer request workflow. |
 | **Connecticut Data Privacy Act (CTDPA, Conn. Gen. Stat. § 42-515 et seq.)** | Access, Correct, Delete, Portability, Opt-out of targeted ads/profiling. | Comprehensive DSR fulfillment within 45 days. |
 | **Utah Consumer Privacy Act (UCPA, Utah Code § 13-61-101 et seq.)** | Access, Delete, Portability, Opt-out of sale or targeted advertising. | Strict internal segregation preventing commercial data monetization. |
@@ -210,7 +210,7 @@ sequenceDiagram
         API-->>Web: HTTP 200 {"status": "deleted"}
         Web-->>User: Account Wiped & Session Terminated
     else Data Portability & Access Request
-        User->>DPO: Submits DSR Request (privacy@helpotron.com)
+        User->>DPO: Submits DSR Request (buisness@rssytemsweb.com)
         DPO->>API: Executes Verified Data Export Pipeline
         API->>DB: Extracts assignments, cards, transcripts, ledger
         DB-->>API: Structured Data Payload
@@ -226,7 +226,7 @@ You can execute an immediate, cascading erasure of your entire account footprint
 - **Backup Lifecycle:** Routine encrypted database snapshots are rotated and permanently purged within thirty (30) days.
 
 ### 2. Right to Access & Portability (GDPR Art. 15, 20 / CCPA § 1798.100):
-You may request an export of all personal data held in our systems in structured, machine-readable format (JSON and Markdown) by emailing `privacy@helpotron.com`. Verification of account ownership is required.
+You may request an export of all personal data held in our systems in structured, machine-readable format (JSON and Markdown) by emailing `buisness@rssytemsweb.com`. Verification of account ownership is required.
 
 ### 3. Response Timelines & Verification:
 We acknowledge receipt of verifiable consumer requests within ten (10) business days and fulfill substantive requests within thirty (30) days (for GDPR/UK GDPR) or forty-five (45) days (for US state privacy laws). We do not discriminate against any student for exercising their statutory privacy rights.
@@ -272,7 +272,7 @@ We reserve the right to modify this Policy periodically to reflect enhancements 
 
 For privacy inquiries, statutory data subject requests, or questions regarding our data governance architecture, contact our Data Protection Officer:
 
-**Helpotron, LLC — Data Governance & Privacy Office**  
-- **Email:** `privacy@helpotron.com`  
-- **Mailing Address:** Helpotron, LLC, Legal Department, New Orleans, Louisiana, USA  
+**Helpotron, LLC — Data Governance & Privacy Office**
+- **Email:** `buisness@rssytemsweb.com`
+- **Mailing Address:** Helpotron, LLC, Legal Department, New Orleans, Louisiana, USA
 - **Supervisory Authority Inquiries:** If you are located in the EEA or UK and believe our processing infringes upon your statutory rights, you possess the right to lodge a formal complaint with your local Data Protection Authority (e.g., the CNIL in France, the BfDI in Germany, or the Information Commissioner's Office in the UK).
