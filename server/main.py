@@ -780,7 +780,14 @@ async def health_check(deep: bool = False):
 
 @app.get("/api/admin/health")
 async def admin_health(current_user: User = Depends(require_admin)):
-    """Health check with DB connectivity and service status behind admin auth (HT-003)."""
+    """Health check with DB connectivity and service status behind admin auth (HT-003).
+
+    `status` is DERIVED from the probes, never hardcoded (V5-A5-06). It used to
+    be the literal "ok" while `database` said "error: ..." — so the operator
+    dashboard, which reads `status`, showed a green box on a database that had
+    just failed its probe, and /api/health?deep=true (which does 503) was the
+    only surface telling the truth. Same 503 contract as the public one.
+    """
     from .database import SessionLocal
     db_status = "ok"
     try:
@@ -789,8 +796,8 @@ async def admin_health(current_user: User = Depends(require_admin)):
     except Exception as e:
         db_status = f"error: {e}"
 
-    return {
-        "status": "ok",
+    payload = {
+        "status": "degraded" if db_status != "ok" else "ok",
         "app": "Helpotron Academic Companion",
         "version": "1.0.0",
         "env": config.ENVIRONMENT,
@@ -799,6 +806,9 @@ async def admin_health(current_user: User = Depends(require_admin)):
         "stripe_configured": bool(config.stripe_secret_key),
         "telegram_configured": bool(config.telegram_bot_token),
     }
+    if payload["status"] != "ok":
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 
