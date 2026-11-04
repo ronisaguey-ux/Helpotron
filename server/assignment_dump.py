@@ -648,6 +648,18 @@ class AssignmentDumpManager:
         )
         dump_item.extracted_text = extracted_text
 
+        # Retention (audit-v5 A3): everything downstream reads extracted_text —
+        # routing, prompts, flashcards — and no code path re-opens the upload
+        # (the delete route tolerates file_path=None). Nothing purged these
+        # either: uploads/assignment_dump is a subdirectory, and
+        # main._cleanup_temp_files_once only scans top-level files, so raw
+        # coursework lived forever. Keep the text, drop the bytes.
+        try:
+            Path(file_path).unlink(missing_ok=True)
+            dump_item.file_path = None
+        except OSError as _unlink_exc:
+            logger.warning("Could not unlink dump upload %s: %s", file_path, _unlink_exc)
+
         # Route to Assignment
         user_assignments = db.query(Assignment).filter(Assignment.user_id == user.id).all()
         if manual_assignment_id:
