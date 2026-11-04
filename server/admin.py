@@ -231,17 +231,38 @@ class TokenManager:
 async def list_users(request: Request, db: Session = Depends(get_db)):
     require_admin(request)
     users = db.query(User).all()
+    # Audit V5-A4-17: this is the live handler for GET /api/admin/users (it is
+    # registered before main.py's same-path route, so Starlette serves THIS
+    # one). It used to cost 1 + 4N statements — effective_credits_balance() per
+    # user plus lazy loads of u.assignments / u.materials / u.transcripts just
+    # to call len() on them, hydrating every row of those tables as ORM
+    # objects. Balances come from one grouped ledger query and the three counts
+    # from three grouped queries.
+    from .credits import effective_credits_balances
+
+    balances = effective_credits_balances(db, users)
+
+    def _counts(model):
+        return {
+            uid: int(n or 0)
+            for uid, n in db.query(model.user_id, func.count(model.id)).group_by(model.user_id).all()
+        }
+
+    assignment_counts = _counts(Assignment)
+    material_counts = _counts(StudyMaterial)
+    transcript_counts = _counts(Transcript)
+
     return [{
         "id": u.id,
         "public_id": u.public_id,
         "plan": u.plan,
-        "credits": effective_credits_balance(db, u),
+        "credits": balances[u.id],
         "token_balance": float((u.settings or {}).get("token_balance", 0) or 0),
         "telegram_id": u.telegram_id,
         "created_at": u.created_at.isoformat(),
-        "assignment_count": len(u.assignments),
-        "material_count": len(u.materials),
-        "transcript_count": len(u.transcripts),
+        "assignment_count": assignment_counts.get(u.id, 0),
+        "material_count": material_counts.get(u.id, 0),
+        "transcript_count": transcript_counts.get(u.id, 0),
         "is_banned": u.settings.get("banned", False) if u.settings else False,
     } for u in users]
 
