@@ -347,6 +347,23 @@ export default function App() {
   const PUBLIC_PATHS = new Set(['/', '/features', '/pricing', '/guide', '/help', '/terms', '/privacy', '/extension']);
   const [notFoundPath, setNotFoundPath] = useState(null);
   const pendingDeepLink = useRef(null);
+  /* URL <-> view sync (V5-A1-01). Canonical path per view; the inverse of
+     VIEW_PATH_MAP above ('/' is the authed dashboard). The open assignment
+     rides in the existing #assignment=<id> deep link, the tab in ?tab=. */
+  const VIEW_CANONICAL_PATH = {
+    overview: '/', activity: '/activity', automation: '/automation',
+    notifications: '/notifications', library: '/library', agent: '/agent',
+    insights: '/insights', credits: '/credits', settings: '/settings',
+    extension: '/extension', dump: '/dump', inbox: '/inbox',
+    message_admin: '/message_admin', admin: '/admin', monitors: '/monitors',
+    datalake: '/datalake', guide: '/guide', terms: '/terms', privacy: '/privacy',
+  };
+  /* Next URL-sync action: 'push' (user navigation), 'replace' (deep-link
+     landing, state-only back), 'skip' (state was restored FROM the URL). */
+  const urlSyncModeRef = useRef('push');
+  /* Index of the current history entry within this tab's app history. */
+  const histIdxRef = useRef(Number(window.history.state?.idx) || 0);
+  const prevAuthRef = useRef(authStatus);
   const resolvePath = (path, status) => {
     if (path === '/sign-in' || path === '/signup') {
       pendingDeepLink.current = ['overview', null];
@@ -364,7 +381,15 @@ export default function App() {
     }
     if (status === 'authed') {
       pendingDeepLink.current = null;
-      handleSelectView(mapped[0], mapped[1]);
+      /* URL sync (V5-A1-01): ?tab= round-trips the in-view tab, and the view
+         change this deep link causes REPLACES the landing history entry —
+         reload/share must not stack a duplicate entry for the same view. */
+      const urlTab = new URLSearchParams(window.location.search).get('tab');
+      const nextTab = urlTab || mapped[1];
+      if (mapped[0] !== activeView || nextTab !== viewTab || openAssignment) {
+        urlSyncModeRef.current = 'replace';
+      }
+      handleSelectView(mapped[0], nextTab);
     } else {
       pendingDeepLink.current = mapped;
       if (status === 'signedOut') openAuth('login');
@@ -623,6 +648,14 @@ export default function App() {
 
   const goBack = () => {
     if (navBack.length === 0) return;
+    /* The previous view has its own history entry (pushed by the URL sync):
+       step the browser back so the chevron and the browser Back button are
+       the same action; the popstate handler restores the view. */
+    if (authStatus === 'authed' && histIdxRef.current > 0) {
+      window.history.back();
+      return;
+    }
+    urlSyncModeRef.current = 'replace';
     const entry = navBack[navBack.length - 1];
     setNavFwd((f) => [...f, { view: activeView, tab: viewTab, assignment: openAssignment }]);
     setNavBack((b) => b.slice(0, -1));
@@ -689,7 +722,10 @@ export default function App() {
     const nextView = mapped ? mapped[0] : viewKey;
     const nextTab = tab ?? (mapped ? mapped[1] : null);
     /* Same destination (e.g. clicking the current nav item) — no history push. */
-    if (nextView === activeView && nextTab === viewTab && !openAssignment) return;
+    if (nextView === activeView && nextTab === viewTab && !openAssignment) {
+      urlSyncModeRef.current = 'push'; // no render follows: disarm a pending 'replace'
+      return;
+    }
     recordNav();
     setActiveView(nextView);
     setViewTab(nextTab);
@@ -704,15 +740,21 @@ export default function App() {
    * hash still works after sign-in for a logged-out tab. */
   useEffect(() => {
     if (authStatus !== 'authed') return undefined;
-    const openFromHash = async () => {
+    const openFromHash = async (evt) => {
       const m = window.location.hash.match(/assignment=(\d+)/);
       if (!m) return;
       const id = Number(m[1]);
       if (!id) return;
+      // history traversal onto this entry (hashchange, not the mount call):
+      // popstate already restored it
+      if (evt && window.history.state?.hv?.aid === id) return;
       try {
         const full = await api.assignmentFullView(id);
         const a = full && full.assignment;
         if (a && a.id) {
+          // an entry the URL sync has not claimed yet (fresh hash link):
+          // rewrite it in place instead of stacking a second entry
+          if (!window.history.state?.hv) urlSyncModeRef.current = 'replace';
           recordNav();
           setOpenAssignment(a);
           setActiveView('overview');
@@ -724,6 +766,104 @@ export default function App() {
     return () => window.removeEventListener('hashchange', openFromHash);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authStatus]);
+
+  /* URL sync (V5-A1-01): every view change writes the address bar, so
+   * reload restores the view, URLs are shareable, and browser Back/Forward
+   * walk the same history as the in-app chevrons. */
+  const urlForView = (view, tab, assignment) => {
+    const path = VIEW_CANONICAL_PATH[view]
+      || (window.location.pathname.replace(/\/+$/, '') || '/');
+    const query = tab ? `?tab=${encodeURIComponent(tab)}` : '';
+    const hash = assignment && assignment.id != null ? `#assignment=${assignment.id}` : '';
+    return `${path}${query}${hash}`;
+  };
+  useEffect(() => {
+    const justAuthed = prevAuthRef.current !== 'authed' && authStatus === 'authed';
+    prevAuthRef.current = authStatus;
+    if (authStatus !== 'authed') return;
+    if (justAuthed) {
+      /* This run still sees the pre-deep-link view; the landing entry is
+         only stamped. resolvePath's view change (if any) replaces it. */
+      if (window.history.state?.idx == null) {
+        window.history.replaceState({ ...(window.history.state || {}), idx: histIdxRef.current }, '', window.location.href);
+      }
+      return;
+    }
+    const mode = urlSyncModeRef.current;
+    urlSyncModeRef.current = 'push';
+    if (mode === 'skip') return;
+    const url = urlForView(activeView, viewTab, openAssignment);
+    const here = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    // ids only: assignment content never lands in session history, which
+    // outlives sign-out on a shared machine
+    const hv = { view: activeView, tab: viewTab, aid: openAssignment?.id ?? null };
+    if (mode === 'replace' || url === here) {
+      window.history.replaceState({ hv, idx: histIdxRef.current }, '', url);
+    } else {
+      histIdxRef.current += 1;
+      window.history.pushState({ hv, idx: histIdxRef.current }, '', url);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus, activeView, viewTab, openAssignment?.id]);
+
+  useEffect(() => {
+    const onPop = (e) => {
+      const path = window.location.pathname.replace(/\/+$/, '') || '/';
+      if (authStatus !== 'authed') {
+        resolvePath(path, authStatus);
+        return;
+      }
+      const st = e.state;
+      // a fresh hash-only entry (extension deep link) carries no state: it is
+      // a NEW entry; hashchange's openFromHash handles the assignment
+      const newIdx = st && st.idx != null ? Number(st.idx) : histIdxRef.current + 1;
+      if (!st && /assignment=\d+/.test(window.location.hash)) {
+        histIdxRef.current = newIdx; // openFromHash claims this entry
+        return;
+      }
+      let target;
+      if (st && st.hv) {
+        const aid = st.hv.aid ?? null;
+        // the in-memory chevron stack holds the assignment snapshot
+        const near = newIdx < histIdxRef.current ? navBack[navBack.length - 1] : navFwd[navFwd.length - 1];
+        const snap = aid != null && near && near.assignment && near.assignment.id === aid ? near.assignment : null;
+        target = { view: st.hv.view, tab: st.hv.tab ?? null, assignment: snap, aid };
+      } else {
+        const mapped = path === '/' ? ['overview', null] : VIEW_PATH_MAP[path];
+        if (!mapped) { setNotFoundPath(path); return; }
+        const urlTab = new URLSearchParams(window.location.search).get('tab');
+        target = { view: mapped[0], tab: urlTab || mapped[1], assignment: null, aid: null };
+      }
+      const cur = { view: activeView, tab: viewTab, assignment: openAssignment };
+      if (newIdx < histIdxRef.current) {
+        setNavBack((b) => b.slice(0, -1));
+        setNavFwd((f) => [...f, cur]);
+      } else if (newIdx > histIdxRef.current) {
+        setNavBack((b) => [...b, cur]);
+        setNavFwd((f) => f.slice(0, -1));
+      }
+      histIdxRef.current = newIdx;
+      const sameView = target.view === activeView && target.tab === viewTab
+        && (target.aid ?? null) === (openAssignment?.id ?? null);
+      if (sameView) return;
+      // only arm 'skip' when this restore re-renders, or it would swallow
+      // the next real navigation's push
+      const willRender = target.view !== activeView || target.tab !== viewTab
+        || (target.assignment?.id ?? null) !== (openAssignment?.id ?? null);
+      if (willRender) urlSyncModeRef.current = 'skip';
+      setActiveView(target.view);
+      setViewTab(target.tab);
+      setOpenAssignment(target.assignment);
+      if (target.aid != null && !target.assignment) {
+        api.assignmentFullView(target.aid)
+          .then((full) => { if (full && full.assignment) { urlSyncModeRef.current = 'skip'; setOpenAssignment(full.assignment); } })
+          .catch(() => {});
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus, activeView, viewTab, openAssignment, navBack, navFwd]);
 
   /* helpotron:nav event bus (09-06): any embedded card (e.g. the trial
    * activation card's "Enable 2FA" step) can request a view switch without
