@@ -319,11 +319,26 @@ async def get_admin_users_costs(request: Request, db: Session = Depends(get_db))
     from .database import User, ApiUsageLog
     from sqlalchemy import func
     users = db.query(User).all()
+    # Audit V5-A4-07: this used to run three aggregate queries PER USER
+    # (count + sum + sum), so the admin cost tab cost 1 + 3N round trips on
+    # SQLite — each one a separate statement on the same connection, holding
+    # the GIL and the write lock slot. One grouped ledger query replaces them.
+    spend_by_user = {
+        pid: (int(calls or 0), float(base or 0.0), float(charged or 0.0))
+        for pid, calls, base, charged in (
+            db.query(
+                ApiUsageLog.public_id,
+                func.count(ApiUsageLog.id),
+                func.coalesce(func.sum(ApiUsageLog.base_cost_usd), 0.0),
+                func.coalesce(func.sum(ApiUsageLog.charged_cost_usd), 0.0),
+            )
+            .group_by(ApiUsageLog.public_id)
+            .all()
+        )
+    }
     res = []
     for u in users:
-        call_count = db.query(func.count(ApiUsageLog.id)).filter(ApiUsageLog.public_id == u.public_id).scalar() or 0
-        total_cost = db.query(func.sum(ApiUsageLog.base_cost_usd)).filter(ApiUsageLog.public_id == u.public_id).scalar() or 0.0
-        total_charged = db.query(func.sum(ApiUsageLog.charged_cost_usd)).filter(ApiUsageLog.public_id == u.public_id).scalar() or 0.0
+        call_count, total_cost, total_charged = spend_by_user.get(u.public_id, (0, 0.0, 0.0))
         plan_rev = 40.00 if u.plan == "elite" else (20.00 if u.plan == "pro" else 10.00)
         profit = round(plan_rev - total_cost, 2)
         margin = round((profit / plan_rev) * 100, 1) if plan_rev > 0 else 0
