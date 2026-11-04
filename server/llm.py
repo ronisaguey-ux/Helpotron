@@ -34,6 +34,43 @@ _BREAKER_COOLDOWN_S = float(os.getenv("LLM_BREAKER_COOLDOWN_S", "60") or 60)
 _breaker_failures: List[float] = []   # monotonic timestamps of recent failures
 _breaker_tripped_until = 0.0
 
+# ── request budget for the model cascade ────────────────────────────────────
+# Audit V5-A4-10: call_llm/stream_llm hard-coded `httpx.AsyncClient(timeout=60)`
+# and looped up to 5 candidate models, so a black-holed provider meant 5 x 60s
+# = 300s inside ONE request — three times the ~100s budget a proxied request
+# actually has, and `config.chat_timeout_seconds` (30) was never consulted.
+# The per-attempt timeout is now bounded by a whole-cascade deadline: the
+# cascade stops starting new attempts once the budget is gone, and it fails
+# fast instead of billing a doomed retry.
+_ATTEMPT_TIMEOUT_S = float(os.getenv("LLM_ATTEMPT_TIMEOUT_S", "60") or 60)
+_CONNECT_TIMEOUT_S = float(os.getenv("LLM_CONNECT_TIMEOUT_S", "10") or 10)
+_CASCADE_BUDGET_S = float(os.getenv("LLM_CASCADE_BUDGET_S", "90") or 90)
+_MIN_ATTEMPT_S = 5.0
+
+
+def _attempt_timeout(deadline: float) -> Optional[float]:
+    """Seconds to allow for the next candidate, or None when the budget is spent.
+
+    `deadline` is a monotonic timestamp; each attempt gets the smaller of the
+    configured attempt timeout and whatever is left of the cascade budget.
+    """
+    remaining = deadline - _now()
+    if remaining < _MIN_ATTEMPT_S:
+        return None
+    return min(_ATTEMPT_TIMEOUT_S, remaining)
+
+
+def _http_timeout(seconds: float) -> "httpx.Timeout":
+    """Per-attempt httpx timeout with an explicit connect cap.
+
+    httpx applies the same number to DNS/TCP connect as to the read, so a
+    provider that accepts the socket and then stalls looked identical to one
+    that never answered — and a dead endpoint cost the full attempt budget
+    before the cascade moved on.
+    """
+    return httpx.Timeout(seconds, connect=min(_CONNECT_TIMEOUT_S, seconds))
+
+
 
 def _now() -> float:
     import time
@@ -519,8 +556,16 @@ async def call_llm(
             ModelPolicy.PRIMARY_MODELS["deepseek_v4_1_flash"],
         ]
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    deadline = _now() + _CASCADE_BUDGET_S
+    async with httpx.AsyncClient(timeout=_http_timeout(_ATTEMPT_TIMEOUT_S)) as client:
         for cand_id in attempt_models:
+            attempt_timeout = _attempt_timeout(deadline)
+            if attempt_timeout is None:
+                logger.warning(
+                    "call_llm: cascade budget of %.0fs spent, not retrying another model",
+                    _CASCADE_BUDGET_S,
+                )
+                break
             cand_payload = dict(payload)
             # 09-10: V4.1 Flash is natively vision on OpenRouter (text+image), so the
             # canonical id is already the wire id — the old "-exp" slug rewrite is retired.
@@ -547,7 +592,12 @@ async def call_llm(
             cand_payload["messages"] = cand_messages
 
             try:
-                resp = await client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=cand_payload)
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=cand_payload,
+                    timeout=_http_timeout(attempt_timeout),
+                )
                 if hasattr(resp, "raise_for_status") and callable(resp.raise_for_status):
                     resp.raise_for_status()
                 data = resp.json()
@@ -749,9 +799,17 @@ async def stream_llm(
     attempt_models = _effort_cascade(model_id, effort=effort_score or 500)
 
     streamed_any = False
+    deadline = _now() + _CASCADE_BUDGET_S
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=_http_timeout(_ATTEMPT_TIMEOUT_S)) as client:
             for cand_id in attempt_models:
+                attempt_timeout = _attempt_timeout(deadline)
+                if attempt_timeout is None:
+                    logger.warning(
+                        "stream_llm: cascade budget of %.0fs spent, not retrying another model",
+                        _CASCADE_BUDGET_S,
+                    )
+                    break
                 cand_payload = dict(payload)
                 # 09-10: canonical id == wire id for V4.1 Flash (native vision).
                 openrouter_model = cand_id
@@ -773,7 +831,7 @@ async def stream_llm(
                         "https://openrouter.ai/api/v1/chat/completions",
                         headers=headers,
                         json=cand_payload,
-                        timeout=60.0,
+                        timeout=_http_timeout(attempt_timeout),
                     ) as response:
                         if response.status_code != 200:
                             continue
