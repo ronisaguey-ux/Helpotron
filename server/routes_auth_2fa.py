@@ -365,7 +365,11 @@ def _record_verify_challenge_failure(user_id: str) -> None:
 
 
 @router.post("/2fa/send-challenge")
-async def send_two_factor_challenge(payload: TwoFactorChallengeRequest, db: Session = Depends(get_db)):
+async def send_two_factor_challenge(
+    payload: TwoFactorChallengeRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     """Sends a 2FA challenge code to the user via their configured method.
     Mitigates user enumeration and message generator abuse (AUTH-02).
 
@@ -380,6 +384,17 @@ async def send_two_factor_challenge(payload: TwoFactorChallengeRequest, db: Sess
     so the budget itself does not become an account-existence oracle.
     """
     method = payload.method.lower()
+    # Unauthenticated by design (it runs before a session exists) and it makes
+    # the server send an email or a billable SMS, so it needs the same per-source
+    # and per-target throttle send-email-verification already has. Without it a
+    # known public_id could be made to receive unlimited messages.
+    client = request.client.host if request.client else "unknown"
+    for throttle_key in (
+        f"2fa_challenge_ip:{client}",
+        f"2fa_challenge_to:{(payload.user_id or '').lower()[:120]}:{method}",
+    ):
+        if not limiter.allow(throttle_key, 3, window=900.0):
+            raise HTTPException(429, "Too many 2FA codes requested. Please wait 15 minutes.")
     user = db.query(User).filter(User.public_id == payload.user_id).first()
 
     # Keyed on the CLAIMED id (not on a resolved user) so the throttle behaves
