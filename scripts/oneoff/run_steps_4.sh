@@ -52,17 +52,17 @@ limit_req_zone $binary_remote_addr zone=llm_limit:10m rate=5r/s;
 server {
     listen 80;
     listen [::]:80;
-    server_name helpotron.com www.helpotron.com;
+    server_name helpotron.dpdns.org www.helpotron.dpdns.org;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name helpotron.com www.helpotron.com;
+    server_name helpotron.dpdns.org www.helpotron.dpdns.org;
 
-    ssl_certificate /etc/letsencrypt/live/helpotron.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/helpotron.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/helpotron.dpdns.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/helpotron.dpdns.org/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
     ssl_prefer_server_ciphers off;
@@ -179,4 +179,3 @@ repos:
       - id: detect-private-key
 INNER_EOF
 git add .pre-commit-config.yaml && git commit -m 'fix(remediation): STEP-10 - Configure pre-commit hooks for secret detection' || true
-
