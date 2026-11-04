@@ -81,6 +81,26 @@ def require_admin(request: Request, db: Session = Depends(get_db)) -> User:
         local_db.close()
 
 
+def _actor_public_id(current_user: User | None, request: Request | None = None) -> str:
+    """Who performed this admin action, for the audit trail.
+
+    Every `admin_audit.record` call used `getattr(request.state, "public_id",
+    "admin")`, and `request.state.public_id` is never set anywhere in the app —
+    so every credit adjustment, welcome-token grant and plan change was recorded
+    with the literal actor "admin". The trail could say WHAT happened and to
+    WHOM, never WHO did it, which is the one question an audit row exists to
+    answer. The resolved admin from `require_admin` is the real identity.
+    """
+    pid = getattr(current_user, "public_id", None)
+    if pid:
+        return str(pid)
+    if request is not None:
+        state_pid = getattr(getattr(request, "state", None), "public_id", None)
+        if state_pid:
+            return str(state_pid)
+    return "unknown-admin"
+
+
 class TokenRequest(BaseModel):
     duration_days: int
     max_uses: int = 1
@@ -271,7 +291,7 @@ async def adjust_user_credits(
     db.commit()
     db.refresh(user)
     from .admin_audit import record as _audit
-    _audit(db, actor=getattr(request.state, "public_id", "admin"), target=public_id,
+    _audit(db, actor=_actor_public_id(current_user, request), target=public_id,
            action="adjust-credits", detail={"amount": amount, "reason": reason,
                                             "new_balance": get_token_balance(user)},
            request=request)
@@ -299,7 +319,7 @@ async def grant_welcome_tokens(
     db.commit()
     db.refresh(user)
     from .admin_audit import record as _audit
-    _audit(db, actor=getattr(request.state, "public_id", "admin"), target=public_id,
+    _audit(db, actor=_actor_public_id(current_user, request), target=public_id,
            action="grant-welcome-tokens",
            detail={"amount": amount, "reason": reason, "new_balance": settings["token_balance"]},
            request=request)
@@ -502,7 +522,7 @@ async def set_user_plan(public_id: str, plan: str, request: Request, db: Session
     user.plan = plan
     db.commit()
     from .admin_audit import record as _audit
-    _audit(db, actor=getattr(request.state, "public_id", "admin"), target=public_id,
+    _audit(db, actor=_actor_public_id(current_user, request), target=public_id,
            action="set-plan", detail={"from": previous, "to": plan}, request=request)
     return {"plan": plan}
 
@@ -559,6 +579,10 @@ async def unban_user(public_id: str, request: Request, db: Session = Depends(get
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
+    # Same protected-target rule as ban/tempban/delete/change-password (V2-B2-03):
+    # a lesser admin must not be able to touch the owner's standing, in either
+    # direction. Only the owner may change the owner's ban state.
+    _assert_not_protected_target(user, current_user)
     settings = user.settings or {}
     settings["banned"] = False
     settings.pop("banned_until", None)
@@ -595,6 +619,10 @@ async def kick_user(public_id: str, request: Request, db: Session = Depends(get_
     user = db.query(User).filter(User.public_id == public_id).first()
     if not user:
         raise HTTPException(404, "User not found")
+    # Kick is destructive to a live session, so it carries the same protected
+    # target rule as ban/tempban/delete: without it any admin could sign the
+    # owner (or another admin) out of every device on demand.
+    _assert_not_protected_target(user, current_user)
     revoked = SessionStore.revoke_all_sessions(user.id)
     return {"message": f"{revoked} session(s) revoked", "revoked": revoked}
 
