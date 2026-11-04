@@ -74,7 +74,7 @@ export default function NotificationsPanel({
       ref={containerRef}
       role="dialog"
       aria-label="Notifications"
-      className="absolute top-full right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-surface-container-low/95 backdrop-blur-xl border border-outline-variant/30 shadow-2xl z-50 overflow-hidden text-on-surface"
+      className="fixed inset-x-3 top-16 z-50 w-auto rounded-2xl bg-surface-container-low/95 backdrop-blur-xl border border-outline-variant/30 shadow-2xl overflow-hidden text-on-surface sm:absolute sm:inset-x-auto sm:top-full sm:right-0 sm:mt-2 sm:w-96"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant/20 bg-surface-container/50">
