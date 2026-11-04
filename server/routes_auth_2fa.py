@@ -541,9 +541,29 @@ async def send_purchase_challenge(
     method = payload.method.lower()
 
     if method == "email":
+        # The code STORE is keyed by public_id (purchase-verify reads the same
+        # key), but the code is DELIVERED to the account's real address. Those
+        # two were conflated: the send went to `current_user.public_id`, so with
+        # SMTP configured the mail was addressed to e.g. "RoniDev" and the SMTP
+        # server rejected it, and the caller was then told "Email delivery is not
+        # configured on this deployment" — a false cause for a failure that was
+        # this endpoint's own. The email lane of mandatory purchase 2FA could
+        # never deliver a code.
         target = current_user.public_id
+        settings = current_user.settings or {}
+        to_email = str(
+            (settings.get("profile") or {}).get("email")
+            or settings.get("email")
+            or ""
+        ).strip()
+        if "@" not in to_email:
+            raise HTTPException(
+                400,
+                "This account has no email address stored, so a purchase verification "
+                "email cannot be sent. Add one in Account → Settings, or use SMS.",
+            )
         code = code_store.generate_code(target, purpose="purchase_verification")
-        sent = await asyncio.to_thread(email_service.send_verification_code, target, code, purpose_label="Purchase Authorization")
+        sent = await asyncio.to_thread(email_service.send_verification_code, to_email, code, purpose_label="Purchase Authorization")
         if not sent:
             # Same honesty rule as the other email paths: unavailable is 503 and
             # says why, rather than a 500 that reads like a transient failure.
@@ -552,11 +572,13 @@ async def send_purchase_challenge(
                 "Email delivery is not configured on this deployment, so a purchase "
                 "verification email cannot be sent. Use SMS or your authenticator app.",
             )
+        local, _, domain = to_email.partition("@")
+        shown = f"{local[:1]}***@{domain}" if domain else "***"
         return {
             "status": "success",
             "method": "email",
-            "destination": target,
-            "message": f"6-digit purchase verification code sent to {target}.",
+            "destination": shown,
+            "message": f"6-digit purchase verification code sent to {shown}.",
         }
 
     elif method == "sms":
