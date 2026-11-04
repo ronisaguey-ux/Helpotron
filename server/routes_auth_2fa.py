@@ -368,9 +368,30 @@ def _record_verify_challenge_failure(user_id: str) -> None:
 async def send_two_factor_challenge(payload: TwoFactorChallengeRequest, db: Session = Depends(get_db)):
     """Sends a 2FA challenge code to the user via their configured method.
     Mitigates user enumeration and message generator abuse (AUTH-02).
+
+    2026-11-04 (audit-v5 A2): the enumeration mitigation was here but the
+    message-generator mitigation was not. This route is in the middleware's
+    unauthenticated allowlist (it runs BEFORE a session exists), so anyone could
+    post a known public_id and make the server send SMS/email over and over —
+    bounded only by the 400/min per-IP flood stop. Login sends the same codes
+    behind a verified password and its own per-account throttle; this sibling
+    path was strictly cheaper to abuse. A per-account budget now applies, and a
+    throttled request answers with the SAME uniform message as a successful one
+    so the budget itself does not become an account-existence oracle.
     """
     method = payload.method.lower()
     user = db.query(User).filter(User.public_id == payload.user_id).first()
+
+    # Keyed on the CLAIMED id (not on a resolved user) so the throttle behaves
+    # identically for existing and non-existent accounts, and is spent even when
+    # there is nothing to send.
+    if not limiter.allow(f"2fa_send:{payload.user_id.strip().lower()}", 5, window=900.0):
+        if method == "email":
+            return {"status": "success", "message": "12-digit 2FA verification code sent to your email."}
+        if method == "sms":
+            return {"status": "success", "message": "If a mobile phone is linked to this account, a 2FA code has been sent via SMS."}
+        if method == "totp":
+            return {"status": "ready", "message": "Please enter the 6-digit code from your authenticator app."}
 
     if method == "email":
         # Always return uniform generic response without leaking existence
