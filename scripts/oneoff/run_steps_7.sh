@@ -153,7 +153,7 @@ export default function PrivacyPolicyModal({ isOpen, onClose, onAccept, onDeclin
                 <li>📦 <strong>Right to Portability</strong> — Export your data as JSON</li>
                 <li>🚫 <strong>Right to Object</strong> — Opt out of non-essential processing</li>
               </ul>
-              <p>To exercise your rights, visit Settings → Account → Delete Account, or contact buisness@rssytemsweb.com</p>
+              <p>To exercise your rights, visit Settings → Account → Delete Account, or contact buisness@rs-systems-web.com</p>
             </div>
           )}
         </div>
