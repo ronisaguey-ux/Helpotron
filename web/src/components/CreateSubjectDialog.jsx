@@ -139,7 +139,7 @@ export default function CreateSubjectDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-subject-title"
-        className="relative w-full max-w-xl my-auto rounded-3xl bg-surface-container-lowest border border-outline-variant/30 shadow-2xl p-6 md:p-8 flex flex-col gap-6 overflow-hidden transition-all scale-100"
+        className="relative w-full max-w-xl my-auto max-h-[calc(100dvh-2rem)] overflow-y-auto os-scroll rounded-3xl bg-surface-container-lowest border border-outline-variant/30 shadow-2xl p-6 md:p-8 flex flex-col gap-6 transition-all scale-100"
       >
         {/* Top Specular Hairline Highlight */}
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
