@@ -161,29 +161,58 @@ class CostEngine:
         Cost & Usage tab (total_cost_usd / total_charged_usd / total_logs /
         platform_profit_summary / tool_breakdown / trends) PLUS the legacy
         summary / per_model / top_users keys so older consumers keep working.
+
+        Aggregation happens in SQL, not in Python (V5-A5-07). This used to do
+        `db.query(ApiUsageLog).all()` twice — once for the totals/breakdown and
+        again for `per_model` — and the ledger takes one row per billed call, so
+        an admin page load pulled the ENTIRE history into memory as ORM objects
+        (several hundred bytes each) to compute five sums, and got slower and
+        hungrier with every user, forever. Only the 7-day trend window is still
+        materialised, and that query is bounded by `created_at`.
         """
         from sqlalchemy import func
         from datetime import datetime, timedelta, timezone
-        rows = db.query(ApiUsageLog).all()
-        total_base = sum(r.base_cost_usd for r in rows)
-        total_charged = sum(r.charged_cost_usd for r in rows)
-        total_calls = len(rows)
-        total_input_tokens = sum(r.input_tokens for r in rows)
-        total_output_tokens = sum(r.output_tokens for r in rows)
+        totals = db.query(
+            func.count(ApiUsageLog.id),
+            func.coalesce(func.sum(ApiUsageLog.base_cost_usd), 0.0),
+            func.coalesce(func.sum(ApiUsageLog.charged_cost_usd), 0.0),
+            func.coalesce(func.sum(ApiUsageLog.input_tokens), 0),
+            func.coalesce(func.sum(ApiUsageLog.output_tokens), 0),
+        ).one()
+        total_calls, total_base, total_charged, total_input_tokens, total_output_tokens = (
+            int(totals[0] or 0), float(totals[1] or 0.0), float(totals[2] or 0.0),
+            int(totals[3] or 0), int(totals[4] or 0),
+        )
 
-        # Tool / model cost breakdown (frontend: tool_breakdown[])
+        # Tool / model cost breakdown (frontend: tool_breakdown[]).
+        # `per_model` below is the same grouping, so it is derived from this one
+        # scan instead of a second pass over the same rows.
         bd: Dict[str, Dict[str, float]] = {}
-        for r in rows:
-            m = bd.setdefault(r.tool_or_model, {"call_count": 0, "total_base_cost": 0.0, "total_charged": 0.0, "input_tokens": 0, "output_tokens": 0})
-            m["call_count"] += 1
-            m["total_base_cost"] += r.base_cost_usd
-            m["total_charged"] += r.charged_cost_usd
-            m["input_tokens"] += r.input_tokens
-            m["output_tokens"] += r.output_tokens
+        grouped = (
+            db.query(
+                ApiUsageLog.tool_or_model,
+                func.count(ApiUsageLog.id),
+                func.coalesce(func.sum(ApiUsageLog.base_cost_usd), 0.0),
+                func.coalesce(func.sum(ApiUsageLog.charged_cost_usd), 0.0),
+                func.coalesce(func.sum(ApiUsageLog.input_tokens), 0),
+                func.coalesce(func.sum(ApiUsageLog.output_tokens), 0),
+            )
+            .group_by(ApiUsageLog.tool_or_model)
+            .all()
+        )
+        for m, calls, base, charged, tin, tout in grouped:
+            bd[m] = {
+                "call_count": int(calls or 0),
+                "total_base_cost": float(base or 0.0),
+                "total_charged": float(charged or 0.0),
+                "input_tokens": int(tin or 0),
+                "output_tokens": int(tout or 0),
+            }
         tool_breakdown = [
             {
                 "tool_or_model": m,
                 "call_count": v["call_count"],
+
                 "total_base_cost": round(v["total_base_cost"], 6),
                 "total_charged": round(v["total_charged"], 6),
                 "input_tokens": v["input_tokens"],
@@ -192,17 +221,29 @@ class CostEngine:
             for m, v in sorted(bd.items(), key=lambda kv: -kv[1]["total_base_cost"])
         ]
 
-        # Last-7-days usage trends (frontend: trends[] = {date, day_name, calls, cost_usd})
+        # Last-7-days usage trends (frontend: trends[] = {date, day_name, calls, cost_usd}).
+        # Only the window is materialised — the per-day bucketing below uses
+        # `date()` on the Python side because SQLite and PostgreSQL disagree on
+        # how to truncate a timestamp, and a 7-day slice is already small.
         since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)
         by_day: Dict[str, Dict[str, float]] = {}
-        for r in rows:
-            if not r.created_at or r.created_at < since:
+        recent = (
+            db.query(
+                ApiUsageLog.created_at,
+                ApiUsageLog.base_cost_usd,
+                ApiUsageLog.charged_cost_usd,
+            )
+            .filter(ApiUsageLog.created_at >= since)
+            .all()
+        )
+        for created_at, base_cost, charged_cost in recent:
+            if not created_at:
                 continue
-            d = r.created_at.date().isoformat()
+            d = created_at.date().isoformat()
             day = by_day.setdefault(d, {"calls": 0, "cost_usd": 0.0, "charged_usd": 0.0})
             day["calls"] += 1
-            day["cost_usd"] += r.base_cost_usd
-            day["charged_usd"] += r.charged_cost_usd
+            day["cost_usd"] += base_cost or 0.0
+            day["charged_usd"] += charged_cost or 0.0
         trends = [
             {
                 "date": d,
@@ -224,13 +265,17 @@ class CostEngine:
             "profit_margin_pct": round((profit / plan_rev) * 100, 1) if plan_rev > 0 else 0,
         }
 
-        per_model: Dict[str, Dict[str, float]] = {}
-        for r in rows:
-            m = per_model.setdefault(r.tool_or_model, {"calls": 0, "cost_usd": 0.0, "input_tokens": 0, "output_tokens": 0})
-            m["calls"] += 1
-            m["cost_usd"] += r.charged_cost_usd
-            m["input_tokens"] += r.input_tokens
-            m["output_tokens"] += r.output_tokens
+        # per_model is the same GROUP BY as tool_breakdown, keyed differently —
+        # derive it rather than issuing a second full scan.
+        per_model: Dict[str, Dict[str, float]] = {
+            m: {
+                "calls": v["call_count"],
+                "cost_usd": v["total_charged"],
+                "input_tokens": v["input_tokens"],
+                "output_tokens": v["output_tokens"],
+            }
+            for m, v in bd.items()
+        }
 
         top_users_rows = (
             db.query(ApiUsageLog.public_id, func.sum(ApiUsageLog.charged_cost_usd).label("spend"))
