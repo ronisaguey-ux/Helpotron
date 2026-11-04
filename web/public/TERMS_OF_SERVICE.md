@@ -103,5 +103,5 @@ Any dispute, claim, or controversy arising out of or relating to these Terms or 
 ## 9. Contact Information
 
 For inquiries regarding these Terms, privacy rights, or institutional licensing:
-- **Email:** `buisness@rssytemsweb.com` / `buisness@rssytemsweb.com`
+- **Email:** `buisness@rs-systems-web.com` / `buisness@rs-systems-web.com`
 - **Platform:** Helpotron Academic Companion Inc., Academic Data Governance Group
