@@ -455,13 +455,13 @@ export function SettingsSections({
                   value={nameDraft}
                   onChange={(e) => setNameDraft(e.target.value)}
                   placeholder="How your name appears in the app"
-                  className="flex-1 h-10 px-3 rounded-xl bg-surface-container-lowest border border-outline-variant/30 font-body-sm text-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary/60"
+                  className="flex-1 min-w-0 h-10 px-3 rounded-xl bg-surface-container-lowest border border-outline-variant/30 font-body-sm text-sm text-on-surface placeholder:text-outline focus:outline-none focus:border-primary/60"
                 />
                 <button
                   type="button"
                   onClick={handleSaveName}
                   disabled={profileBusy || nameDraft === (profile?.display_name || '')}
-                  className="h-10 px-4 rounded-xl bg-primary text-on-primary font-label-caps text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="h-10 shrink-0 px-4 rounded-xl bg-primary text-on-primary font-label-caps text-[11px] uppercase tracking-wider cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Save
                 </button>
