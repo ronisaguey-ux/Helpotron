@@ -610,7 +610,14 @@ async def send_purchase_challenge(
             raise HTTPException(400, "SMS messages are disabled for this number (you replied STOP). Reply START to re-enable.")
         sent = await SMSVerification.send(target)
         if not sent:
-            raise HTTPException(500, "Failed to send purchase verification SMS.")
+            # 502, not 500, and with the next step spelled out: the SMS provider
+            # rejected or did not accept the message, so retrying identically is
+            # pointless — the user has another lane (authenticator app) available.
+            raise HTTPException(
+                502,
+                "The purchase verification SMS could not be sent right now. Try again in "
+                "a minute, or use your authenticator app to authorise this purchase.",
+            )
         return {
             "status": "success",
             "method": "sms",

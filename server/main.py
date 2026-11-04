@@ -2006,7 +2006,18 @@ async def transcribe(file: UploadFile = File(...),
         text, duration = await _budgeted(lambda: transcription.transcribe_audio(path),
                                         process="transcription", track_stall=True)
     except RuntimeError as e:
-        raise HTTPException(500, str(e))
+        # Copy rule (audit-v5 A2, cat4): a 500 body used to be the raw exception
+        # string, which is unactionable for the student ("decode failed on
+        # /var/.../upload_ab12.webm") and leaks internal paths and upstream
+        # provider text. Say what happened, say what to do, keep the detail in
+        # the log where an operator can find it.
+        logger.exception("transcription failed for %s", getattr(current_user, "public_id", "?"))
+        raise HTTPException(
+            502,
+            "Transcription failed — the audio could not be processed. Try the file "
+            "again, or convert it to mp3/m4a and re-upload. If it keeps failing, send "
+            "the file through Support so it can be looked at.",
+        )
     finally:
         # Privacy: the raw recording is not referenced by any row, so neither
         # GDPR erasure nor retention could ever reach it. Keep only the text.
@@ -2015,7 +2026,12 @@ async def transcribe(file: UploadFile = File(...),
         except OSError:
             pass
     if not text.strip():
-        raise HTTPException(500, "transcription returned empty text")
+        raise HTTPException(
+            422,
+            "The recording came back empty — no speech was detected in it. Check that "
+            "the audio actually has sound, then upload it again (or type the notes in "
+            "manually).",
+        )
 
     # charge: 500 task tokens per started hour of audio ($0.05 floor)
     hours = max(1.0, math.ceil((duration or 3600.0) / 3600.0))
@@ -2079,7 +2095,16 @@ async def _material_endpoint(db: Session, body: GenerateIn, kind: str, current_u
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(500, str(e))
+        # Same copy rule as /api/transcribe: the student gets a sentence they can
+        # act on; the provider error stays in the log.
+        logger.exception("study material generation failed (kind=%s) for %s",
+                         kind, getattr(current_user, "public_id", "?"))
+        raise HTTPException(
+            502,
+            f"Could not generate the {kind.replace('_', ' ')}. This is usually a "
+            "temporary upstream failure — try again in a minute. Your tokens were not "
+            "spent on a failed run.",
+        )
     db.commit()
     return _material_payload(material)
 
