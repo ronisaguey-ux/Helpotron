@@ -364,6 +364,19 @@ def _record_verify_challenge_failure(user_id: str) -> None:
     _VERIFY_CHALLENGE_ATTEMPTS[user_id] = attempts
 
 
+def _uniform_challenge_response(method: str) -> dict:
+    """The same body a successful send returns, for every method.
+
+    Used by both throttles so a rate-limited caller cannot tell a real account
+    from a missing one, or a fresh budget from an exhausted one.
+    """
+    if method == "sms":
+        return {"status": "success", "message": "If a mobile phone is linked to this account, a 2FA code has been sent via SMS."}
+    if method == "totp":
+        return {"status": "ready", "message": "Please enter the 6-digit code from your authenticator app."}
+    return {"status": "success", "message": "12-digit 2FA verification code sent to your email."}
+
+
 @router.post("/2fa/send-challenge")
 async def send_two_factor_challenge(
     payload: TwoFactorChallengeRequest,
@@ -394,7 +407,9 @@ async def send_two_factor_challenge(
         f"2fa_challenge_to:{(payload.user_id or '').lower()[:120]}:{method}",
     ):
         if not limiter.allow(throttle_key, 3, window=900.0):
-            raise HTTPException(429, "Too many 2FA codes requested. Please wait 15 minutes.")
+            # Answer exactly like a delivery: a 429 here would turn the budget
+            # into an account-existence oracle and a "this account is busy" signal.
+            return _uniform_challenge_response(method)
     user = db.query(User).filter(User.public_id == payload.user_id).first()
 
     # Keyed on the CLAIMED id (not on a resolved user) so the throttle behaves
