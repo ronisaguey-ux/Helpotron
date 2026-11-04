@@ -2,7 +2,7 @@
 
 Last reviewed: September 5, 2026
 
-Applies to: the Helpotron web app, the Helpotron Academic Companion browser extension, and the service they talk to (helpotron.dpdns.org via a Cloudflare tunnel). Questions: buisness@rssytemsweb.com. A machine-readable version of this policy also lives in the app at Settings → Privacy (the same six sections you see below).
+Applies to: the Helpotron web app, the Helpotron Academic Companion browser extension, and the service they talk to (helpotron.dpdns.org via a Cloudflare tunnel). Questions: buisness@rs-systems-web.com. A machine-readable version of this policy also lives in the app at Settings → Privacy (the same six sections you see below).
 
 The short version: we keep your study data to run the service. The AI features send your prompts, study content, and (only while you turn it on) screen frames to OpenRouter — which serves DeepSeek and Google Gemini models — to generate your material. We never sell data, there are no ad or analytics trackers, and you can export everything or delete your whole account in two clicks from Settings.
 
@@ -76,7 +76,7 @@ Two of these rights are working buttons in Settings, and both are wired to serve
 
 - Reset without deleting: Settings → Data → Soft Reset restores preferences to defaults and archives unfinished staging. Nothing is deleted and the reset is reversible.
 
-- Formal requests: email buisness@rssytemsweb.com. We will verify ownership and fulfil requests within GDPR (Articles 12-23) and US state-law timelines. Rights include access, rectification, erasure, restriction, portability, objection to telemetry processing, and the right not to be subject to fully-automated decisions. Under US state laws (CCPA/CPRA, Virginia VCDPA, Colorado CPA, Connecticut CTDPA, Texas TDPSA) you have the right to know, delete, correct, port and non-discrimination — and here the delete right is a working button, not a form. We do not sell or share personal data for cross-context behavioral advertising, and no such sharing exists to opt out of.
+- Formal requests: email buisness@rs-systems-web.com. We will verify ownership and fulfil requests within GDPR (Articles 12-23) and US state-law timelines. Rights include access, rectification, erasure, restriction, portability, objection to telemetry processing, and the right not to be subject to fully-automated decisions. Under US state laws (CCPA/CPRA, Virginia VCDPA, Colorado CPA, Connecticut CTDPA, Texas TDPSA) you have the right to know, delete, correct, port and non-discrimination — and here the delete right is a working button, not a form. We do not sell or share personal data for cross-context behavioral advertising, and no such sharing exists to opt out of.
 
 ## 5. Kids and schools
 
@@ -95,4 +95,4 @@ Two of these rights are working buttons in Settings, and both are wired to serve
 - Honest limits: the database and uploads sit on our own machine's disk. We do not claim encryption of data at rest. Access to stored data belongs to the account owner and to the platform operator who keeps the service running.
 - Breach notification: if a breach puts your data at risk we will tell you what happened and what we did, following GDPR Article 33 (authorities, within 72 hours) and Article 34 (affected users, without undue delay), and applicable US state breach statutes.
 - Policy changes: if this policy changes, the date at the top changes too; if a change reduces your rights we will say so prominently before it takes effect.
-- Questions or wishes to exercise any right: buisness@rssytemsweb.com, or use the "message to admin" channel inside the app.
+- Questions or wishes to exercise any right: buisness@rs-systems-web.com, or use the "message to admin" channel inside the app.
