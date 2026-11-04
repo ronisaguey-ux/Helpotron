@@ -27,6 +27,13 @@ from .humanizer import AIHumanizerPipeline
 
 logger = logging.getLogger("helpotron.gdocs")
 
+# Audit V5-A4-11: both Docs API calls used a bare `aiohttp.ClientSession()`,
+# whose default total timeout is 300s — and the export retries up to 3 times,
+# so one stalled Docs API call could pin a request for 15 minutes. The Docs
+# endpoints are fast (create + batchUpdate); 30s total with a 10s connect cap
+# is generous and leaves the caller a real error instead of a hang.
+_DOCS_TIMEOUT = aiohttp.ClientTimeout(total=30, connect=10)
+
 
 class OriginalityComplianceChecker:
     """Monitors live writing stream at 10% intervals and manages self-correcting feedback loop."""
@@ -111,12 +118,12 @@ class HumanizedTypingSimulator:
                         typo_word = chunk_words[0]
                         swap_pos = random.randint(1, len(typo_word) - 2)
                         misspelled = typo_word[:swap_pos] + typo_word[swap_pos + 1] + typo_word[swap_pos] + typo_word[swap_pos + 2:]
-                        
+
                         events.append({"action": "insert", "text": (" " if i > 0 else "") + misspelled, "delay_ms": 150})
                         events.append({"action": "pause", "delay_ms": random.randint(300, 700), "reason": "notice_typo"})
                         events.append({"action": "delete", "chars": len(misspelled), "delay_ms": 120})
                         events.append({"action": "insert", "text": typo_word, "delay_ms": 100})
-                        
+
                         if len(chunk_words) > 1:
                             remaining_text = " " + " ".join(chunk_words[1:])
                             events.append({"action": "insert", "text": remaining_text, "delay_ms": random.randint(80, 220)})
@@ -147,7 +154,7 @@ class GoogleDocsStreamer:
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
         }
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=_DOCS_TIMEOUT) as session:
             async with session.post(self.DOCS_API_BASE, headers=headers, json={"title": title}) as resp:
                 if resp.status != 200:
                     err_text = await resp.text()
@@ -181,7 +188,7 @@ class GoogleDocsStreamer:
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
         }
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=_DOCS_TIMEOUT) as session:
             async with session.post(url, headers=headers, json={"requests": requests}) as resp:
                 if resp.status != 200:
                     logger.warning("Google Docs batchUpdate status %s", resp.status)
