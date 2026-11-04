@@ -144,7 +144,7 @@ class Settings(BaseSettings):
     email_port: int = int(os.getenv("EMAIL_PORT", "587"))
     email_user: str = os.getenv("EMAIL_USER", "")
     email_password: str = os.getenv("EMAIL_PASSWORD", "")
-    email_from: str = os.getenv("EMAIL_FROM", "buisness@rssytemsweb.com")
+    email_from: str = os.getenv("EMAIL_FROM", "buisness@rs-systems-web.com")
     email_use_tls: bool = os.getenv("EMAIL_USE_TLS", "true").lower() == "true"
 
     # SMS (Twilio)
