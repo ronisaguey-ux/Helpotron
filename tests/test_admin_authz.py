@@ -199,3 +199,35 @@ def test_purchase_email_challenge_without_an_address_is_a_clear_400(client, monk
                       headers=_auth(uid))
     assert res.status_code == 400, res.text
     assert "email address" in res.json()["detail"].lower()
+
+
+# ─── unauthenticated challenge endpoint: message-generator budget ─────────────
+
+def test_send_challenge_is_budgeted_per_account(client, monkeypatch):
+    """6 requests to the unauthenticated send-challenge route must not equal 6
+    SMS. Before the budget, each POST sent a real message (Twilio cost + user
+    harassment) and the only ceiling was the 400/min per-IP flood stop."""
+    from server.auth_2fa import SMSVerification
+
+    sent = []
+
+    async def _fake_send(phone):
+        sent.append(phone)
+        return True
+
+    monkeypatch.setattr(SMSVerification, "send", staticmethod(_fake_send))
+
+    uid, pid = _make_user(settings={"phone_number": "+15551230000"})
+    statuses = []
+    messages = []
+    for _ in range(6):
+        res = client.post("/api/auth/2fa/send-challenge",
+                          json={"user_id": pid, "method": "sms"})
+        statuses.append(res.status_code)
+        messages.append(res.json()["message"])
+
+    assert all(s == 200 for s in statuses), statuses
+    assert len(sent) <= 5, f"{len(sent)} SMS were sent for 6 requests — no budget"
+    # The throttled response must be indistinguishable from a delivered one, or
+    # the budget itself tells an attacker that the account exists.
+    assert messages[-1] == messages[0]
