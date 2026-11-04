@@ -1,4 +1,4 @@
-fastapi>=0.141.1,<0.142.0
+fastapi>=0.162.0,<0.163.0
 uvicorn[standard]>=0.52.4,<0.53.0
 gunicorn>=22.0.0,<24.0.0
 # uvloop>=0.19.0,<0.22.0; sys_platform != "win32"
