@@ -565,6 +565,16 @@ async def call_llm(
                 usage = data.get("usage", {})
                 from .metering import current_meter_user
                 meter_pid = current_meter_user()
+                # ONE call, ONE ledger row (V5-A5-04). These were two independent
+                # accounting paths and both fired for every authenticated caller
+                # that passes db + user_id (routes_overlord.py:2180,
+                # humanize_skill.py:520): the metering pillar wrote one row and
+                # record_routing_telemetry wrote a second identical row for the
+                # same tokens. credits.charge_actual_usage settles whatever the
+                # ledger accumulated, so every one of those calls billed twice.
+                # Measured on the pre-fix code: 1 call → 2 rows, $0.0048 charged
+                # for a $0.0024 provider charge (tests/test_llm_cost_ledger.py).
+                recorded = False
                 if meter_pid and usage:
                     try:
                         from .cost_tracking import cost_engine
@@ -578,18 +588,25 @@ async def call_llm(
                                 input_tokens=int(usage.get("prompt_tokens") or 0),
                                 output_tokens=int(usage.get("completion_tokens") or 0),
                                 exact_cost_usd=usage.get("cost"),
+                                # keep the routing context record_routing_telemetry
+                                # used to carry, now that it no longer writes a row
+                                metadata={k: v for k, v in route.items() if k != "model"},
                             )
+                            return True
 
                         if db:
-                            _record_call(db)
+                            recorded = _record_call(db)
                         else:
                             with SessionLocal() as session:
-                                _record_call(session)
+                                recorded = _record_call(session)
                     except Exception as e:
                         # An unmetered call is recoverable; a phantom zero-cost row is a lie.
                         logger.warning("llm metering failed for %s: %s", cand_id, e)
 
-                if db and user_id:
+                if not recorded and db and user_id and usage:
+                    # No paying account in context (operator tooling, tests):
+                    # the caller-supplied db + user_id is the only attribution
+                    # available, so this is the row — not a second one.
                     await record_routing_telemetry(db, user_id, {**route, "model": cand_id}, usage)
                 note_upstream_success()
                 return content
