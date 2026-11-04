@@ -247,6 +247,14 @@ class AgentAction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     undone_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Audit V5-A4-08: the notifications feed reads
+    #   WHERE user_id=? AND status='done' ORDER BY created_at DESC LIMIT n
+    # which with a single user_id index sorted the user's whole action history
+    # in a temp B-tree on every poll. This serves the filter and the ORDER BY.
+    __table_args__ = (
+        Index("ix_agent_actions_user_status_created", "user_id", "status", "created_at"),
+    )
+
 
 class AgentFile(Base):
     """A file uploaded into a user's personal agent (skill / rule / automation /
@@ -472,6 +480,13 @@ class Draft(Base):
     user = relationship("User", back_populates="drafts")
     assignment = relationship("Assignment", back_populates="drafts")
 
+    # Audit V5-A4-08: the notifications feed orders drafts by updated_at per
+    # user ("Draft ready" events); the single-column user_id index left that
+    # to a temp B-tree sort of every draft the user ever had.
+    __table_args__ = (
+        Index("ix_drafts_user_updated", "user_id", "updated_at"),
+    )
+
 
 class Referral(Base):
     __tablename__ = "referrals"
@@ -610,6 +625,16 @@ class AdminNotice(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     broadcast: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Audit V5-A4-08: two feed queries scan this table on every notification
+    # poll — per-user direct notices (user_id + ORDER BY created_at) and the
+    # broadcast lane (broadcast + ORDER BY created_at). Without the composite
+    # indexes both did a full table scan of every user's notices plus a temp
+    # B-tree sort, because a broadcast row's user_id is '*'.
+    __table_args__ = (
+        Index("ix_admin_notices_user_broadcast_created", "user_id", "broadcast", "created_at"),
+        Index("ix_admin_notices_broadcast_created", "broadcast", "created_at"),
+    )
 
 
 class AdminNoticeRead(Base):
@@ -896,6 +921,12 @@ def init_db() -> None:
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_calendar_entries_user_date ON calendar_entries (user_id, entry_date)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_calendar_entries_upcoming ON calendar_entries (user_id, remind, reminded_at, entry_date)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS ix_study_card_user_due ON study_card_states (user_id, due)"))
+                # Audit V5-A4-08: notifications feed ORDER BY coverage (existing
+                # DBs never get the model's __table_args__ from create_all).
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_drafts_user_updated ON drafts (user_id, updated_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_actions_user_status_created ON agent_actions (user_id, status, created_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_admin_notices_user_broadcast_created ON admin_notices (user_id, broadcast, created_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_admin_notices_broadcast_created ON admin_notices (broadcast, created_at)"))
 
                 conn.commit()
             except Exception as e:
