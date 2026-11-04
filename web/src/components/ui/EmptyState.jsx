@@ -27,10 +27,12 @@ export default function EmptyState({
           {icon}
         </div>
       )}
+      {/* h2, not h3: EmptyState sits directly under a view's single h1, so an
+          h3 jumped a level on every empty view (audit-v5 A1-06). */}
       {title && (
-        <h3 className="font-headline-lg text-lg md:text-xl font-semibold text-on-surface mb-2 tracking-tight">
+        <h2 className="font-headline-lg text-lg md:text-xl font-semibold text-on-surface mb-2 tracking-tight">
           {title}
-        </h3>
+        </h2>
       )}
       {description && (
         <p className="font-body-sm text-sm text-on-surface-variant max-w-md mx-auto mb-6 leading-relaxed">

@@ -207,9 +207,9 @@ export function AnalyticsDashboard({ userId, onExplainWithAgent }) {
         <div className="flex items-center justify-between gap-2 mb-4 text-sm text-on-surface font-semibold">
           <div className="flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-primary" />
-            <h3 className="font-title-md text-sm font-semibold text-on-surface">
+            <h2 className="font-title-md text-sm font-semibold text-on-surface">
               Telemetry Activity (Last 30 Days)
-            </h3>
+            </h2>
           </div>
           <button
             type="button"
