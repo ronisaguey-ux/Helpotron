@@ -10,17 +10,27 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from .config import config
+from .cost_tracking import MODEL_RATES as _COST_RATES
 from .database import User, Assignment
 
 
 class ModelTieringEngine:
-    # Model Catalog & Pricing (per 1M tokens)
+    # Model Catalog & Pricing (per 1M tokens).
+    #
+    # These numbers are DERIVED from cost_tracking.MODEL_RATES, the same table
+    # the ledger bills with (V5-A5-11). They used to be hand-written, and the
+    # high tier had drifted: this file said gemini-3.8-flash was $2.50 in /
+    # $7.50 out per 1M while cost_tracking priced the very same model at $1.00 /
+    # $4.00 — a 2.5x overstatement in the pre-flight estimate a user is shown
+    # before a run. A second copy of a price is a number that will be wrong;
+    # there is now one copy, and tests/test_model_tiering_rates.py keeps the
+    # two segments in step.
     MODEL_TIERS = {
         "gemini-3.1-flash-lite": {
             "tier": "economy",
             "name": "Gemini 3.1 Flash-Lite",
-            "cost_per_1m_input": 0.50,
-            "cost_per_1m_output": 1.50,
+            "cost_per_1m_input": _COST_RATES["gemini-3.1-flash-lite"]["input"] * 1000,
+            "cost_per_1m_output": _COST_RATES["gemini-3.1-flash-lite"]["output"] * 1000,
             "description": "Ultra-fast, cost-effective default for audio transcription, OCR, text extraction, and initial drafts.",
             "recommended_effort_min": 1,
             "recommended_effort_max": 5,
@@ -28,8 +38,8 @@ class ModelTieringEngine:
         "gemini-3.8-flash": {
             "tier": "high_quality",
             "name": "Gemini 3.8 Flash",
-            "cost_per_1m_input": 2.50,
-            "cost_per_1m_output": 7.50,
+            "cost_per_1m_input": _COST_RATES["gemini-3.8-flash"]["input"] * 1000,
+            "cost_per_1m_output": _COST_RATES["gemini-3.8-flash"]["output"] * 1000,
             "description": "High-intelligence flagship for complex reasoning, academic synthesis, humanization, and detector evasion.",
             "recommended_effort_min": 6,
             "recommended_effort_max": 10,
@@ -89,11 +99,17 @@ class ModelTieringEngine:
         model = ModelTieringEngine.resolve_model_for_task(task_type, effort_level)
         est_tokens = max(100, int(word_count * 1.4))
 
-        # Model Token Cost
-        if model == "gemini-3.1-flash-lite":
-            model_cost = (est_tokens / 1_000_000.0) * 0.50 + (est_tokens / 1_000_000.0) * 1.50
-        else:
-            model_cost = (est_tokens / 1_000_000.0) * 2.50 + (est_tokens / 1_000_000.0) * 7.50
+        # Model Token Cost — read from MODEL_TIERS (which derives from the
+        # billing table), never re-typed here. These two branches used to repeat
+        # 0.50/1.50 and 2.50/7.50 literally, which is how the high tier ended up
+        # 2.5x dearer than the ledger.
+        tier = ModelTieringEngine.MODEL_TIERS.get(
+            model, ModelTieringEngine.MODEL_TIERS["gemini-3.1-flash-lite"]
+        )
+        model_cost = (
+            (est_tokens / 1_000_000.0) * tier["cost_per_1m_input"]
+            + (est_tokens / 1_000_000.0) * tier["cost_per_1m_output"]
+        )
 
         # Detectors Cost (Pangram + Sapling only)
         detector_cost = 0.0
@@ -135,7 +151,7 @@ class ModelTieringEngine:
         file_name: str = "",
     ) -> Dict[str, Any]:
         """Exclusively uses Google Gemini models for presentation & slide assignments.
-        
+
         Nemotron and DeepSeek subagent teams are bypassed completely.
         User can configure the exact percentage balance between Gemini 3.1 Flash-Lite
         (structure, outline, raw slide notes) and Gemini 3.8 Flash (visual styling,
@@ -188,11 +204,11 @@ class ModelTieringEngine:
 
         versions = []
         step_words = max(1, total_words // version_count)
-        
+
         for i in range(1, version_count + 1):
             cur_word_count = min(total_words, i * step_words if i < version_count else total_words)
             timestamp = start_time + timedelta(minutes=int(total_elapsed_minutes * (i / version_count)))
-            
+
             partial_text = " ".join(words[:cur_word_count])
             versions.append({
                 "version_number": i,
