@@ -9,17 +9,17 @@ thinkst-zippy>=0.1.3,<0.2
 onnxruntime>=1.29.0,<2.0
 tokenizers>=0.23.0,<1.0
 numpy>=2.0.0,<3.0
-brotli>=1.1.0,<2.0
+brotli>=1.2.1,<2.0
 sqlalchemy>=2.0.52,<2.1.0
 pydantic>=2.6.0,<3.0.0
 pydantic-settings>=2.15.0,<3.0.0
 email-validator>=2.3.0
 sympy>=1.12,<2.0
-PyJWT>=2.10.0,<3.0.0
+PyJWT>=2.15.0,<3.0.0
 pyotp>=2.10.0
 python-multipart>=0.0.20,<0.1.0
 requests>=2.34.2
-aiohttp>=3.14.3
+aiohttp>=3.14.4
 aiofiles>=25.1.0,<26.0.0
 httpx>=0.27.0,<0.29.0
 redis>=5.0.0,<6.0.0
@@ -39,7 +39,7 @@ latex2mathml>=3.80,<4.0
 
 # Stylometry + typing engines moved in from text-improver (owner 2026-09-17).
 # spacy also needs the model: python -m spacy download en_core_web_sm
-nltk>=3.9
+nltk>=3.10.4
 spacy>=3.8
 pyphen>=0.15
 
