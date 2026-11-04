@@ -119,8 +119,11 @@ export default function MobileDrawer({
               <div className="h-16 px-5 flex items-center justify-between border-b border-outline-variant/20 shrink-0">
                 <div className="flex items-center gap-2.5">
                   <img
-                    src="/HelpoTron_logo.jpeg"
+                    src="/HelpoTron_logo_256.jpeg"
                     alt="Helpotron Logo"
+                    width={32}
+                    height={32}
+                    decoding="async"
                     className="w-8 h-8 rounded-xl object-cover border border-primary/30 shrink-0"
                   />
                   <div className="flex flex-col">
