@@ -41,7 +41,7 @@ latex2mathml>=3.80,<4.0
 # spacy also needs the model: python -m spacy download en_core_web_sm
 nltk>=3.10.4
 spacy>=3.8
-pyphen>=0.15
+pyphen>=0.18.1
 
 # Stripe (payments). server/payments.py imports this lazily inside each route,
 # so checkout/webhook raised ModuleNotFoundError only once STRIPE_SECRET_KEY was
