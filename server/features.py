@@ -303,10 +303,22 @@ def recommend_next_study(user: User, db: Session) -> str:
     assignments = db.query(Assignment).filter(Assignment.user_id == user.id).all()
     if not assignments:
         return "Complete an assignment first to get recommendations."
-    # Simple heuristic: recommend materials for assignments with no study materials
+    # Audit V5-A4-09: this used to run `count()` PER ASSIGNMENT (N+1) — a user
+    # with 40 coursework items cost 41 statements for one tip line. One
+    # DISTINCT join scoped to this user answers the same question.
+    covered = {
+        aid
+        for (aid,) in (
+            db.query(StudyMaterial.assignment_id)
+            .join(Assignment, Assignment.id == StudyMaterial.assignment_id)
+            .filter(Assignment.user_id == user.id, StudyMaterial.assignment_id.isnot(None))
+            .distinct()
+            .all()
+        )
+    }
+    # Simple heuristic: recommend materials for the first assignment with none
     for a in assignments:
-        materials = db.query(StudyMaterial).filter(StudyMaterial.assignment_id == a.id).count()
-        if materials == 0:
+        if a.id not in covered:
             return f"📚 Study recommendation: Create materials for '{a.title}' — it has no study guides yet."
     return "You're up to date! Consider reviewing older materials or starting a new assignment."
 
