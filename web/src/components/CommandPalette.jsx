@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import useModalA11y from '../lib/useModalA11y.js';
 import { motion, AnimatePresence } from 'motion';
 import { Search, CornerDownLeft, Clock, SearchX, Terminal } from 'lucide-react';
 import { searchIndex, SLASH_COMMANDS, demoEnabled } from '../demoData.js';
@@ -32,6 +33,11 @@ export default function CommandPalette({ open, onClose, onNavigate, isAdmin = fa
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef = useRef(null);
+  const panelRef = useRef(null);
+  /* aria-modal="true" now means something: Tab cycles inside the panel, the
+     page behind stops scrolling, and focus returns to the opener on close
+     (audit-v5 A1-04). */
+  useModalA11y({ active: open, containerRef: panelRef });
 
   useEffect(() => {
     if (open) {
@@ -117,6 +123,7 @@ export default function CommandPalette({ open, onClose, onNavigate, isAdmin = fa
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: -8 }}
             transition={{ duration: 0.14, ease: 'easeOut' }}
+            ref={panelRef}
             className="w-full max-w-xl rounded-2xl bg-surface-container-low/95 backdrop-blur-xl border border-outline-variant/30 shadow-2xl overflow-hidden text-on-surface"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
