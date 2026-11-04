@@ -21,7 +21,7 @@ async def get_referral_code(
     return {
         "status": "success",
         "code": ref.referral_code,
-        "url": f"https://helpotron.com/invite/{ref.referral_code}",
+        "url": f"https://helpotron.dpdns.org/invite/{ref.referral_code}",
         "reward": "40 compute credits per friend who subscribes",
         "is_single_use": True,
         "code_length": len(ref.referral_code),
@@ -38,7 +38,7 @@ async def generate_new_code(
     return {
         "status": "success",
         "code": ref.referral_code,
-        "url": f"https://helpotron.com/invite/{ref.referral_code}",
+        "url": f"https://helpotron.dpdns.org/invite/{ref.referral_code}",
         "message": "Fresh 40-digit single-use referral code issued.",
     }
 
