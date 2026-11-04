@@ -19,6 +19,7 @@ import {
   Library as LibraryIcon,
 } from 'lucide-react';
 import Button from './Button.jsx';
+import useModalA11y from '../lib/useModalA11y.js';
 import { AvatarWidget } from './ui/AvatarWidget.jsx';
 
 /**
@@ -37,6 +38,11 @@ export default function MobileDrawer({
   triggerRef,
 }) {
   const drawerRef = useRef(null);
+  /* aria-modal alone does not trap anything: measured with the drawer open,
+     5/5 Tab presses landed on the toolbar BEHIND the scrim (audit-v5 A1-09).
+     The hook also locks background scroll; Escape + trigger restore stay in
+     the effect below. */
+  useModalA11y({ active: isOpen, containerRef: drawerRef });
 
   // Focus restore to trigger button when closed
   useEffect(() => {
