@@ -31,7 +31,9 @@ def test_flash_alias_wires_to_vision_exp(monkeypatch):
         async def __aexit__(self, *a):
             return False
 
-        async def post(self, url, headers=None, json=None):
+        async def post(self, url, headers=None, json=None, **kwargs):
+            # Audit V5-A4-10 added a per-attempt `timeout=` kwarg to this call;
+            # the fake must accept it (and any future httpx request option).
             captured["payload"] = json
             return FakeResp()
 
