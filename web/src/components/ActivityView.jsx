@@ -73,9 +73,11 @@ export default function ActivityView({ admin = false, initialMode = 'timeline', 
     </div>
   );
 
-  const controls = (
-    <>
-      {header}
+  /* Tab strip + category filters. Split out of `controls` so notifications mode
+     can render it WITHOUT the timeline heading: NotificationsView brings its
+     own <h1>Notification Center</h1>, and stacking two h1s (plus a heading that
+     names the other tab) broke the outline on /notifications (audit-v5 A1-05). */
+  const tabBar = (
       <div className="clean-card p-3 flex flex-wrap items-center gap-2">
       <div className="flex gap-1 p-1 rounded-[var(--radius-md)] bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)]">
         {[['timeline', '⚡ Timeline'], ['notifications', '🔔 Notifications']].map(([k, label]) => (
@@ -112,6 +114,12 @@ export default function ActivityView({ admin = false, initialMode = 'timeline', 
         </div>
       )}
     </div>
+  );
+
+  const controls = (
+    <>
+      {header}
+      {tabBar}
     </>
   );
 
@@ -119,7 +127,7 @@ export default function ActivityView({ admin = false, initialMode = 'timeline', 
     return (
       <div className="space-y-5">
         <style>{AURORA_CHIP_TINTS}</style>
-        {controls}
+        {tabBar}
         <NotificationsView onNavigate={onNavigate} user={user} />
       </div>
     );
