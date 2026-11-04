@@ -57,7 +57,7 @@ export const AnimatedLogo = ({
           />
         ) : (
           <img
-            src="/HelpoTron_logo.jpeg"
+            src="/HelpoTron_logo_256.jpeg"
             alt="Helpotron Logo"
             width={currentPx}
             height={currentPx}
